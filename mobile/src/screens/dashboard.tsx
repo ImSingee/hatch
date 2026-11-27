@@ -20,10 +20,10 @@ import { useLifetimeSignal } from '../state/use-lifetime-signal';
 import { useSurfaceHandoff } from '../state/use-surface-handoff';
 import { RefreshMenu } from '../ui/native-controls';
 import { Busy, EmptyState, Notice, errorText } from '../ui/primitives';
-import { useAccent } from '../ui/accent';
 import { Screen } from '../ui/screen';
 import { SecureSurface } from '../ui/secure-surface';
-import { palette as c, pill, radii, shadows } from '../ui/theme';
+import { pill } from '../ui/theme';
+import { useAccent, usePalette, useTheme } from '../ui/theme-context';
 
 /**
  * The dashboards of the instance and the one on show. Widgets are web
@@ -195,6 +195,7 @@ export function DashboardPager({
   visible?: number;
 }) {
   const accent = useAccent();
+  const c = usePalette();
   const scroller = useRef<ScrollViewInstance>(null);
   const index = board.dashboards.findIndex(
     (dashboard) => dashboard.id === board.current?.id,
@@ -269,7 +270,7 @@ export function DashboardNotices({ board }: { board: Dashboards }) {
   );
 }
 
-/** The white sheet a dashboard's widgets are shown on. */
+/** The sheet a dashboard's widgets are shown on. */
 export function WidgetSheet({
   board,
   style,
@@ -277,6 +278,7 @@ export function WidgetSheet({
   board: Dashboards;
   style?: StyleProp<ViewStyle>;
 }) {
+  const { palette: c, radii, shadows } = useTheme();
   const { workspace, destination, current, invalid, retry } = board;
   const failed = Boolean((workspace.error && !workspace.data) || invalid);
   // The web canvas draws its widgets as sheets on the ground itself, so it

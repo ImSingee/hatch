@@ -28,8 +28,7 @@ import {
 } from '@expo/ui/swift-ui/modifiers';
 import { useState } from 'react';
 import { glyphs } from './glyph.types';
-import { useAccent } from './accent';
-import { palette as c } from './theme';
+import { useAccent, usePalette, useTheme } from './theme-context';
 import type {
   AttachmentMenuProps,
   ChoiceProps,
@@ -48,6 +47,8 @@ export function Choice({
   compact = false,
 }: ChoiceProps) {
   const accent = useAccent();
+  const c = usePalette();
+  const { appearance } = useTheme();
   const chosen = options.find((option) => option.value === value);
   const current = chosen?.short ?? chosen?.label;
   // Menu labels report their ideal width; cap them to the width RN assigns.
@@ -58,7 +59,7 @@ export function Choice({
     // sizes; a compact one keeps one line and cuts it off, so the row's
     // other actions always stay on screen.
     <Host
-      colorScheme="light"
+      colorScheme={appearance}
       seedColor={accent.fill}
       matchContents={{ vertical: true }}
       ignoreSafeArea="all"
@@ -142,9 +143,11 @@ export function AttachmentMenu({
   onChoose,
 }: AttachmentMenuProps) {
   const accent = useAccent();
+  const c = usePalette();
+  const { appearance } = useTheme();
   return (
     <Host
-      colorScheme="light"
+      colorScheme={appearance}
       seedColor={accent.fill}
       matchContents
       ignoreSafeArea="all"
@@ -197,10 +200,12 @@ export function RefreshMenu({
   intervalDisabled,
 }: RefreshMenuProps) {
   const accent = useAccent();
+  const c = usePalette();
+  const { appearance } = useTheme();
   const auto = interval !== '0';
   return (
     <Host
-      colorScheme="light"
+      colorScheme={appearance}
       seedColor={accent.fill}
       matchContents
       ignoreSafeArea="all"

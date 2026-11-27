@@ -18,6 +18,7 @@ use objc2::{
     runtime::{AnyObject, NSObject, NSObjectProtocol, ProtocolObject, Sel},
     DefinedClass, MainThreadMarker, MainThreadOnly,
 };
+use objc2_app_kit::NSColorSpace;
 use objc2_foundation::{
     ns_string, NSData, NSDictionary, NSKeyValueChangeKey, NSKeyValueObservingOptions,
     NSMutableURLRequest, NSObjectNSKeyValueObserverRegistration, NSString, NSURL,
@@ -210,6 +211,73 @@ pub unsafe fn observe_url(webview: *mut c_void, on_change: Box<dyn Fn(String)>) 
     webview.addObserver_forKeyPath_options_context(
         &observer,
         ns_string!("URL"),
+        NSKeyValueObservingOptions::New,
+        std::ptr::null_mut(),
+    );
+    // Observed for the app's lifetime, like the window itself.
+    std::mem::forget(observer);
+}
+
+/// An sRGB colour with components from 0 to 1.
+pub type Rgb = (f64, f64, f64);
+
+/// Called with the page's theme colour, or `None` when it declares none.
+pub type OnThemeColor = Box<dyn Fn(Option<Rgb>)>;
+
+pub struct ThemeColorObserverIvars {
+    on_change: OnThemeColor,
+}
+
+define_class!(
+    #[unsafe(super(NSObject))]
+    #[thread_kind = MainThreadOnly]
+    #[name = "HatchThemeColorObserver"]
+    #[ivars = ThemeColorObserverIvars]
+    struct ThemeColorObserver;
+
+    unsafe impl NSObjectProtocol for ThemeColorObserver {}
+
+    impl ThemeColorObserver {
+        #[unsafe(method(observeValueForKeyPath:ofObject:change:context:))]
+        fn observe(
+            &self,
+            _key_path: Option<&NSString>,
+            object: Option<&AnyObject>,
+            _change: Option<&NSDictionary<NSKeyValueChangeKey, AnyObject>>,
+            _context: *mut c_void,
+        ) {
+            let Some(object) = object else { return };
+            let webview = unsafe { &*(object as *const AnyObject as *const WKWebView) };
+            (self.ivars().on_change)(unsafe { theme_color(webview) });
+        }
+    }
+);
+
+/// The page's `theme-color` in sRGB, if it declares one.
+unsafe fn theme_color(webview: &WKWebView) -> Option<Rgb> {
+    let color = webview.themeColor()?;
+    let srgb = color.colorUsingColorSpace(&NSColorSpace::sRGBColorSpace())?;
+    Some((
+        srgb.redComponent(),
+        srgb.greenComponent(),
+        srgb.blueComponent(),
+    ))
+}
+
+/// Calls `on_change` with the page's `<meta name="theme-color">` whenever
+/// it changes, and once now.
+///
+/// # Safety
+/// As for `install_navigation_proxy`.
+pub unsafe fn observe_theme_color(webview: *mut c_void, on_change: OnThemeColor) {
+    let webview = &*(webview as *const WKWebView);
+    let mtm = MainThreadMarker::new().expect("WebKit runs on the main thread");
+    on_change(theme_color(webview));
+    let observer = ThemeColorObserver::alloc(mtm).set_ivars(ThemeColorObserverIvars { on_change });
+    let observer: Retained<ThemeColorObserver> = msg_send![super(observer), init];
+    webview.addObserver_forKeyPath_options_context(
+        &observer,
+        ns_string!("themeColor"),
         NSKeyValueObservingOptions::New,
         std::ptr::null_mut(),
     );

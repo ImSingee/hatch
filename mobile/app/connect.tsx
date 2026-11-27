@@ -13,9 +13,9 @@ import { Button } from '../src/ui/button';
 import { Busy, Card, Wordmark, errorText } from '../src/ui/primitives';
 import { GlyphTile, Group, ListRow } from '../src/ui/rows';
 import { SectionLabel, readable } from '../src/ui/screen';
-import { Text, type } from '../src/ui/text';
-import { useAccent } from '../src/ui/accent';
-import { palette as c, pill, weights } from '../src/ui/theme';
+import { Text, useType } from '../src/ui/text';
+import { pill, weights } from '../src/ui/theme';
+import { useAccent, usePalette } from '../src/ui/theme-context';
 
 type Approval = {
   userCode: string;
@@ -25,6 +25,8 @@ type Approval = {
 export default function ConnectScreen() {
   const { connect, origins, authError } = useSession();
   const accent = useAccent();
+  const c = usePalette();
+  const type = useType();
   const [url, setUrl] = useState(origins[0] ?? '');
   const urlField = useRef<NativeFieldRef>(null);
   const [pending, setPending] = useState(false);

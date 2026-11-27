@@ -444,15 +444,52 @@ const definitions: readonly CliCommandDefinition[] = [
   },
   {
     path: ['theme', 'get'],
-    usage: 'theme get',
+    usage: 'theme get [--resolved]',
     description:
-      'Show the instance theme: the chosen accent, the default accent, every accent that can be chosen with its #RRGGBB colour, and dockLabels (whether the web dock shows names under its tiles).',
+      'Show the instance theme: the accent (null when the active theme shows its own primary), the default accent, every accent with its #RRGGBB colour, dockLabels, the active theme (id, name, preset or custom, light or dark appearance, its own primary and its document) and accentOverridesPrimary (whether the accent hides that primary). --resolved adds resolved: every token of the active theme, with the accent applied.',
   },
   {
     path: ['theme', 'set'],
-    usage: 'theme set [--accent <name>] [--dock-labels | --no-dock-labels]',
+    usage:
+      'theme set [--theme <id>] [--accent <name> | --clear-accent] [--dock-labels | --no-dock-labels]',
     description:
-      'Change the theme of the whole instance; settings left out keep their value, and at least one is required. --accent replaces the accent colour (names come from theme get); every signed-in web, mobile and desktop client recolours without a reload. --dock-labels shows names under the web dock tiles and --no-dock-labels hides them (the default); the full name still shows on hover.',
+      "Change the theme of the whole instance; settings left out keep their value, and at least one is required. Every signed-in web, mobile and desktop client and every open native App restyles without a reload. --theme activates a theme of the library (a preset name such as desk or desk-dark, or a custom theme id from theme list); a dark theme is a theme like any other. --accent replaces the active theme's primary (names come from theme get); --clear-accent lets it show its own. When an accent hides the activated theme's own primary, the result says accentOverridesPrimary and a note on stderr names --clear-accent. A theme whose text would be unreadable with the accent is rejected with THEME_INVALID. --dock-labels shows names under the web dock tiles and --no-dock-labels hides them (the default).",
+  },
+  {
+    path: ['theme', 'list'],
+    usage: 'theme list [--limit <n>] [--cursor <cursor>]',
+    description:
+      'List the theme library: the presets, then the custom themes, oldest first, each with its id, name, source, appearance, own primary, document, and valid (false, with problems, for a custom theme that no longer passes the rules; it cannot be activated until updated). Without --limit it prints every theme; --limit (1-100) pages and prints nextCursor while more follow.',
+  },
+  {
+    path: ['theme', 'create'],
+    usage: 'theme create --file <path|->',
+    description:
+      'Save a new custom theme from a theme document (JSON; see theme check) and print it with its id. It is not activated; use theme set --theme <id>. Names are unique ignoring case (preset names included): a taken name is CONFLICT. Rejected with THEME_INVALID, naming each problem, like theme check.',
+  },
+  {
+    path: ['theme', 'update'],
+    usage: 'theme update <id> --file <path|->',
+    description:
+      "Replace a custom theme's document whole, its name included (presets cannot be changed; create a copy instead). A name another theme has is CONFLICT. An active theme restyles every client at once and is also checked with the chosen accent. Rejected with THEME_INVALID like theme check; an unknown id is NOT_FOUND.",
+  },
+  {
+    path: ['theme', 'delete'],
+    usage: 'theme delete <id> --yes',
+    description:
+      'Delete a custom theme permanently; cannot be undone, so --yes is required. Presets cannot be deleted, and neither can the active theme (CONFLICT): activate another theme first.',
+  },
+  {
+    path: ['theme', 'check'],
+    usage: 'theme check --file <path|->',
+    description:
+      'Validate a theme document without changing anything, and print it resolved into every token. A document is {"name"?, "appearance": "light"|"dark", "colors": {background, foreground, card, primary, secondary, muted, muted-foreground, border, destructive}, "radius"?: px 0-32, "fonts"?: {sans, mono}}; colours are #RRGGBB, #RGB or rgb(r g b), fonts one of the bundled faces or system. Unknown keys, unparsable colours, other fonts and text below 4.5:1 contrast are rejected (exit 2, THEME_INVALID) with every problem in error.details.problems.',
+  },
+  {
+    path: ['theme', 'reset'],
+    usage: 'theme reset',
+    description:
+      'Activate desk with no accent (desk looks as with the default accent) in one change. Dock labels and the custom themes are kept.',
   },
   {
     path: ['pin', 'list'],

@@ -3,10 +3,9 @@ import { Image, View } from 'react-native';
 import type { JsonValue, RunStatus, StreamBlock, StreamState } from '../core';
 import { Button } from './button';
 import { Glyph } from './glyph';
-import { Text, type } from './text';
+import { Text, useType } from './text';
 import { messageBlocks } from './transcript-content';
-import { useAccent } from './accent';
-import { palette as c, radii, status as hue } from './theme';
+import { useAccent, usePalette, useStatus, useTheme } from './theme-context';
 import {
   StepRow,
   StepSlip,
@@ -43,8 +42,10 @@ function endedEarlyNote(stopReason: unknown): string | null {
   }
 }
 
-/** The Agent's words: a white sheet with its tail at the leading edge. */
+/** The Agent's words: a card sheet with its tail at the leading edge. */
 function Bubble({ children }: PropsWithChildren) {
+  const c = usePalette();
+  const { radii } = useTheme();
   return (
     <View
       style={{
@@ -84,6 +85,8 @@ function ProcessBlock({
   results: ToolResults;
   running: boolean;
 }) {
+  const c = usePalette();
+  const type = useType();
   const part = record(block);
   if (!part) return null;
   if (part.type === 'text' && typeof part.text === 'string') {
@@ -154,6 +157,10 @@ export function TranscriptMessage({
   results?: ToolResults;
 }) {
   const accent = useAccent();
+  const c = usePalette();
+  const hue = useStatus();
+  const type = useType();
+  const { radii } = useTheme();
   const message = record(value);
   if (!message || typeof message.role !== 'string') return null;
   const role = message.role;
@@ -429,6 +436,9 @@ export function LiveTranscript({
   expanded: boolean;
   onToggle: () => void;
 }) {
+  const c = usePalette();
+  const hue = useStatus();
+  const type = useType();
   const phase = livePhase(state, settled, runStatus);
   const steps = state.blocks.filter(
     (block) => block.kind === 'tool' || block.kind === 'compact',

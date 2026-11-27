@@ -44,7 +44,7 @@ const config: NativePlayerConfig = {
 function setup(fetchImpl: (url: string, init?: RequestInit) => Response) {
   const calls: { url: string; init?: RequestInit }[] = [];
   const shell = {
-    accent: () => 'indigo',
+    theme: () => config.themes.indigo,
     post: vi.fn<(message: unknown) => boolean>(() => true),
     setTitle: vi.fn<(title: string | null) => void>(),
     setRoute: vi.fn<(route: string) => void>(),

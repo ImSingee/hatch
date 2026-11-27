@@ -118,6 +118,7 @@ export default defineConfig({
             'src/**/*.{test,spec}.{ts,tsx}',
             'packages/hatch-cli/src/**/*.{test,spec}.ts',
             'packages/hatch-platform-api/*.test.ts',
+            'packages/hatch-design-tokens/test/**/*.test.ts',
             'mobile/src/core/**/*.test.ts',
             'scripts/**/*.test.ts',
             'sdk-internal/ui/test/**/*.test.ts',

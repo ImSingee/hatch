@@ -21,13 +21,13 @@ export type ButtonKind = 'primary' | 'default' | 'tint' | 'subtle' | 'danger';
 
 const KIND: Record<ButtonKind, string> = {
   primary:
-    'bg-primary hover:bg-primary-strong active:bg-primary-strong active:translate-y-px',
+    'bg-primary hover:bg-primary-pressed active:bg-primary-pressed active:translate-y-px',
   default:
     'border border-hairline bg-card hover:bg-surface-hover active:bg-surface-pressed',
   tint: 'bg-primary-tint hover:bg-primary-tint-hover active:bg-primary-tint-hover',
   subtle: 'hover:bg-surface-hover active:bg-surface-pressed',
   danger:
-    'bg-danger hover:bg-danger-strong active:bg-danger-strong active:translate-y-px',
+    'bg-danger hover:bg-danger-pressed active:bg-danger-pressed active:translate-y-px',
 };
 
 const LABEL_COLOR: Record<ButtonKind, string> = {

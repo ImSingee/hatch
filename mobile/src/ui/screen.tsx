@@ -2,8 +2,8 @@ import type { ComponentRef, PropsWithChildren, ReactNode, Ref } from 'react';
 import { Platform, ScrollView, View, type ScrollViewProps } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ground } from './ground';
-import { Text, type } from './text';
-import { palette as c } from './theme';
+import { Text, useType } from './text';
+import { usePalette } from './theme-context';
 
 /**
  * Inset ownership for a page's root scroll view. On iOS UIKit adds the status
@@ -38,6 +38,7 @@ export function PageRoot({
   nested = false,
   children,
 }: PropsWithChildren<{ nested?: boolean }>) {
+  const c = usePalette();
   return (
     <SafeAreaView
       style={{ flex: 1, backgroundColor: c.ground }}
@@ -66,6 +67,7 @@ export function Screen({
   actions?: ReactNode;
   nested?: boolean;
 }>) {
+  const c = usePalette();
   return (
     <SafeAreaView
       style={{ flex: 1, backgroundColor: c.ground }}
@@ -146,6 +148,7 @@ export function Masthead({
   actions?: ReactNode;
   nested?: boolean;
 }) {
+  const type = useType();
   return (
     <View
       style={{
@@ -184,6 +187,7 @@ export function SectionLabel({
   children,
   count,
 }: PropsWithChildren<{ count?: number }>) {
+  const type = useType();
   return (
     <View
       accessible

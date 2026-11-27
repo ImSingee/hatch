@@ -9,6 +9,14 @@
  * names a missing token unresolved.
  */
 import tokens from '../../../packages/hatch-design-tokens/tokens.json' with { type: 'json' };
+import {
+  colorRamp as tokenRamp,
+  destructiveRamp,
+  pressedShade,
+  mix,
+  resolvePreset,
+  type ResolvedTheme,
+} from '../../../packages/hatch-design-tokens/src/index.ts';
 
 export type AccentName = keyof typeof tokens.accents;
 
@@ -24,157 +32,137 @@ export type NshTheme = {
   };
 };
 
-type Rgb = { r: number; g: number; b: number };
-
-function parseHex(hex: string): Rgb {
-  const match = /^#([0-9a-f]{6})$/i.exec(hex);
-  if (!match) throw new Error(`Expected a #RRGGBB colour, got ${hex}`);
-  const value = Number.parseInt(match[1], 16);
-  return { r: (value >> 16) & 255, g: (value >> 8) & 255, b: value & 255 };
-}
-
-function toHex({ r, g, b }: Rgb): string {
-  return `#${[r, g, b]
-    .map((channel) => channel.toString(16).padStart(2, '0').toUpperCase())
-    .join('')}`;
-}
-
-/** Mantine's `lighten`: each channel moves `amount` of the way to white. */
-function lighten(hex: string, amount: number): string {
-  const { r, g, b } = parseHex(hex);
-  const light = (channel: number) =>
-    Math.round(channel + (255 - channel) * amount);
-  return toHex({ r: light(r), g: light(g), b: light(b) });
-}
-
-/** Mantine's `darken`: each channel is scaled by `1 - amount`. */
-function darken(hex: string, amount: number): string {
-  const { r, g, b } = parseHex(hex);
-  const dark = (channel: number) => Math.round(channel * (1 - amount));
-  return toHex({ r: dark(r), g: dark(g), b: dark(b) });
-}
-
 /**
- * The ten-step ramp of one token colour, as `colorRamp()` in
- * `src/ui/theme/theme.ts` builds it for the platform: the token is shade 6,
- * shades 0–5 mix it with white, shades 7–9 with black.
+ * The ten-step ramp of one token colour on a light theme, as the platform
+ * builds it (`packages/hatch-design-tokens`): the token is shade 6, shades
+ * 0–5 mix it with white, shades 7–9 with black.
  */
 export function colorRamp(base: string): string[] {
-  return [
-    lighten(base, 0.92),
-    lighten(base, 0.86),
-    lighten(base, 0.72),
-    lighten(base, 0.5),
-    lighten(base, 0.3),
-    lighten(base, 0.14),
-    base.toUpperCase(),
-    darken(base, 0.16),
-    darken(base, 0.32),
-    darken(base, 0.48),
-  ];
+  return tokenRamp(base);
 }
 
 /**
  * The roles a chromatic colour plays (DESIGN.md "Ramps"): the fill, its
- * stronger shade for hover and for text or links, and the tint variant.
+ * stronger shade for text, links and icons, the shade a hovered or pressed
+ * fill takes (one step away from the fill's `label`), and the tint variant.
  */
-function toneRoles(name: string, base: string): Record<string, string> {
-  const ramp = colorRamp(base);
+function toneRoles(
+  name: string,
+  ramp: readonly string[],
+  label: string,
+): Record<string, string> {
   return {
     [name]: ramp[6],
     [`${name}-strong`]: ramp[7],
+    [`${name}-pressed`]: ramp[pressedShade(ramp, label)],
     [`${name}-tint`]: ramp[1],
     [`${name}-tint-hover`]: ramp[2],
     [`${name}-tint-foreground`]: ramp[8],
   };
 }
 
-/** `amount`% of `hex` over white, as CSS `color-mix(in srgb, …)` gives it. */
-function tintOnWhite(hex: string, percent: number): string {
-  return lighten(hex, 1 - percent / 100);
+const SANS_FALLBACK =
+  'PingFang SC, Microsoft YaHei UI, Noto Sans SC, system-ui, sans-serif';
+const MONO_FALLBACK = 'ui-monospace, Menlo, Consolas, monospace';
+
+/** A bundled face first, or the platform's own for `system`. */
+function family(face: string, fallback: string): string {
+  return face === 'system' ? fallback : `${face}, ${fallback}`;
 }
-
-const neutral = tokens.neutral;
-const light = tokens.light;
-const surfaces = tokens.surfaces;
-
-const sansFamily = `${tokens.fonts.sans}, PingFang SC, Microsoft YaHei UI, Noto Sans SC, system-ui, sans-serif`;
-const monoFamily = `${tokens.fonts.mono}, ui-monospace, Menlo, Consolas, monospace`;
 
 function px(value: number): string {
   return `${value}px`;
 }
 
-/** The complete theme of an App for one accent. */
-export function buildAppTheme(options: { accent?: AccentName } = {}): NshTheme {
+/**
+ * The complete theme of an App: for a resolved instance theme (`theme`),
+ * else for the built-in `desk` theme with `accent`.
+ */
+export function buildAppTheme(
+  options: { accent?: AccentName; theme?: ResolvedTheme } = {},
+): NshTheme {
   const accent = options.accent ?? DEFAULT_ACCENT;
   const accentColor = tokens.accents[accent];
-  if (!accentColor) throw new Error(`Unknown accent ${String(accent)}`);
-  const primary = toneRoles('primary', accentColor);
+  if (!options.theme && !accentColor)
+    throw new Error(`Unknown accent ${String(accent)}`);
+  const theme = options.theme ?? resolvePreset('desk', accentColor);
+  const c = theme.colors;
+  const neutral = theme.ramps.neutral;
+  const primaryColor = c.primary;
+  const primary = toneRoles(
+    'primary',
+    theme.ramps.primary,
+    c['primary-foreground'],
+  );
 
   return {
     cssVars: {
       theme: {
-        radius: px(tokens.radius.md),
-        'radius-xs': px(tokens.radius.xs),
-        'radius-sm': px(tokens.radius.sm),
-        'radius-md': px(tokens.radius.md),
-        'radius-lg': px(tokens.radius.lg),
-        'radius-tile': px(tokens.radius.tile),
-        'radius-xl': px(tokens.radius.xl),
-        'radius-window': px(tokens.radius.window),
-        'font-sans': sansFamily,
-        'font-mono': monoFamily,
+        radius: px(theme.radius.md),
+        'radius-xs': px(theme.radius.xs),
+        'radius-sm': px(theme.radius.sm),
+        'radius-md': px(theme.radius.md),
+        'radius-lg': px(theme.radius.lg),
+        'radius-tile': px(theme.radius.tile),
+        'radius-xl': px(theme.radius.xl),
+        'radius-window': px(theme.radius.window),
+        'font-sans': family(theme.fonts.sans, SANS_FALLBACK),
+        'font-mono': family(theme.fonts.mono, MONO_FALLBACK),
       },
+      // NSH applies `light` as the theme; a dark theme's values go here too.
       light: {
         // shadcn/ui roles, which NSH's own components read as well.
-        background: light.background,
-        foreground: light.foreground,
-        card: light.card,
-        'card-foreground': light['card-foreground'],
-        popover: light.popover,
-        'popover-foreground': light['popover-foreground'],
+        background: c.background,
+        foreground: c.foreground,
+        card: c.card,
+        'card-foreground': c['card-foreground'],
+        popover: c.popover,
+        'popover-foreground': c['popover-foreground'],
         ...primary,
-        'primary-foreground': light['primary-foreground'],
-        secondary: light.secondary,
-        'secondary-foreground': light['secondary-foreground'],
-        muted: light.muted,
-        'muted-foreground': light['muted-foreground'],
-        accent: surfaces.hover,
-        'accent-foreground': light.foreground,
-        border: light.border,
-        input: light.input,
-        ring: light.ring,
-        destructive: light.destructive,
-        'destructive-foreground': light['destructive-foreground'],
-        'chart-1': accentColor,
-        'chart-2': tokens.hues.teal,
-        'chart-3': tokens.hues.amber,
-        'chart-4': tokens.hues.violet,
-        'chart-5': tokens.hues.pink,
-        sidebar: light.muted,
-        'sidebar-foreground': light.foreground,
-        'sidebar-primary': accentColor,
-        'sidebar-primary-foreground': light['primary-foreground'],
+        'primary-foreground': c['primary-foreground'],
+        secondary: c.secondary,
+        'secondary-foreground': c['secondary-foreground'],
+        muted: c.muted,
+        'muted-foreground': c['muted-foreground'],
+        accent: c['surface-hover'],
+        'accent-foreground': c.foreground,
+        border: c.border,
+        input: c.input,
+        ring: c.ring,
+        destructive: c.destructive,
+        'destructive-foreground': c['destructive-foreground'],
+        'chart-1': primaryColor,
+        'chart-2': theme.ramps.teal[6],
+        'chart-3': theme.ramps.amber[6],
+        'chart-4': theme.ramps.violet[6],
+        'chart-5': theme.ramps.pink[6],
+        sidebar: c.muted,
+        'sidebar-foreground': c.foreground,
+        'sidebar-primary': primaryColor,
+        'sidebar-primary-foreground': c['primary-foreground'],
         'sidebar-accent': primary['primary-tint'],
         'sidebar-accent-foreground': primary['primary-tint-foreground'],
-        'sidebar-border': surfaces.hairline,
-        'sidebar-ring': light.ring,
+        'sidebar-border': c.hairline,
+        'sidebar-ring': c.ring,
 
         // Desk surfaces (DESIGN.md "Roles").
-        'surface-window': surfaces.window,
-        'surface-panel': surfaces.panel,
-        'surface-dock': surfaces.dock,
-        'surface-widget': surfaces.widget,
-        'surface-bubble': surfaces.bubble,
-        'surface-sunken': surfaces.sunken,
-        'surface-hover': surfaces.hover,
-        'surface-pressed': surfaces.pressed,
-        scrim: surfaces.scrim,
-        hairline: surfaces.hairline,
-        'ground-accent': tintOnWhite(accentColor, tokens.ground.accentTint),
-        'ground-warm': tokens.ground.warm,
-        'ground-fresh': tokens.ground.fresh,
+        'surface-window': c['surface-window'],
+        'surface-panel': c['surface-panel'],
+        'surface-dock': c['surface-dock'],
+        'surface-widget': c['surface-widget'],
+        'surface-bubble': c['surface-bubble'],
+        'surface-sunken': c['surface-sunken'],
+        'surface-hover': c['surface-hover'],
+        'surface-pressed': c['surface-pressed'],
+        scrim: c['surface-scrim'],
+        hairline: c.hairline,
+        'ground-accent': mix(
+          primaryColor,
+          c.card,
+          1 - tokens.ground.accentTint / 100,
+        ),
+        'ground-warm': c['ground-warm'],
+        'ground-fresh': c['ground-fresh'],
 
         // Neutral shades the component specification names.
         'field-label': neutral[7],
@@ -185,16 +173,22 @@ export function buildAppTheme(options: { accent?: AccentName } = {}): NshTheme {
         'neutral-fill-hover': neutral[3],
 
         // Status colours: red, amber, green and blue (DESIGN.md "Hues").
-        ...toneRoles('danger', tokens.hues.red),
-        ...toneRoles('warning', tokens.hues.amber),
-        ...toneRoles('success', tokens.hues.green),
-        ...toneRoles('info', tokens.hues.blue),
+        // The theme's own destructive colour, so a danger fill keeps the
+        // `destructive-foreground` derived (and contrast-checked) for it.
+        ...toneRoles(
+          'danger',
+          destructiveRamp(theme),
+          c['destructive-foreground'],
+        ),
+        ...toneRoles('warning', theme.ramps.amber, c['on-fill']),
+        ...toneRoles('success', theme.ramps.green, c['on-fill']),
+        ...toneRoles('info', theme.ramps.blue, c['on-fill']),
 
         // Monogram tile fills; each carries white text at 4.5:1.
         ...Object.fromEntries(
           tokens.tiles.map((fill, index) => [`tile-${index}`, fill]),
         ),
-        'tile-foreground': light.card,
+        'tile-foreground': c['on-fill'],
       },
     },
   };

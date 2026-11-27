@@ -1,6 +1,7 @@
 import { Host } from '@expo/ui';
 import { Button, ContextMenu, RNHostView } from '@expo/ui/swift-ui';
 import { glyphs } from './glyph.types';
+import { useTheme } from './theme-context';
 import type { TileMenuProps } from './tile-menu.types';
 
 /**
@@ -8,8 +9,9 @@ import type { TileMenuProps } from './tile-menu.types';
  * and lists its actions, as on the home screen. A tap still reaches the tile.
  */
 export function TileMenu({ actions, children }: TileMenuProps) {
+  const { appearance } = useTheme();
   return (
-    <Host colorScheme="light" matchContents>
+    <Host colorScheme={appearance} matchContents>
       <ContextMenu>
         <ContextMenu.Items>
           {actions.map((action) => (

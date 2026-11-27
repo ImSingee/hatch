@@ -3,11 +3,34 @@ syntax = "proto3";
 package hatch.platform.v1;
 
 import "buf/validate/validate.proto";
+import "google/protobuf/struct.proto";
 
 // The instance-wide look that the web, mobile and desktop clients apply.
+//
+// The instance has one active theme, picked from a library: the presets
+// (`desk`, `desk-dark`) and custom themes. A theme is a theme document: a
+// small set of semantic values (name, appearance, nine colours, a base
+// radius and two bundled fonts) from which the platform derives every other
+// token. A dark theme is a theme like any other; clients draw the active
+// theme whatever their device prefers. An optional accent replaces the
+// active theme's primary. See DESIGN.md "Themes".
 service ThemeService {
   rpc GetTheme(GetThemeRequest) returns (GetThemeResponse);
+  // Changes the accent, the dock labels or the active theme.
   rpc SetTheme(SetThemeRequest) returns (SetThemeResponse);
+  // Back to `desk` with no accent, in one change; dock labels and the
+  // library are kept.
+  rpc ResetTheme(ResetThemeRequest) returns (ResetThemeResponse);
+  // The library: presets first, then custom themes, oldest first.
+  rpc ListThemes(ListThemesRequest) returns (ListThemesResponse);
+  // Saves a new custom theme; it is not activated.
+  rpc CreateTheme(CreateThemeRequest) returns (CreateThemeResponse);
+  // Replaces a custom theme's document whole.
+  rpc UpdateTheme(UpdateThemeRequest) returns (UpdateThemeResponse);
+  // Deletes a custom theme. The active theme cannot be deleted.
+  rpc DeleteTheme(DeleteThemeRequest) returns (DeleteThemeResponse);
+  // Checks a theme document without saving anything.
+  rpc ValidateTheme(ValidateThemeRequest) returns (ValidateThemeResponse);
 }
 
 // One accent the instance can choose.
@@ -17,8 +40,28 @@ message Accent {
   string color = 2;
 }
 
+// One theme of the library.
+message ThemeEntry {
+  // The preset's name, or the custom theme's id.
+  string id = 1;
+  string name = 2;
+  // `preset` or `custom`.
+  string source = 3;
+  // `light` or `dark`.
+  string appearance = 4;
+  // The theme's own primary as #RRGGBB, shown while no accent is chosen.
+  string primary = 5;
+  // The theme document, as saved.
+  google.protobuf.Struct document = 6;
+  // False for a custom theme that no longer passes the current rules. It is
+  // listed with its problems and cannot be activated until it is fixed.
+  bool valid = 7;
+  repeated ThemeProblem problems = 8;
+}
+
 message ThemeState {
-  // Name of the chosen accent.
+  // Name of the chosen accent; empty when no accent is chosen and the
+  // active theme shows its own primary.
   string accent = 1;
   // The accent used while none has been chosen.
   string default_accent = 2;
@@ -27,12 +70,48 @@ message ThemeState {
   // Whether the web dock shows each tile's name under it. Off by default;
   // the full name always shows on hover.
   bool dock_labels = 4;
+  // The theme every client draws.
+  ThemeEntry theme = 5;
+  // Whether the chosen accent hides the active theme's own primary. Clear
+  // the accent to show it.
+  bool accent_overrides_primary = 6;
 }
 
-message GetThemeRequest {}
+// A ten-shade ramp, from the surface (0) to the ink (9); 6 is the fill.
+message ColorRamp {
+  repeated string shades = 1;
+}
+
+// Every token of one theme, ready to apply. Clients do not derive tokens.
+message ResolvedTheme {
+  // `light` or `dark`.
+  string appearance = 1;
+  // The theme's name.
+  string name = 2;
+  // `preset` or `custom`.
+  string source = 3;
+  // Every colour role by name (`background`, `primary-foreground`,
+  // `surface-panel`, `hairline`, ...): #RRGGBB or rgba(r, g, b, a).
+  map<string, string> colors = 4;
+  // `primary`, `neutral` and each status hue.
+  map<string, ColorRamp> ramps = 5;
+  // Each radius in px by name (`xs` ... `dock`).
+  map<string, int32> radius = 6;
+  // `sans` and `mono`: a bundled face, or `system`.
+  map<string, string> fonts = 7;
+  // CSS box-shadow values by name (`card`, `dock`, `window`).
+  map<string, string> shadows = 8;
+}
+
+message GetThemeRequest {
+  // Also return every token of the active theme, with the accent applied.
+  bool resolve = 1;
+}
 
 message GetThemeResponse {
   ThemeState theme = 1;
+  // The active theme's tokens, when `resolve` was set.
+  ResolvedTheme resolved = 2;
 }
 
 // Changes the fields it sets and keeps the others; set at least one.
@@ -45,14 +124,112 @@ message SetThemeRequest {
   }];
   // Whether the web dock shows each tile's name under it.
   optional bool dock_labels = 2;
+  // Clears the accent, so the active theme shows its own `primary`.
+  bool clear_accent = 3;
+  // The theme to activate: a preset name or a custom theme's id.
+  optional string theme = 4 [(buf.validate.field).string = {
+    min_len: 1
+    max_len: 64
+    pattern: "^[a-z0-9][a-z0-9-]*$"
+  }];
 
   option (buf.validate.message).cel = {
     id: "set_theme.field"
-    message: "set accent or dock_labels"
-    expression: "has(this.accent) || has(this.dock_labels)"
+    message: "set accent, clear_accent, dock_labels or theme"
+    expression: "has(this.accent) || this.clear_accent || has(this.dock_labels) || has(this.theme)"
+  };
+  option (buf.validate.message).cel = {
+    id: "set_theme.accent_conflict"
+    message: "set accent or clear_accent, not both"
+    expression: "!(has(this.accent) && this.clear_accent)"
   };
 }
 
 message SetThemeResponse {
   ThemeState theme = 1;
+}
+
+message ResetThemeRequest {}
+
+message ResetThemeResponse {
+  ThemeState theme = 1;
+}
+
+message ListThemesRequest {
+  // At most this many themes; 0 returns every theme from the cursor on.
+  uint32 limit = 1 [(buf.validate.field).uint32.lte = 200];
+  // A next_cursor from an earlier call.
+  optional string cursor = 2 [(buf.validate.field).string = {
+    max_len: 16
+    pattern: "^[0-9]+$"
+  }];
+}
+
+message ListThemesResponse {
+  repeated ThemeEntry themes = 1;
+  // Present while more themes follow; pass it as `cursor`.
+  optional string next_cursor = 2;
+}
+
+message CreateThemeRequest {
+  google.protobuf.Struct document = 1 [(buf.validate.field).required = true];
+}
+
+message CreateThemeResponse {
+  ThemeEntry theme = 1;
+}
+
+message UpdateThemeRequest {
+  // A custom theme's id.
+  string id = 1 [(buf.validate.field).string = {
+    min_len: 1
+    max_len: 64
+    pattern: "^[a-z0-9][a-z0-9-]*$"
+  }];
+  // The new document; it replaces the old one whole.
+  google.protobuf.Struct document = 2 [(buf.validate.field).required = true];
+}
+
+message UpdateThemeResponse {
+  ThemeEntry theme = 1;
+}
+
+message DeleteThemeRequest {
+  // A custom theme's id.
+  string id = 1 [(buf.validate.field).string = {
+    min_len: 1
+    max_len: 64
+    pattern: "^[a-z0-9][a-z0-9-]*$"
+  }];
+}
+
+message DeleteThemeResponse {}
+
+// One reason a theme document was rejected.
+message ThemeProblem {
+  // `invalid_document`, `unknown_key`, `missing_key`, `invalid_color`,
+  // `invalid_value`, `unknown_font` or `low_contrast`.
+  string code = 1;
+  // Dotted path of the key at fault (`colors.primary`); empty for contrast.
+  string path = 2;
+  string message = 3;
+  // For `low_contrast`: the text role, the surface role and the ratio.
+  string foreground = 4;
+  string background = 5;
+  double ratio = 6;
+  double required_ratio = 7;
+}
+
+message ValidateThemeRequest {
+  google.protobuf.Struct document = 1 [(buf.validate.field).required = true];
+  // Also check the document with the instance's current accent, the way it
+  // would be drawn if activated now.
+  bool with_current_accent = 2;
+}
+
+message ValidateThemeResponse {
+  bool ok = 1;
+  repeated ThemeProblem problems = 2;
+  // The resolved theme when the document is valid.
+  ResolvedTheme resolved = 3;
 }

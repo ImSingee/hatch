@@ -12,12 +12,12 @@ import {
   View,
 } from 'react-native';
 import type { JsonValue } from '../core';
-import { useAccent } from './accent';
 import { Glyph } from './glyph';
 import type { GlyphName } from './glyph.types';
 import { useReducedMotion } from './primitives';
-import { Text, type } from './text';
-import { palette as c, radii, status as hue, weights } from './theme';
+import { Text, useType } from './text';
+import { type Palette, type Status, weights } from './theme';
+import { useAccent, usePalette, useStatus, useTheme } from './theme-context';
 import { type WorkPhase, workWords } from './work-layout';
 
 /**
@@ -99,13 +99,22 @@ function LiveDot() {
   );
 }
 
-const PHASE_MARK: Partial<
-  Record<WorkPhase, { glyph: GlyphName; color: string; size: number }>
-> = {
-  failed: { glyph: 'warning', color: hue.danger.ink, size: 11 },
-  cancelled: { glyph: 'stop', color: c.inkSoft, size: 9 },
-  incomplete: { glyph: 'alert', color: hue.warning.ink, size: 11 },
-};
+function phaseMark(
+  phase: WorkPhase,
+  c: Palette,
+  hue: Status,
+): { glyph: GlyphName; color: string; size: number } | undefined {
+  switch (phase) {
+    case 'failed':
+      return { glyph: 'warning', color: hue.danger.ink, size: 11 };
+    case 'cancelled':
+      return { glyph: 'stop', color: c.inkSoft, size: 9 };
+    case 'incomplete':
+      return { glyph: 'alert', color: hue.warning.ink, size: 11 };
+    default:
+      return undefined;
+  }
+}
 
 export function WorkLine({
   phase,
@@ -130,6 +139,9 @@ export function WorkLine({
   expanded: boolean;
   onToggle: () => void;
 }) {
+  const c = usePalette();
+  const hue = useStatus();
+  const type = useType();
   const ticking = phase === 'running' && startedAt !== null && endedAt === null;
   const now = useServerNow(ticking, clockOffset);
   const end = endedAt ?? (ticking ? now : null);
@@ -139,7 +151,7 @@ export function WorkLine({
     steps,
     current,
   });
-  const mark = PHASE_MARK[phase];
+  const mark = phaseMark(phase, c, hue);
   const leadColor = mark && phase !== 'cancelled' ? mark.color : c.inkSoft;
   const line = (pressed: boolean) => (
     <>
@@ -213,6 +225,7 @@ export function WorkLine({
 
 /** The hairline the open process hangs off, on the line's mark. */
 export function WorkRail({ children }: PropsWithChildren) {
+  const c = usePalette();
   return (
     <View
       style={{
@@ -244,6 +257,10 @@ export function StepRow({
   detail?: string;
   body?: ReactNode;
 }) {
+  const c = usePalette();
+  const hue = useStatus();
+  const type = useType();
+  const { radii } = useTheme();
   // A running step shows its detail until the reader folds it; a finished
   // one starts folded. One value drives the slip, chevron and state.
   const [choice, setChoice] = useState<boolean | null>(null);
@@ -358,6 +375,8 @@ export function StepSlip({
   output?: string;
   error?: boolean;
 }) {
+  const hue = useStatus();
+  const type = useType();
   return (
     <View style={{ gap: 8 }}>
       {request !== undefined ? (

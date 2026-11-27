@@ -35,10 +35,11 @@
      warm-ink text color) rather than a solid gray block, so it reads as a
      gentle container, not a heavy chip. No border, and override the theme's
      default Paper shadow so the bubble stays flat. */
-  /* The user's turn carries the accent: a filled bubble with white text and
-     one tight corner pointing at the sender's side. */
+  /* The user's turn carries the accent: a filled bubble with the primary's
+     paired label colour (white on desk) and one tight corner pointing at the
+     sender's side. */
   background-color: var(--mantine-color-primary-filled);
-  color: var(--mantine-color-white);
+  color: var(--mantine-primary-color-contrast);
   border: none;
   border-radius: var(--mantine-radius-xl) var(--mantine-radius-xl)
     var(--mantine-radius-xs) var(--mantine-radius-xl);
@@ -46,9 +47,14 @@
   font-weight: var(--font-weight-strong);
 }
 
-/* On the accent fill a mention is a white wash, not an accent tint. */
+/* On the accent fill a mention is a wash of the label colour, not an accent
+   tint. */
 .userBubble .messageAppMention {
-  background: color-mix(in srgb, var(--mantine-color-white) 22%, transparent);
+  background: color-mix(
+    in srgb,
+    var(--mantine-primary-color-contrast) 22%,
+    transparent
+  );
   color: inherit;
 }
 
@@ -93,7 +99,11 @@
      between the text and the bubble edge. */
   margin-bottom: -6px;
   border-radius: var(--mantine-radius-sm);
-  color: color-mix(in srgb, var(--mantine-color-white) 75%, transparent);
+  color: color-mix(
+    in srgb,
+    var(--mantine-primary-color-contrast) 75%,
+    transparent
+  );
   transition: color var(--transition-fast);
   /* Keep the control out of copied transcript text. */
   user-select: none;
@@ -103,11 +113,11 @@
 }
 
 .userMessageSpoiler .userMessageToggle:hover {
-  color: var(--mantine-color-white);
+  color: var(--mantine-primary-color-contrast);
 }
 
 .userMessageSpoiler .userMessageToggle:focus-visible {
-  outline: 2px solid var(--mantine-color-white);
+  outline: 2px solid var(--mantine-primary-color-contrast);
   outline-offset: -2px;
 }
 

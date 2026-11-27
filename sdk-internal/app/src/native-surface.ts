@@ -14,19 +14,44 @@
 export const NATIVE_SURFACE_PROTOCOL = 'hatch.app-surface/1';
 export const NATIVE_RUNTIME_META = 'hatch-app-runtime';
 
+/**
+ * Which instance theme the surface draws. A player that knows these reads
+ * that theme from the platform (`/api/theme/native`) and refetches when the
+ * key changes; an older player follows `accent` alone.
+ */
+export type ThemeIdentity = {
+  /** Changes whenever the surface's resolved theme changes. */
+  themeKey?: string;
+};
+
+const MAX_THEME_KEY_LENGTH = 128;
+
+function themeIdentity(value: Record<string, unknown>): ThemeIdentity | null {
+  const identity: ThemeIdentity = {};
+  if (value.themeKey !== undefined) {
+    if (
+      typeof value.themeKey !== 'string' ||
+      value.themeKey.length > MAX_THEME_KEY_LENGTH
+    )
+      return null;
+    identity.themeKey = value.themeKey;
+  }
+  return identity;
+}
+
 /** Surface -> player. */
 export type SurfaceMessage =
   /** First message on the port: how the player should start the App. */
-  | {
+  | ({
       type: 'init';
       /** Raw, percent-encoded fragment without `#`; '' is the App's home. */
       route: string;
       /** Instance accent name; unknown names fall back to the default. */
       accent: string;
       visible: boolean;
-    }
+    } & ThemeIdentity)
   | { type: 'navigate'; route: string }
-  | { type: 'theme'; accent: string }
+  | ({ type: 'theme'; accent: string } & ThemeIdentity)
   | { type: 'visibility'; visible: boolean }
   /** A newer deployment of this App is live. */
   | { type: 'update-available' };
@@ -48,25 +73,31 @@ function isObject(value: unknown): value is Record<string, unknown> {
 export function parseSurfaceMessage(value: unknown): SurfaceMessage | null {
   if (!isObject(value)) return null;
   switch (value.type) {
-    case 'init':
+    case 'init': {
+      const identity = themeIdentity(value);
       return typeof value.route === 'string' &&
         typeof value.accent === 'string' &&
-        typeof value.visible === 'boolean'
+        typeof value.visible === 'boolean' &&
+        identity
         ? {
             type: 'init',
             route: value.route,
             accent: value.accent,
             visible: value.visible,
+            ...identity,
           }
         : null;
+    }
     case 'navigate':
       return typeof value.route === 'string'
         ? { type: 'navigate', route: value.route }
         : null;
-    case 'theme':
-      return typeof value.accent === 'string'
-        ? { type: 'theme', accent: value.accent }
+    case 'theme': {
+      const identity = themeIdentity(value);
+      return typeof value.accent === 'string' && identity
+        ? { type: 'theme', accent: value.accent, ...identity }
         : null;
+    }
     case 'visibility':
       return typeof value.visible === 'boolean'
         ? { type: 'visibility', visible: value.visible }

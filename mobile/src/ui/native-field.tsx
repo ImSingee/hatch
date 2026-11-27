@@ -11,32 +11,35 @@ import { Pressable, View } from 'react-native';
 import { useImperativeHandle, useRef, type Ref } from 'react';
 import { IconButton } from './button';
 import { Glyph } from './glyph';
-import { useAccent } from './accent';
-import { palette as c, pill, radii } from './theme';
+import { themedStyles, useAccent, usePalette, useTheme } from './theme-context';
+import { pill } from './theme';
 import { useFieldState } from './use-field-state';
 
 export type NativeFieldRef = { getText: () => string };
 
-const chrome = {
-  box: {
-    backgroundColor: c.card,
-    borderColor: c.input,
-    borderWidth: 1,
-    borderRadius: radii.md,
-    paddingHorizontal: 16,
-    paddingVertical: 13,
-  },
-  search: {
-    backgroundColor: c.sunken,
-    borderColor: c.sunken,
-    borderWidth: 1,
-    borderRadius: pill,
-    paddingLeft: 16,
-    paddingRight: 4,
-    paddingVertical: 4,
-  },
-  bare: { paddingHorizontal: 4, paddingVertical: 8 },
-} as const;
+const useChrome = themedStyles(
+  (t) =>
+    ({
+      box: {
+        backgroundColor: t.palette.card,
+        borderColor: t.palette.input,
+        borderWidth: 1,
+        borderRadius: t.radii.md,
+        paddingHorizontal: 16,
+        paddingVertical: 13,
+      },
+      search: {
+        backgroundColor: t.palette.sunken,
+        borderColor: t.palette.sunken,
+        borderWidth: 1,
+        borderRadius: pill,
+        paddingLeft: 16,
+        paddingRight: 4,
+        paddingVertical: 4,
+      },
+      bare: { paddingHorizontal: 4, paddingVertical: 8 },
+    }) as const,
+);
 
 export function NativeField({
   ref,
@@ -61,9 +64,12 @@ export function NativeField({
   maxLength?: number;
   keyboardType?: TextInputProps['keyboardType'];
   onSubmitEditing?: TextInputProps['onSubmitEditing'];
-  variant?: keyof typeof chrome;
+  variant?: keyof ReturnType<typeof useChrome>;
 }) {
   const accent = useAccent();
+  const c = usePalette();
+  const { appearance } = useTheme();
+  const chrome = useChrome();
   const binding = useFieldState(value, onChange);
   const input = useRef<TextInputRef>(null);
   // Native state can advance before its asynchronous onChangeText reaches JS.
@@ -91,7 +97,7 @@ export function NativeField({
     >
       {search ? <Glyph name="search" size={15} color={c.inkSoft} /> : null}
       <Host
-        colorScheme="light"
+        colorScheme={appearance}
         seedColor={accent.fill}
         matchContents={{ vertical: true }}
         ignoreSafeArea="all"

@@ -29,14 +29,13 @@ import {
   errorText,
 } from '../../../src/ui/primitives';
 import { ScrollScreen } from '../../../src/ui/screen';
-import { Text, type } from '../../../src/ui/text';
+import { Text, useType } from '../../../src/ui/text';
+import { pill, weights } from '../../../src/ui/theme';
 import {
-  palette as c,
-  pill,
-  radii,
-  status,
-  weights,
-} from '../../../src/ui/theme';
+  themedStyles,
+  usePalette,
+  useStatus,
+} from '../../../src/ui/theme-context';
 
 const CHANGE_LABELS: Record<VersionChange, string> = {
   status: 'Status',
@@ -75,6 +74,10 @@ type Version = VersionContent & {
 export default function NotificationHistoryScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const { api, origin } = useSession();
+  const c = usePalette();
+  const status = useStatus();
+  const type = useType();
+  const styles = useStyles();
   const deleted = useNotificationDeleted(id);
   const current = useQuery({
     queryKey: [origin, 'notification', id],
@@ -322,6 +325,9 @@ function Question({
   answer: NotificationAnswer | null | undefined;
   open: boolean;
 }) {
+  const status = useStatus();
+  const type = useType();
+  const styles = useStyles();
   return (
     <View style={styles.question}>
       {(inline ? [] : reply.fields).map((field) => (
@@ -358,36 +364,38 @@ function Question({
   );
 }
 
-const styles = StyleSheet.create({
-  note: {
-    padding: 12,
-    borderRadius: radii.md,
-    backgroundColor: c.muted,
-  },
-  head: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    alignItems: 'center',
-    gap: 8,
-  },
-  label: {
-    paddingHorizontal: 9,
-    paddingVertical: 3,
-    borderRadius: pill,
-    backgroundColor: c.muted,
-  },
-  body: {
-    gap: 8,
-    padding: 14,
-    borderRadius: radii.lg,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: c.hairline,
-    backgroundColor: c.card,
-  },
-  question: {
-    gap: 6,
-    paddingTop: 8,
-    borderTopWidth: StyleSheet.hairlineWidth,
-    borderTopColor: c.hairline,
-  },
-});
+const useStyles = themedStyles((t) =>
+  StyleSheet.create({
+    note: {
+      padding: 12,
+      borderRadius: t.radii.md,
+      backgroundColor: t.palette.muted,
+    },
+    head: {
+      flexDirection: 'row',
+      flexWrap: 'wrap',
+      alignItems: 'center',
+      gap: 8,
+    },
+    label: {
+      paddingHorizontal: 9,
+      paddingVertical: 3,
+      borderRadius: pill,
+      backgroundColor: t.palette.muted,
+    },
+    body: {
+      gap: 8,
+      padding: 14,
+      borderRadius: t.radii.lg,
+      borderWidth: StyleSheet.hairlineWidth,
+      borderColor: t.palette.hairline,
+      backgroundColor: t.palette.card,
+    },
+    question: {
+      gap: 6,
+      paddingTop: 8,
+      borderTopWidth: StyleSheet.hairlineWidth,
+      borderTopColor: t.palette.hairline,
+    },
+  }),
+);

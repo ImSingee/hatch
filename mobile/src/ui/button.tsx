@@ -1,9 +1,9 @@
 import { Pressable, View } from 'react-native';
-import { useAccent } from './accent';
+import { useAccent, usePalette, useStatus, useTheme } from './theme-context';
 import { Glyph } from './glyph';
 import type { GlyphName } from './glyph.types';
 import { Text } from './text';
-import { palette as c, pill, radii, status, weights } from './theme';
+import { pill, weights } from './theme';
 
 type Variant = 'primary' | 'secondary' | 'quiet' | 'danger' | 'muted';
 
@@ -27,7 +27,7 @@ export type ButtonProps = {
   accessibilityHint?: string;
 };
 
-// Desk buttons: the accent fill for the one primary action of a view, a white
+// Desk buttons: the accent fill for the one primary action of a view, a card
 // sheet with a hairline for the rest, a wash for subtle ones.
 export function Button({
   label,
@@ -45,6 +45,9 @@ export function Button({
   accessibilityHint,
 }: ButtonProps) {
   const accent = useAccent();
+  const c = usePalette();
+  const status = useStatus();
+  const { radii } = useTheme();
   const tone = {
     primary: {
       bg: accent.fill,
@@ -142,6 +145,7 @@ export function IconButton({
   size?: number;
 }) {
   const accent = useAccent();
+  const c = usePalette();
   const colors = {
     card: { bg: c.card, fg: c.ink },
     accent: { bg: accent.fill, fg: accent.onFill },
