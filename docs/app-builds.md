@@ -31,15 +31,18 @@ wakes followers, on every platform instance.
 
 - **Dedicated Builder** (optional): `node dist/builder/main.mjs`, the same
   image as the platform, enabled by setting `HATCH_BUILDER_TOKEN` on both.
-  It has no database credentials or platform secrets, but it is not a
-  lower-privileged service: what it builds runs as the platform (see
+  It has no database credentials or platform secrets, but for frontend
+  content it is trusted like the platform: App pages are served from the
+  platform's origin (see
   [What a build is trusted with](#what-a-build-is-trusted-with)), so run it
   only where you would run the platform. It pulls work over the
   platform's internal server (`/internal/api/builds/*`,
   `src/builder/protocol.ts`), so the platform keeps no connection to it and
   may run as several instances. Each build runs in a child process that never
-  receives the token; authored code runs under the sandbox identity, as it did
-  on the platform. `BUILDER_CONCURRENCY` builds run at once, and several
+  receives the token. Every tool that reads or runs authored code (pnpm,
+  deno, tsc, buf, nsh) runs under the sandbox identity, with a home and
+  package store of its own; what those tools write into the package is
+  staged in a sandbox-owned directory of the build copy first. `BUILDER_CONCURRENCY` builds run at once, and several
   Builders can share the queue. A Builder that stops renewing its lease loses
   the build: it is queued again once, then fails with `builder_lost`.
 - **Local**: the CLI builds a checkout of the commit with the platform's
