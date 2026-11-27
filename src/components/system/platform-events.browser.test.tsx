@@ -3,7 +3,12 @@ import {
   QueryClientProvider,
   useQueryClient,
 } from '@tanstack/react-query';
-import { useState, useSyncExternalStore, type ReactNode } from 'react';
+import {
+  useEffect,
+  useState,
+  useSyncExternalStore,
+  type ReactNode,
+} from 'react';
 import { afterEach, expect, test, vi } from 'vitest';
 import { render as renderBare } from 'vitest-browser-react';
 import { themeQueryOptions } from '~queries/theme';
@@ -138,6 +143,37 @@ function CacheProbe() {
   seen.push({ user, dashboards: client.getQueryData(['dashboards']) });
   return null;
 }
+
+/** Switches the account as soon as the tree has mounted, before the provider. */
+function SwitchOnMount() {
+  useEffect(() => session.set('other'), []);
+  return null;
+}
+
+test('never renders the previous account’s data when the account changes right after mounting', async () => {
+  installEventSource();
+  seen.length = 0;
+  queryClient = new QueryClient();
+  // The cache already holds owner's data when the provider mounts.
+  queryClient.setQueryData(['dashboards'], ['owner-dashboard']);
+  const screen = await renderBare(
+    <QueryClientProvider client={queryClient}>
+      <PlatformEventsProvider>
+        <CacheProbe />
+        <SwitchOnMount />
+      </PlatformEventsProvider>
+    </QueryClientProvider>,
+  );
+  await vi.waitFor(() =>
+    expect(seen.some((render) => render.user === 'other')).toBe(true),
+  );
+  expect(
+    seen.filter(
+      (render) => render.user === 'other' && render.dashboards !== undefined,
+    ),
+  ).toEqual([]);
+  screen.unmount();
+});
 
 test('never renders the previous account’s data for the new one', async () => {
   installEventSource();

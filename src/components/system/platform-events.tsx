@@ -120,25 +120,30 @@ export function PlatformEventsProvider({
   // The user whose data the query cache may hold. Children render only for
   // that user: when another account signs in, they show nothing until the
   // previous account's data is gone (a blank frame, never their data).
-  const [cacheUser, setCacheUser] = useState<string | null>(null);
-  const cacheOwner = useRef<string | null>(null);
-  const ready = !userId || cacheUser === null || cacheUser === userId;
+  const [cacheUser, setCacheUser] = useState<string | null>(userId);
+  // The first account this provider sees owns whatever is cached: nothing of
+  // another account can be there yet. Adopted while rendering, so the first
+  // load never blanks.
+  if (userId && cacheUser === null) setCacheUser(userId);
+  const ready = !userId || cacheUser === userId;
+
+  // Another account signed in: none of the previous user's data may stay,
+  // including the pins and dashboards that are not keyed by user. Queries
+  // refetch as the new user once the children mount again.
+  useEffect(() => {
+    if (!userId || cacheUser === null || cacheUser === userId) return;
+    let cancelled = false;
+    void queryClient.resetQueries().then(() => {
+      if (!cancelled) setCacheUser(userId);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [queryClient, userId, cacheUser]);
 
   useEffect(() => {
     // Signed out, here or in another tab: nothing to stream.
     if (!userId) return;
-    let cancelled = false;
-    // Another account signed in: none of the previous user's data may stay,
-    // including the pins and dashboards that are not keyed by user. Queries
-    // refetch as the new user once the children mount again.
-    const switched =
-      cacheOwner.current !== null && cacheOwner.current !== userId;
-    cacheOwner.current = userId;
-    void (switched ? queryClient.resetQueries() : Promise.resolve()).then(
-      () => {
-        if (!cancelled) setCacheUser(userId);
-      },
-    );
     const source = new EventSource('/api/events');
     const onPlatformEvent = (rawEvent: Event) => {
       const event = parsePlatformEvent(rawEvent as MessageEvent<string>);
@@ -160,7 +165,6 @@ export function PlatformEventsProvider({
     source.addEventListener('resync', onResync);
 
     return () => {
-      cancelled = true;
       source.removeEventListener('platform', onPlatformEvent);
       source.removeEventListener('resync', onResync);
       source.close();
