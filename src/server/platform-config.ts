@@ -45,6 +45,17 @@ const modelCatalogStatusSchema = z.object({
 });
 export type ModelCatalogStatus = z.infer<typeof modelCatalogStatusSchema>;
 
+/**
+ * Models an App's AI role uses when the owner picked none for it: one chat
+ * and one image model (`agent_models.id`). Null follows the model order (the
+ * first usable model of that kind).
+ */
+const appAiDefaultsSchema = z.object({
+  chatModelId: z.string().min(1).max(191).nullable().catch(null),
+  imageModelId: z.string().min(1).max(191).nullable().catch(null),
+});
+export type AppAiDefaults = z.infer<typeof appAiDefaultsSchema>;
+
 type ConfigEntry<T> = {
   schema: z.ZodType<T>;
   /** Value used when no row exists (fresh install / key never written). */
@@ -95,6 +106,10 @@ const REGISTRY = {
       etagSourceUrl: null,
     },
   } satisfies ConfigEntry<ModelCatalogStatus>,
+  'apps.aiDefaults': {
+    schema: appAiDefaultsSchema,
+    fallback: { chatModelId: null, imageModelId: null },
+  } satisfies ConfigEntry<AppAiDefaults>,
 } as const;
 
 export type PlatformConfigKey = keyof typeof REGISTRY;

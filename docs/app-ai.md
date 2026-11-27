@@ -48,11 +48,14 @@ Checks, in order:
 3. Body schema (`ai_invalid_request`, 400).
 4. The role is declared by the live deployment (`ai_role_not_declared` or
    `ai_role_kind_mismatch`, 422).
-5. Model resolution (`src/server/apps/ai/models.ts`): the owner's binding, or
-   the default of the role's kind (the first chat model of the Agent catalog,
-   or the default image model). `ai_no_model` / `ai_model_unavailable`, 409.
-6. Monthly budget (`ai_budget_exceeded`, 402) and at most four calls in flight
-   per App and platform process (`ai_busy`, 429).
+5. Model resolution (`src/server/apps/ai/models.ts`): the owner's binding
+   for the role; else the default model for Apps of the role's kind
+   (`apps.aiDefaults` in `platform_config`); else the first usable model of
+   that kind in provider and model order. A disabled binding or default
+   fails with `ai_model_unavailable` instead of falling through; none at all
+   is `ai_no_model` (both 409).
+6. At most four calls in flight per App and platform process (`ai_busy`,
+   429).
 7. The call. Chat goes through pi-ai with the same model config an Agent Run
    uses (`src/server/model-resolution.ts`, `src/agent/remote-models.ts`).
    `maxTokens` is capped at the model's limit; the model's default thinking
@@ -61,31 +64,26 @@ Checks, in order:
    and its signature) that the App sends back unchanged; the platform
    restores them as thinking blocks attributed to that model, so pi-ai
    replays signatures only to it. A client disconnect, including an SDK
-   caller that stops iterating, aborts the provider request. Images use the image drivers and are re-encoded as
-   PNG.
+   caller that stops iterating, aborts the provider request. Images use the
+   image drivers and are re-encoded as PNG.
 8. A usage row (`app_ai_usage`): role, kind, provider name, model id, tokens,
-   images, estimated cost, status, error code, duration. Prompts and replies
-   are never stored.
+   images, status, error code, duration. Prompts and replies are never
+   stored. Billing (prices, budgets, spend) is out of scope for now.
 
 Errors are JSON `{ ok: false, error: { code, message } }`. Streamed chat is
 server-sent events: `text` (`{ delta }`), `tool_call` (`{ type, id, name,
 arguments }`), then one `done` (the same body as the non-streaming JSON
 result) or `error`.
 
-## Cost
-
-Cost is estimated from the catalog price of the chat model
-(`usage.cost.total` from pi-ai). Image models have no price; their calls are
-recorded as unpriced and count as zero towards the budget. The budget is per
-UTC calendar month (`apps.ai_monthly_budget_micros`, millionths of a US
-dollar); calls already in flight when the cap is reached may finish past it.
-
 ## Owner settings
 
-`src/server/apps/ai/settings.ts` serves both the App manage page (Server
-Functions in `src/server/app-ai.ts`) and the public `AppService` RPCs
-`GetAppAi`, `SetAppAiRoleModel`, `SetAppAiBudget` and `ListAppAiUsage`
-(`hatch app ai show|set-model|budget|usage`). Bindings live in
+`src/server/apps/ai/settings.ts` serves the Web UI (Server Functions in
+`src/server/app-ai.ts`: the App manage page and the "Default models for Apps"
+card in Settings → AI Providers) and the public `AppService` RPCs
+`GetAppAi`, `SetAppAiRoleModel`, `ListAppAiUsage`, `GetAppAiDefaults` and
+`SetAppAiDefaults` (`hatch app ai show|set-model|usage|defaults`). The
+defaults are stored as model ids; deleting that model clears the default, so
+the first usable model applies again. Bindings live in
 `app_ai_role_bindings`; deleting the bound model deletes the binding, so the
 role falls back to the default. Disabling the bound model makes the role
 `unavailable` until the owner picks another.

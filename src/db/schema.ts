@@ -1,7 +1,6 @@
 import { sql } from 'drizzle-orm';
 import {
   timestamp as _timestamp,
-  bigint,
   boolean,
   check,
   index,
@@ -268,11 +267,6 @@ export const apps = snakeCase.table(
      * every time the icon is replaced. Null means the monogram fallback.
      */
     icon: text(),
-    /**
-     * Spending cap for the App's AI calls per calendar month (UTC), in
-     * millionths of a US dollar. Null means no cap.
-     */
-    aiMonthlyBudgetMicros: bigint({ mode: 'number' }),
     currentDeploymentId: ulid(),
     createdAt,
     updatedAt,
@@ -651,10 +645,6 @@ export const appAiUsage = snakeCase.table(
     cacheReadTokens: integer().notNull().default(0),
     cacheWriteTokens: integer().notNull().default(0),
     images: integer().notNull().default(0),
-    /** Estimated cost in millionths of a US dollar. */
-    costMicros: bigint({ mode: 'number' }).notNull().default(0),
-    /** False when the model has no price, so the cost is not known. */
-    costKnown: boolean().notNull().default(true),
     status: text().$type<AppAiCallStatus>().notNull(),
     errorCode: text(),
     durationMs: integer().notNull().default(0),

@@ -62,17 +62,19 @@ service AppService {
   // that call its webhook or RPC API. Read-only.
   rpc ListAppDocs(ListAppDocsRequest) returns (ListAppDocsResponse);
   rpc GetAppDoc(GetAppDocRequest) returns (GetAppDocResponse);
-  // AI roles the live deployment declares, the model each uses, the monthly
-  // budget and this month's estimated spend.
+  // AI roles the live deployment declares and the model each uses.
   rpc GetAppAi(GetAppAiRequest) returns (GetAppAiResponse);
   // Pick the model for one declared AI role, or clear the pick so the role
-  // uses the default model of its kind.
+  // uses the default model for Apps.
   rpc SetAppAiRoleModel(SetAppAiRoleModelRequest) returns (SetAppAiRoleModelResponse);
-  // Set or remove the App's monthly AI budget.
-  rpc SetAppAiBudget(SetAppAiBudgetRequest) returns (SetAppAiBudgetResponse);
   // The App's AI calls, newest first, and this month's totals per role and
   // model. Prompts and replies are never stored.
   rpc ListAppAiUsage(ListAppAiUsageRequest) returns (ListAppAiUsageResponse);
+  // The default chat and image models every App's unpicked AI roles use.
+  rpc GetAppAiDefaults(GetAppAiDefaultsRequest) returns (GetAppAiDefaultsResponse);
+  // Set or clear the default chat and image models for Apps. An unset field
+  // leaves that default unchanged.
+  rpc SetAppAiDefaults(SetAppAiDefaultsRequest) returns (SetAppAiDefaultsResponse);
 }
 
 message ListAppsRequest {}
@@ -813,12 +815,15 @@ message AppAiRole {
   repeated string needs = 4;
   // The model calls use now; unset when none of this kind is configured.
   optional AppAiModel model = 5;
-  // True when the owner picked the model; false when it is the default.
+  // True when the owner picked the model for this role.
   bool bound = 6;
-  // True when the picked model is disabled; calls fail until it is changed.
+  // True when the model is disabled; calls fail until it is changed.
   bool unavailable = 7;
   // Declared needs the model does not offer (only "reasoning" is known).
   repeated string missing_needs = 8;
+  // For an unpicked role, where its model comes from: "setting" (the default
+  // model for Apps) or "order" (the first usable model).
+  optional string default_source = 9;
 }
 
 message AppAi {
@@ -826,17 +831,10 @@ message AppAi {
   // False when the live deployment declares no AI roles.
   bool available = 2;
   repeated AppAiRole roles = 3;
-  // Monthly cap in US dollars; unset means no cap.
-  optional double budget_usd = 4;
-  // Estimated spend since month_start (UTC calendar month).
-  double month_spend_usd = 5;
-  // Calls this month whose model has no price; the spend is then a floor.
-  uint32 month_unpriced_calls = 6;
-  string month_start = 7;
   // Models chat roles may be set to.
-  repeated AppAiModel chat_models = 8;
+  repeated AppAiModel chat_models = 4;
   // Models image roles may be set to.
-  repeated AppAiModel image_models = 9;
+  repeated AppAiModel image_models = 5;
 }
 
 message GetAppAiRequest {
@@ -870,22 +868,6 @@ message SetAppAiRoleModelResponse {
   AppAi ai = 1;
 }
 
-message SetAppAiBudgetRequest {
-  string id = 1 [(buf.validate.field).string = {
-    min_len: 1
-    max_len: 191
-  }];
-  // Monthly cap in US dollars; unset removes the cap.
-  optional double budget_usd = 2 [(buf.validate.field).double = {
-    gte: 0
-    lte: 1000000
-  }];
-}
-
-message SetAppAiBudgetResponse {
-  AppAi ai = 1;
-}
-
 message ListAppAiUsageRequest {
   string id = 1 [(buf.validate.field).string = {
     min_len: 1
@@ -916,9 +898,7 @@ message AppAiCall {
   uint32 cache_read_tokens = 11;
   uint32 cache_write_tokens = 12;
   uint32 images = 13;
-  // Estimated cost; unset when the model has no price.
-  optional double cost_usd = 14;
-  uint32 duration_ms = 15;
+  uint32 duration_ms = 14;
 }
 
 // This month's calls of one role on one model.
@@ -930,8 +910,6 @@ message AppAiUsageTotal {
   uint64 input_tokens = 5;
   uint64 output_tokens = 6;
   uint32 images = 7;
-  double cost_usd = 8;
-  uint32 unpriced_calls = 9;
 }
 
 message ListAppAiUsageResponse {
@@ -942,4 +920,47 @@ message ListAppAiUsageResponse {
   // This month's totals; the same on every page.
   repeated AppAiUsageTotal month_totals = 4;
   string month_start = 5;
+}
+
+// The default model of one kind for Apps.
+message AppAiDefault {
+  // The model unpicked roles of this kind use now; unset when none exists.
+  optional AppAiModel model = 1;
+  // "setting" when the owner chose it, "order" when it is the first usable
+  // model of that kind.
+  string source = 2;
+  // True when the chosen default is disabled; those calls fail.
+  bool unavailable = 3;
+}
+
+message AppAiDefaults {
+  AppAiDefault chat = 1;
+  AppAiDefault image = 2;
+  repeated AppAiModel chat_models = 3;
+  repeated AppAiModel image_models = 4;
+}
+
+message GetAppAiDefaultsRequest {}
+
+message GetAppAiDefaultsResponse {
+  AppAiDefaults defaults = 1;
+}
+
+message SetAppAiDefaultsRequest {
+  // Model id or "<provider name>/<model id>"; unset leaves it unchanged.
+  optional string chat_model = 1 [(buf.validate.field).string = {
+    min_len: 1
+    max_len: 400
+  }];
+  // Clear the default chat model, so the first usable one applies.
+  bool clear_chat_model = 2;
+  optional string image_model = 3 [(buf.validate.field).string = {
+    min_len: 1
+    max_len: 400
+  }];
+  bool clear_image_model = 4;
+}
+
+message SetAppAiDefaultsResponse {
+  AppAiDefaults defaults = 1;
 }

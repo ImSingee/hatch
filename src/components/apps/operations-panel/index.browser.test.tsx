@@ -41,7 +41,6 @@ vi.mock('~queries/app-ai', () => ({
 }));
 
 vi.mock('~server/app-ai', () => ({
-  setAppAiBudgetFn: vi.fn<() => Promise<null>>(),
   setAppAiRoleModelFn: vi.fn<() => Promise<null>>(),
 }));
 

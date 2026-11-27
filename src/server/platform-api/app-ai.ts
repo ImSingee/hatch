@@ -1,6 +1,8 @@
 /** Server-only: AppService AI RPC messages from the App AI domain views. */
 import type { AiModelOption } from '~server/apps/ai/models';
 import type {
+  AiDefaultView,
+  AppAiDefaultsView,
   AppAiUsageItem,
   AppAiUsageSummaryRow,
   AppAiView,
@@ -28,22 +30,30 @@ export function appAiMessage(view: AppAiView) {
       bound: role.bound,
       unavailable: role.unavailable,
       missingNeeds: role.missingNeeds,
+      defaultSource: role.defaultSource ?? undefined,
     })),
-    budgetUsd: view.budgetUsd ?? undefined,
-    monthSpendUsd: view.monthSpendUsd,
-    monthUnpricedCalls: view.monthUnpricedCalls,
-    monthStart: view.monthStart,
+    chatModels: view.models.chat.map(modelMessage),
+    imageModels: view.models.image.map(modelMessage),
+  };
+}
+
+const defaultMessage = (view: AiDefaultView) => ({
+  model: view.model ? modelMessage(view.model) : undefined,
+  source: view.source,
+  unavailable: view.unavailable,
+});
+
+export function appAiDefaultsMessage(view: AppAiDefaultsView) {
+  return {
+    chat: defaultMessage(view.chat),
+    image: defaultMessage(view.image),
     chatModels: view.models.chat.map(modelMessage),
     imageModels: view.models.image.map(modelMessage),
   };
 }
 
 export function appAiCallMessage(call: AppAiUsageItem) {
-  return {
-    ...call,
-    errorCode: call.errorCode ?? undefined,
-    costUsd: call.costUsd ?? undefined,
-  };
+  return { ...call, errorCode: call.errorCode ?? undefined };
 }
 
 export function appAiTotalMessage(row: AppAiUsageSummaryRow) {

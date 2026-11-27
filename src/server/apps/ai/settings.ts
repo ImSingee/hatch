@@ -1,27 +1,145 @@
 /**
- * Server-only: the owner's AI settings for one App — which model serves each
- * declared role, the monthly budget, and the usage record. The Web UI Server
- * Functions and the public AppService RPCs both call these.
+ * Server-only: the owner's AI settings — the platform default models for
+ * Apps, which model serves each role an App declares, and the record of the
+ * App's AI calls. The Web UI Server Functions and the public AppService RPCs
+ * both call these.
  */
 import { and, desc, eq, gte, lt, sql } from 'drizzle-orm';
 import { db, schema } from '~/db';
 import type { AppAiCallKind, AppAiCallStatus } from '~/db/schema';
 import type { AiRole, NormalizedManifest } from '~server/apps/manifest';
 import { AppError } from '~server/errors';
-import { MAX_AI_BUDGET_USD } from './contract';
-import { listAiModelOptions, type AiModelOption } from './models';
+import { updatePlatformConfig } from '~server/platform-config';
+import {
+  defaultModelRowId,
+  listAiModelOptions,
+  type AiDefaultSource,
+  type AiModelOption,
+  type AiRoleKind,
+} from './models';
 import { monthStart } from './usage';
+
+type Options = Record<AiRoleKind, AiModelOption[]>;
+
+/** Describe a model row for a view, also when it is no longer usable. */
+async function describeModel(
+  id: string,
+  options: AiModelOption[],
+): Promise<{ model: AiModelOption | null; unavailable: boolean }> {
+  const usable = options.find((option) => option.id === id);
+  if (usable) return { model: usable, unavailable: false };
+  const row = await db.query.agentModels.findFirst({
+    where: { id },
+    columns: { id: true, providerId: true, modelId: true, name: true },
+  });
+  if (!row) return { model: null, unavailable: true };
+  const provider = await db.query.agentProviders.findFirst({
+    where: { id: row.providerId },
+    columns: { name: true },
+  });
+  const providerName = provider?.name ?? '';
+  return {
+    model: {
+      id: row.id,
+      providerName,
+      modelId: row.modelId,
+      name: row.name,
+      ref: `${providerName}/${row.modelId}`,
+      reasoning: false,
+    },
+    unavailable: true,
+  };
+}
+
+/** Resolve a model id or `<provider>/<model>` ref to one usable option. */
+function matchModel(options: Options, kind: AiRoleKind, model: string) {
+  const matches = options[kind].filter(
+    (option) => option.id === model || option.ref === model,
+  );
+  if (matches.length !== 1)
+    throw new AppError(
+      matches.length
+        ? `Model "${model}" matches several ${kind} models; pass its id instead.`
+        : `No usable ${kind} model matches "${model}".`,
+      400,
+      { code: 'app.aiModelNotFound', params: { model, kind } },
+    );
+  return matches[0];
+}
+
+/** ================== platform defaults ================== */
+
+export type AiDefaultView = {
+  /** The model unpicked roles of this kind use now; null when none exists. */
+  model: AiModelOption | null;
+  /** `setting` when the owner chose it; `order` when it is the first model. */
+  source: AiDefaultSource;
+  /** True when the chosen default is disabled, so those calls fail. */
+  unavailable: boolean;
+};
+
+export type AppAiDefaultsView = {
+  chat: AiDefaultView;
+  image: AiDefaultView;
+  /** Models each kind may be set to. */
+  models: Options;
+};
+
+async function defaultView(
+  kind: AiRoleKind,
+  options: Options,
+): Promise<AiDefaultView> {
+  const { id, source } = await defaultModelRowId(kind, options);
+  if (!id) return { model: null, source, unavailable: false };
+  const { model, unavailable } = await describeModel(id, options[kind]);
+  return { model, source, unavailable };
+}
+
+export async function getAppAiDefaults(): Promise<AppAiDefaultsView> {
+  const models = await listAiModelOptions();
+  const [chat, image] = await Promise.all([
+    defaultView('chat', models),
+    defaultView('image', models),
+  ]);
+  return { chat, image, models };
+}
+
+/**
+ * Set or clear the default chat and image models for Apps. `undefined` leaves
+ * a kind unchanged; `null` clears it so the first usable model applies.
+ * `chat` / `image` take a model id or a `<provider name>/<model id>` ref.
+ */
+export async function setAppAiDefaults(change: {
+  chat?: string | null;
+  image?: string | null;
+}): Promise<AppAiDefaultsView> {
+  const options = await listAiModelOptions();
+  const pick = (kind: AiRoleKind, value: string | null | undefined) =>
+    value == null ? value : matchModel(options, kind, value).id;
+  const chatModelId = pick('chat', change.chat);
+  const imageModelId = pick('image', change.image);
+  await updatePlatformConfig('apps.aiDefaults', (current) => ({
+    chatModelId: chatModelId === undefined ? current.chatModelId : chatModelId,
+    imageModelId:
+      imageModelId === undefined ? current.imageModelId : imageModelId,
+  }));
+  return getAppAiDefaults();
+}
+
+/** ================== per-App roles ================== */
 
 export type AppAiRoleView = {
   name: string;
-  kind: AiRole['kind'];
+  kind: AiRoleKind;
   description: string;
   needs: NonNullable<AiRole['needs']>;
   /** The model calls use now; null when none of this kind is configured. */
   model: AiModelOption | null;
-  /** True when the owner picked the model; false when it is the default. */
+  /** True when the owner picked the model for this role. */
   bound: boolean;
-  /** True when the picked model is disabled, so calls fail until it is changed. */
+  /** Where an unpicked role's model comes from; null when bound. */
+  defaultSource: AiDefaultSource | null;
+  /** True when the model is disabled, so calls fail until it is changed. */
   unavailable: boolean;
   /** Declared needs the effective model does not offer (only `reasoning` is known). */
   missingNeeds: NonNullable<AiRole['needs']>;
@@ -32,25 +150,14 @@ export type AppAiView = {
   /** False when the live deployment declares no AI roles. */
   available: boolean;
   roles: AppAiRoleView[];
-  /** Monthly cap in US dollars; null means no cap. */
-  budgetUsd: number | null;
-  /** Estimated spend since `monthStart`. */
-  monthSpendUsd: number;
-  /** Calls this month whose model has no price, so the spend is a floor. */
-  monthUnpricedCalls: number;
-  monthStart: string;
   /** Models each role kind may be set to. */
-  models: { chat: AiModelOption[]; image: AiModelOption[] };
+  models: Options;
 };
 
-async function loadApp(appId: string) {
+async function loadRoles(appId: string): Promise<AiRole[]> {
   const app = await db.query.apps.findFirst({
     where: { id: appId },
-    columns: {
-      id: true,
-      currentDeploymentId: true,
-      aiMonthlyBudgetMicros: true,
-    },
+    columns: { id: true, currentDeploymentId: true },
   });
   if (!app) throw new AppError('App not found.', 404);
   const deployment = app.currentDeploymentId
@@ -60,118 +167,58 @@ async function loadApp(appId: string) {
       })
     : undefined;
   const manifest = deployment?.manifestNormalized as NormalizedManifest | null;
-  return { app, roles: manifest?.ai?.roles ?? [] };
-}
-
-async function monthTotals(appId: string) {
-  const [row] = await db
-    .select({
-      micros: sql<string>`coalesce(sum(${schema.appAiUsage.costMicros}), 0)`,
-      unpriced: sql<string>`count(*) filter (where not ${schema.appAiUsage.costKnown})`,
-    })
-    .from(schema.appAiUsage)
-    .where(
-      and(
-        eq(schema.appAiUsage.appId, appId),
-        gte(schema.appAiUsage.createdAt, monthStart()),
-      ),
-    );
-  return {
-    spendUsd: Number(row?.micros ?? 0) / 1e6,
-    unpriced: Number(row?.unpriced ?? 0),
-  };
+  return manifest?.ai?.roles ?? [];
 }
 
 export async function getAppAiSettings(appId: string): Promise<AppAiView> {
-  const { app, roles } = await loadApp(appId);
-  const [models, bindings, totals] = await Promise.all([
+  const roles = await loadRoles(appId);
+  const [models, bindings] = await Promise.all([
     listAiModelOptions(),
     db.query.appAiRoleBindings.findMany({ where: { appId } }),
-    monthTotals(appId),
   ]);
-  const boundRows = bindings.length
-    ? await db.query.agentModels.findMany({
-        where: { id: { in: bindings.map((binding) => binding.modelRowId) } },
-        columns: { id: true, providerId: true, modelId: true, name: true },
-      })
-    : [];
-  const boundProviders = boundRows.length
-    ? await db.query.agentProviders.findMany({
-        where: { id: { in: boundRows.map((row) => row.providerId) } },
-        columns: { id: true, name: true },
-      })
-    : [];
-
-  const views = roles.map((role): AppAiRoleView => {
-    const options = models[role.kind];
-    const binding = bindings.find((entry) => entry.role === role.name);
-    let model: AiModelOption | null = options[0] ?? null;
-    let unavailable = false;
-    if (binding) {
-      const usable = options.find((option) => option.id === binding.modelRowId);
-      if (usable) {
-        model = usable;
-      } else {
-        const row = boundRows.find((entry) => entry.id === binding.modelRowId);
-        const providerName =
-          boundProviders.find((entry) => entry.id === row?.providerId)?.name ??
-          '';
-        unavailable = true;
-        model = row
-          ? {
-              id: row.id,
-              providerName,
-              modelId: row.modelId,
-              name: row.name,
-              ref: `${providerName}/${row.modelId}`,
-              reasoning: false,
-            }
-          : null;
-      }
-    }
-    const needs = role.needs ?? [];
-    const missingNeeds =
-      model && role.kind === 'chat' && !model.reasoning
-        ? needs.filter((need) => need === 'reasoning')
-        : [];
-    return {
-      name: role.name,
-      kind: role.kind,
-      description: role.description,
-      needs,
-      model,
-      bound: Boolean(binding),
-      unavailable,
-      missingNeeds,
-    };
-  });
-
-  return {
-    appId: app.id,
-    available: roles.length > 0,
-    roles: views,
-    budgetUsd:
-      app.aiMonthlyBudgetMicros === null
-        ? null
-        : app.aiMonthlyBudgetMicros / 1e6,
-    monthSpendUsd: totals.spendUsd,
-    monthUnpricedCalls: totals.unpriced,
-    monthStart: monthStart().toISOString(),
-    models,
+  const defaults = {
+    chat: await defaultView('chat', models),
+    image: await defaultView('image', models),
   };
+
+  const views = await Promise.all(
+    roles.map(async (role): Promise<AppAiRoleView> => {
+      const binding = bindings.find((entry) => entry.role === role.name);
+      const effective = binding
+        ? await describeModel(binding.modelRowId, models[role.kind])
+        : defaults[role.kind];
+      const needs = role.needs ?? [];
+      return {
+        name: role.name,
+        kind: role.kind,
+        description: role.description,
+        needs,
+        model: effective.model,
+        bound: Boolean(binding),
+        defaultSource: binding ? null : defaults[role.kind].source,
+        unavailable: effective.unavailable,
+        missingNeeds:
+          effective.model && role.kind === 'chat' && !effective.model.reasoning
+            ? needs.filter((need) => need === 'reasoning')
+            : [],
+      };
+    }),
+  );
+
+  return { appId, available: roles.length > 0, roles: views, models };
 }
 
 /**
  * Pick the model for one declared role, or clear the pick (`null`) so the
- * role uses the default. `model` is a model id from the options or a
- * `<provider name>/<model id>` reference.
+ * role uses the default model for Apps. `model` is a model id from the
+ * options or a `<provider name>/<model id>` reference.
  */
 export async function setAppAiRoleModel(
   appId: string,
   roleName: string,
   model: string | null,
 ): Promise<AppAiView> {
-  const { roles } = await loadApp(appId);
+  const roles = await loadRoles(appId);
   const role = roles.find((entry) => entry.name === roleName);
   if (!role)
     throw new AppError(
@@ -190,55 +237,18 @@ export async function setAppAiRoleModel(
       );
     return getAppAiSettings(appId);
   }
-  const options = (await listAiModelOptions())[role.kind];
-  const matches = options.filter(
-    (option) => option.id === model || option.ref === model,
-  );
-  if (matches.length !== 1)
-    throw new AppError(
-      matches.length
-        ? `Model "${model}" matches several ${role.kind} models; pass its id instead.`
-        : `No usable ${role.kind} model matches "${model}".`,
-      400,
-      { code: 'app.aiModelNotFound', params: { model, kind: role.kind } },
-    );
+  const option = matchModel(await listAiModelOptions(), role.kind, model);
   await db
     .insert(schema.appAiRoleBindings)
-    .values({ appId, role: roleName, modelRowId: matches[0].id })
+    .values({ appId, role: roleName, modelRowId: option.id })
     .onConflictDoUpdate({
       target: [schema.appAiRoleBindings.appId, schema.appAiRoleBindings.role],
-      set: { modelRowId: matches[0].id, updatedAt: new Date() },
+      set: { modelRowId: option.id, updatedAt: new Date() },
     });
   return getAppAiSettings(appId);
 }
 
-/** Set the monthly budget in US dollars, or remove the cap with `null`. */
-export async function setAppAiBudget(
-  appId: string,
-  budgetUsd: number | null,
-): Promise<AppAiView> {
-  if (
-    budgetUsd !== null &&
-    (!Number.isFinite(budgetUsd) ||
-      budgetUsd < 0 ||
-      budgetUsd > MAX_AI_BUDGET_USD)
-  )
-    throw new AppError(
-      `The monthly AI budget must be 0 to ${MAX_AI_BUDGET_USD} USD.`,
-      400,
-      { code: 'app.aiBudgetInvalid' },
-    );
-  const updated = await db
-    .update(schema.apps)
-    .set({
-      aiMonthlyBudgetMicros:
-        budgetUsd === null ? null : Math.round(budgetUsd * 1e6),
-    })
-    .where(eq(schema.apps.id, appId))
-    .returning({ id: schema.apps.id });
-  if (!updated.length) throw new AppError('App not found.', 404);
-  return getAppAiSettings(appId);
-}
+/** ================== call record ================== */
 
 export type AppAiUsageItem = {
   id: string;
@@ -254,8 +264,6 @@ export type AppAiUsageItem = {
   cacheReadTokens: number;
   cacheWriteTokens: number;
   images: number;
-  /** Null when the model has no price. */
-  costUsd: number | null;
   durationMs: number;
 };
 
@@ -267,8 +275,6 @@ export type AppAiUsageSummaryRow = {
   inputTokens: number;
   outputTokens: number;
   images: number;
-  costUsd: number;
-  unpricedCalls: number;
 };
 
 /** Newest calls first; `cursor` is the last id of the previous page. */
@@ -304,14 +310,13 @@ export async function listAppAiUsage(
       cacheReadTokens: row.cacheReadTokens,
       cacheWriteTokens: row.cacheWriteTokens,
       images: row.images,
-      costUsd: row.costKnown ? row.costMicros / 1e6 : null,
       durationMs: row.durationMs,
     })),
     nextCursor: rows.length > limit ? (page.at(-1)?.id ?? null) : null,
   };
 }
 
-/** This month's calls grouped by role and model, most expensive first. */
+/** This month's calls grouped by role and model, most calls first. */
 export async function summarizeAppAiUsage(
   appId: string,
 ): Promise<AppAiUsageSummaryRow[]> {
@@ -325,8 +330,6 @@ export async function summarizeAppAiUsage(
       inputTokens: sql<string>`coalesce(sum(${t.inputTokens}), 0)`,
       outputTokens: sql<string>`coalesce(sum(${t.outputTokens}), 0)`,
       images: sql<string>`coalesce(sum(${t.images}), 0)`,
-      costMicros: sql<string>`coalesce(sum(${t.costMicros}), 0)`,
-      unpriced: sql<string>`count(*) filter (where not ${t.costKnown})`,
     })
     .from(t)
     .where(and(eq(t.appId, appId), gte(t.createdAt, monthStart())))
@@ -340,8 +343,6 @@ export async function summarizeAppAiUsage(
       inputTokens: Number(row.inputTokens),
       outputTokens: Number(row.outputTokens),
       images: Number(row.images),
-      costUsd: Number(row.costMicros) / 1e6,
-      unpricedCalls: Number(row.unpriced),
     }))
-    .sort((a, b) => b.costUsd - a.costUsd || b.calls - a.calls);
+    .sort((a, b) => b.calls - a.calls);
 }

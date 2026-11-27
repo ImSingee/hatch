@@ -1,38 +1,26 @@
 import {
+  Anchor,
   Badge,
-  Button,
   Group,
-  NumberInput,
   Select,
   Stack,
   Table,
   Text,
 } from '@mantine/core';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { Link } from '@tanstack/react-router';
 import { IconSparkles } from '@tabler/icons-react';
-import { useState } from 'react';
+import { Trans } from 'react-i18next';
 import { toast } from 'sonner';
 import { useI18n } from '~i18n';
 import { formatRelativeTime } from '~lib/format';
 import { appAiQueryOptions, appAiUsageQueryOptions } from '~queries/app-ai';
 import {
-  setAppAiBudgetFn,
   setAppAiRoleModelFn,
   type AppAiRoleView,
   type AppAiView,
 } from '~server/app-ai';
 import { SectionHeader } from './section-header';
-
-function useUsd() {
-  const { locale } = useI18n();
-  return (value: number) =>
-    new Intl.NumberFormat(locale, {
-      style: 'currency',
-      currency: 'USD',
-      minimumFractionDigits: 2,
-      maximumFractionDigits: value > 0 && value < 1 ? 4 : 2,
-    }).format(value);
-}
 
 function RoleRow({
   appId,
@@ -45,7 +33,7 @@ function RoleRow({
 }) {
   const { t } = useI18n();
   const qc = useQueryClient();
-  const options = role.kind === 'chat' ? view.models.chat : view.models.image;
+  const options = view.models[role.kind];
   const save = useMutation({
     mutationFn: (model: string | null) =>
       setAppAiRoleModelFn({ data: { id: appId, role: role.name, model } }),
@@ -54,7 +42,6 @@ function RoleRow({
       toast.success(t('ops.ai.modelSaved', { role: role.name }));
     },
   });
-  const defaultModel = options[0];
   const data = options.map((option) => ({
     value: option.id,
     label: `${option.name} · ${option.providerName}`,
@@ -65,6 +52,13 @@ function RoleRow({
       value: role.model.id,
       label: `${role.model.name} · ${role.model.providerName}`,
     });
+  // Unpicked: the placeholder names the model the role uses and where it
+  // comes from.
+  const placeholder = !role.model
+    ? t('ops.ai.noModel')
+    : role.defaultSource === 'setting'
+      ? t('ops.ai.defaultModel', { model: role.model.name })
+      : t('ops.ai.firstModel', { model: role.model.name });
 
   return (
     <Table.Tr>
@@ -89,11 +83,7 @@ function RoleRow({
           aria-label={t('ops.ai.modelFor', { role: role.name })}
           data={data}
           value={role.bound ? (role.model?.id ?? null) : null}
-          placeholder={
-            defaultModel
-              ? t('ops.ai.defaultModel', { model: defaultModel.name })
-              : t('ops.ai.noModel')
-          }
+          placeholder={placeholder}
           clearable
           disabled={save.isPending || (!options.length && !role.bound)}
           onChange={(value) => save.mutate(value)}
@@ -101,7 +91,9 @@ function RoleRow({
         />
         {role.unavailable ? (
           <Text size="xs" c="red" mt={4}>
-            {t('ops.ai.unavailable')}
+            {role.bound
+              ? t('ops.ai.unavailable')
+              : t('ops.ai.defaultUnavailable')}
           </Text>
         ) : null}
         {role.missingNeeds.length ? (
@@ -114,84 +106,8 @@ function RoleRow({
   );
 }
 
-function BudgetRow({ appId, view }: { appId: string; view: AppAiView }) {
-  const { t } = useI18n();
-  const usd = useUsd();
-  const qc = useQueryClient();
-  const [draft, setDraft] = useState<number | string>(view.budgetUsd ?? '');
-  const save = useMutation({
-    mutationFn: (budgetUsd: number | null) =>
-      setAppAiBudgetFn({ data: { id: appId, budgetUsd } }),
-    onSuccess: (next) => {
-      qc.setQueryData(appAiQueryOptions(appId).queryKey, next);
-      setDraft(next.budgetUsd ?? '');
-      toast.success(
-        next.budgetUsd === null
-          ? t('ops.ai.budgetCleared')
-          : t('ops.ai.budgetSaved', { amount: usd(next.budgetUsd) }),
-      );
-    },
-  });
-  // Only an empty input removes the cap. Mantine keeps an unfinished number
-  // such as `10.` as a string; parse it, and refuse anything else.
-  const text = typeof draft === 'string' ? draft.trim() : null;
-  const parsed: number | null | undefined =
-    typeof draft === 'number'
-      ? draft
-      : text === ''
-        ? null
-        : Number.isFinite(Number(text))
-          ? Number(text)
-          : undefined;
-  const changed = parsed !== undefined && parsed !== view.budgetUsd;
-  return (
-    <Stack gap={4}>
-      <Group gap="xs" align="flex-end" wrap="wrap">
-        <NumberInput
-          size="xs"
-          label={t('ops.ai.budget')}
-          placeholder={t('ops.ai.noBudget')}
-          prefix="$"
-          min={0}
-          max={1_000_000}
-          decimalScale={2}
-          value={draft}
-          onChange={setDraft}
-          style={{ width: 160 }}
-        />
-        <Button
-          size="xs"
-          variant="default"
-          disabled={!changed || save.isPending}
-          loading={save.isPending}
-          onClick={() => {
-            if (parsed !== undefined) save.mutate(parsed);
-          }}
-        >
-          {t('common.save')}
-        </Button>
-        {view.budgetUsd !== null ? (
-          <Button
-            size="xs"
-            variant="subtle"
-            color="gray"
-            disabled={save.isPending}
-            onClick={() => save.mutate(null)}
-          >
-            {t('ops.ai.removeBudget')}
-          </Button>
-        ) : null}
-      </Group>
-      <Text size="xs" c="dimmed">
-        {t('ops.ai.budgetHint')}
-      </Text>
-    </Stack>
-  );
-}
-
 function UsageTable({ appId }: { appId: string }) {
   const { t, locale } = useI18n();
-  const usd = useUsd();
   const { data } = useQuery(appAiUsageQueryOptions(appId));
   if (!data) return null;
   const number = new Intl.NumberFormat(locale);
@@ -208,7 +124,6 @@ function UsageTable({ appId }: { appId: string }) {
               <Table.Th>{t('ops.ai.column.model')}</Table.Th>
               <Table.Th ta="right">{t('ops.ai.column.calls')}</Table.Th>
               <Table.Th ta="right">{t('ops.ai.column.tokens')}</Table.Th>
-              <Table.Th ta="right">{t('ops.ai.column.cost')}</Table.Th>
             </Table.Tr>
           </Table.Thead>
           <Table.Tbody>
@@ -226,11 +141,6 @@ function UsageTable({ appId }: { appId: string }) {
                         input: number.format(row.inputTokens),
                         output: number.format(row.outputTokens),
                       })}
-                </Table.Td>
-                <Table.Td ta="right">
-                  {row.unpricedCalls === row.calls
-                    ? t('ops.ai.unpriced')
-                    : usd(row.costUsd)}
                 </Table.Td>
               </Table.Tr>
             ))}
@@ -275,10 +185,13 @@ function UsageTable({ appId }: { appId: string }) {
                           : t('ops.ai.status.error')}
                     </Badge>
                   </Table.Td>
-                  <Table.Td ta="right">
-                    {call.costUsd === null
-                      ? t('ops.ai.unpriced')
-                      : usd(call.costUsd)}
+                  <Table.Td ta="right" c="dimmed">
+                    {call.images
+                      ? t('ops.ai.images', { count: call.images })
+                      : t('ops.ai.tokens', {
+                          input: number.format(call.inputTokens),
+                          output: number.format(call.outputTokens),
+                        })}
                   </Table.Td>
                 </Table.Tr>
               ))}
@@ -290,10 +203,9 @@ function UsageTable({ appId }: { appId: string }) {
   );
 }
 
-/** The App's AI roles, the model each uses, its budget and its calls. */
+/** The App's AI roles, the model each uses, and its calls. */
 export function AiSection({ appId }: { appId: string }) {
   const { t } = useI18n();
-  const usd = useUsd();
   const { data: view } = useQuery(appAiQueryOptions(appId));
   if (!view) return null;
   return (
@@ -303,17 +215,20 @@ export function AiSection({ appId }: { appId: string }) {
         title={t('ops.ai.title')}
         meta={
           <Text size="xs" c="dimmed">
-            {view.budgetUsd === null
-              ? t('ops.ai.spend', { amount: usd(view.monthSpendUsd) })
-              : t('ops.ai.spendOfBudget', {
-                  amount: usd(view.monthSpendUsd),
-                  budget: usd(view.budgetUsd),
-                })}
+            {t('ops.ai.roles', { count: view.roles.length })}
           </Text>
         }
       />
       <Text size="xs" c="dimmed">
-        {t('ops.ai.description')}
+        <Trans
+          t={t}
+          i18nKey="ops.ai.description"
+          components={{
+            link: (
+              <Anchor component={Link} to="/settings/providers" size="xs" />
+            ),
+          }}
+        />
       </Text>
       <Table withTableBorder verticalSpacing={6}>
         <Table.Tbody>
@@ -322,7 +237,6 @@ export function AiSection({ appId }: { appId: string }) {
           ))}
         </Table.Tbody>
       </Table>
-      <BudgetRow key={view.budgetUsd ?? 'none'} appId={appId} view={view} />
       <UsageTable appId={appId} />
     </Stack>
   );

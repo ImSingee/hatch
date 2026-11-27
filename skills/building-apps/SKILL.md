@@ -731,7 +731,7 @@ Read only the reference relevant to the requested capability:
 - [AI](references/ai.md): call the platform's chat and image models from the
   backend with `@hatch/app/ai` through roles declared in `ai.roles`
   (`capabilities.ai`, requires `backend`): streaming, tool loops with the App's
-  own functions, image generation, error codes and per-App budgets. Never ask
+  own functions, image generation, error codes and the default models. Never ask
   the user for a provider API key or open network access to a provider.
 - [Notifications](references/backend-integrations.md#notifications): declare
   notification kinds, push with `notify()` from `@hatch/app/notifications`

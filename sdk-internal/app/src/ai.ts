@@ -64,8 +64,6 @@ export type AiUsage = {
   outputTokens: number;
   cacheReadTokens: number;
   cacheWriteTokens: number;
-  /** Estimated cost; null when the model has no price. */
-  costUsd: number | null;
 };
 
 export type ChatResult = {
@@ -92,7 +90,6 @@ export type AiErrorCode =
   | 'ai_role_kind_mismatch'
   | 'ai_no_model'
   | 'ai_model_unavailable'
-  | 'ai_budget_exceeded'
   | 'ai_busy'
   | 'ai_provider_error'
   | 'ai_request_failed';

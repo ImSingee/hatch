@@ -2,7 +2,7 @@
   "type": "diff",
   "version": "10",
   "dialect": "postgres",
-  "id": "83bd87d0-41ad-4776-a492-929e29d2054b",
+  "id": "b89933db-eefc-4cf6-af2f-5c73ae2337ca",
   "prevIds": ["7e1a861c-4e21-45a5-b0d7-5f0f53346416"],
   "footprints": [
     {
@@ -30,21 +30,6 @@
         "n|rel|public.app_ai_usage_pkey"
       ],
       "reads": ["n|sch|public"]
-    },
-    {
-      "statementType": "add_column",
-      "statementTarget": [
-        "column",
-        "public",
-        "apps",
-        "ai_monthly_budget_micros"
-      ],
-      "writes": [
-        "s|col|public.apps.ai_monthly_budget_micros",
-        "n|col|public.apps.ai_monthly_budget_micros",
-        "e|col|public.apps.ai_monthly_budget_micros"
-      ],
-      "reads": ["n|tbl|public.apps", "n|sch|public"]
     },
     {
       "statementType": "create_index",
@@ -405,38 +390,6 @@
       "row": {
         "schema": "public",
         "table": "app_ai_usage",
-        "name": "cost_micros",
-        "type": "bigint",
-        "typeSchema": null,
-        "notNull": true,
-        "dimensions": 0,
-        "default": "0",
-        "generated": null,
-        "identity": null,
-        "entityType": "columns"
-      }
-    },
-    {
-      "op": "create",
-      "row": {
-        "schema": "public",
-        "table": "app_ai_usage",
-        "name": "cost_known",
-        "type": "boolean",
-        "typeSchema": null,
-        "notNull": true,
-        "dimensions": 0,
-        "default": "true",
-        "generated": null,
-        "identity": null,
-        "entityType": "columns"
-      }
-    },
-    {
-      "op": "create",
-      "row": {
-        "schema": "public",
-        "table": "app_ai_usage",
         "name": "status",
         "type": "text",
         "typeSchema": null,
@@ -491,22 +444,6 @@
         "notNull": true,
         "dimensions": 0,
         "default": "now()",
-        "generated": null,
-        "identity": null,
-        "entityType": "columns"
-      }
-    },
-    {
-      "op": "create",
-      "row": {
-        "schema": "public",
-        "table": "apps",
-        "name": "ai_monthly_budget_micros",
-        "type": "bigint",
-        "typeSchema": null,
-        "notNull": false,
-        "dimensions": 0,
-        "default": null,
         "generated": null,
         "identity": null,
         "entityType": "columns"

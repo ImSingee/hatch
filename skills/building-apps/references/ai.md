@@ -88,7 +88,7 @@ Messages are provider-neutral:
 
 The result has `message` (the reply's text, tool calls and opaque
 `{ type: 'reasoning', state }` parts), `stopReason` (`stop`, `length` or
-`toolUse`), `usage` (tokens and `costUsd`, null when the model has no price)
+`toolUse`), `usage` (token counts)
 and `model` (`provider`, `id`). Keep the whole `message`, reasoning parts
 included, in the history you send next: some providers reject a tool result
 without the reasoning that asked for it. Never change, show or store a
@@ -167,32 +167,36 @@ Every failure throws `AiError` with a stable `code` and the HTTP `status`:
 | `ai_role_kind_mismatch` | A chat role was used for an image or the reverse.               |
 | `ai_no_model`           | The platform has no model of that kind configured.              |
 | `ai_model_unavailable`  | The owner's chosen model is disabled.                           |
-| `ai_budget_exceeded`    | The App reached its monthly AI budget.                          |
 | `ai_busy`               | Four calls are already in flight for this App; retry later.     |
 | `ai_provider_error`     | The provider failed or the call was cancelled.                  |
 
-Show the user a clear message for `ai_no_model`, `ai_model_unavailable` and
-`ai_budget_exceeded` (they need the owner to act in App settings) instead of a
-generic failure. Retry `ai_busy` and transient `ai_provider_error` with
+Show the user a clear message for `ai_no_model` and `ai_model_unavailable`
+(the owner has to configure or change a model) instead of a generic
+failure. Retry `ai_busy` and transient `ai_provider_error` with
 backoff; never retry in a tight loop.
 
-## Cost and limits
+## Limits
 
-The platform records every call (role, model, tokens, estimated cost, status;
-never prompts or replies). The owner can cap the App's spend per UTC month.
-A cron job or task that calls a model on every run multiplies cost, so batch
-work and cache results. An App may have at most four AI calls in flight.
+The platform records every call (role, model, tokens, status; never prompts
+or replies). A cron job or task that calls a model on every run multiplies
+model usage, so batch work and cache results. An App may have at most four AI
+calls in flight.
 
 ## Owner settings and the CLI
 
-The App's manage page has an AI section: the model for each role, the
-monthly budget and the usage. The same settings are in the CLI:
+A role uses, in order: the model the owner picked for it on the App's page;
+otherwise the default model for Apps of its kind (Settings → AI Providers →
+Default models for Apps); otherwise the first usable model of that kind. The
+App's manage page has an AI section with the model of each role and the
+calls. The same settings are in the CLI:
 
-- `hatch app ai show <app>`: roles, the model each uses, budget, spend and the
-  models a role may be set to.
+- `hatch app ai show <app>`: roles, the model each uses and where it comes
+  from, and the models a role may be set to.
 - `hatch app ai set-model <app> --role <name> --model <id|provider/model>` or
   `--clear`.
-- `hatch app ai budget <app> --monthly-usd <amount>` or `--clear`.
+- `hatch app ai defaults [--chat-model <ref> | --clear-chat-model]
+  [--image-model <ref> | --clear-image-model]`: show or change the default
+  models every App's unpicked roles use.
 - `hatch app ai usage <app>`: calls newest first and this month's totals.
 
 Pick a model for a role only when the user asks; otherwise leave the default.

@@ -8,6 +8,7 @@ import {
   type SimpleStreamOptions,
   type TranscriptContext,
 } from '@earendil-works/pi-ai';
+import { eq } from 'drizzle-orm';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { RunModelConfig } from '~agent/protocol';
 
@@ -71,6 +72,7 @@ const sdk = await import('../../../../sdk-internal/app/src/ai');
 const { db, schema } = await import('~/db');
 const { hatchSignature } = await import('~server/secrets');
 const { handleAiRequest } = await import('./ai');
+const { setAppAiDefaults } = await import('~server/apps/ai/settings');
 
 const APP = 'ai-app';
 const SECRET = 'ai-signing-secret';
@@ -79,7 +81,7 @@ const ROLES = [
   { name: 'cover', kind: 'image', description: 'Draw a cover.' },
 ];
 
-async function seed(options: { ai?: boolean; budgetMicros?: number } = {}) {
+async function seed(options: { ai?: boolean } = {}) {
   await db.insert(schema.agentProviders).values([
     {
       id: 'prov-a',
@@ -131,7 +133,6 @@ async function seed(options: { ai?: boolean; budgetMicros?: number } = {}) {
     },
     signingSecret: SECRET,
     currentDeploymentId: `${APP}-deployment`,
-    aiMonthlyBudgetMicros: options.budgetMicros ?? null,
   });
   await db.insert(schema.deployments).values({
     id: `${APP}-deployment`,
@@ -184,6 +185,7 @@ beforeEach(async () => {
   await db.delete(schema.apps);
   await db.delete(schema.agentModels);
   await db.delete(schema.agentProviders);
+  await db.delete(schema.platformConfig);
   provider.configs = [];
   provider.seen = [];
   provider.responses = [];
@@ -364,24 +366,45 @@ describe('App AI endpoint boundary', () => {
     expect(text).not.toContain('alpha-key');
   });
 
-  it('refuses calls once the monthly budget is spent', async () => {
-    await seed({ budgetMicros: 1000 });
-    await db.insert(schema.appAiUsage).values({
-      appId: APP,
-      role: 'summarize',
-      kind: 'chat',
-      providerName: 'Alpha',
-      modelId: 'alpha-1',
-      costMicros: 1000,
-      status: 'ok',
-    });
-    const response = await call('chat', {
-      role: 'summarize',
-      messages: [{ role: 'user', content: 'hi' }],
-    });
-    expect(response.status).toBe(402);
-    expect(await errorCode(response)).toBe('ai_budget_exceeded');
-    expect(provider.configs).toHaveLength(0);
+  it('serves unpicked roles with the default model for Apps', async () => {
+    await seed();
+    const chat = () =>
+      call('chat', {
+        role: 'summarize',
+        stream: false,
+        messages: [{ role: 'user', content: 'hi' }],
+      });
+    provider.responses = [
+      fauxAssistantMessage('a'),
+      fauxAssistantMessage('b'),
+      fauxAssistantMessage('c'),
+    ];
+    // No default set: the first model in provider order.
+    expect((await chat()).status).toBe(200);
+    // The default for Apps wins over the order, by `<provider>/<model>` ref.
+    await setAppAiDefaults({ chat: 'Beta/beta-1' });
+    expect((await chat()).status).toBe(200);
+    // Clearing it returns to the first model.
+    await setAppAiDefaults({ chat: null });
+    expect((await chat()).status).toBe(200);
+    expect(provider.configs.map((config) => config.providerId)).toEqual([
+      'prov-a',
+      'prov-b',
+      'prov-a',
+    ]);
+
+    // A disabled default fails closed instead of silently using another.
+    await setAppAiDefaults({ chat: 'model-b' });
+    await db
+      .update(schema.agentModels)
+      .set({ enabled: false })
+      .where(eq(schema.agentModels.id, 'model-b'));
+    const disabled = await chat();
+    expect(disabled.status).toBe(409);
+    expect(await errorCode(disabled)).toBe('ai_model_unavailable');
+    await expect(setAppAiDefaults({ chat: 'Gamma/none' })).rejects.toThrow(
+      /No usable chat model/,
+    );
   });
 
   it('aborts the provider call when the caller disconnects', async () => {

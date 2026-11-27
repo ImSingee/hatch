@@ -10,8 +10,6 @@ import { z } from 'zod';
 export const MAX_AI_BODY_BYTES = 8 * 1024 * 1024;
 /** Calls one App may have in flight at once. */
 export const MAX_AI_CONCURRENT_CALLS = 4;
-/** Largest monthly budget accepted, in US dollars. */
-export const MAX_AI_BUDGET_USD = 1_000_000;
 /** Longest an image prompt may be. */
 export const MAX_IMAGE_PROMPT_CHARS = 4000;
 
@@ -22,7 +20,6 @@ export const AI_ERROR_CODES = [
   'ai_role_kind_mismatch',
   'ai_no_model',
   'ai_model_unavailable',
-  'ai_budget_exceeded',
   'ai_busy',
   'ai_provider_error',
 ] as const;
@@ -34,7 +31,6 @@ const HTTP_STATUS: Record<AiErrorCode, number> = {
   ai_role_kind_mismatch: 422,
   ai_no_model: 409,
   ai_model_unavailable: 409,
-  ai_budget_exceeded: 402,
   ai_busy: 429,
   ai_provider_error: 502,
 };
@@ -179,13 +175,12 @@ export const aiImageRequestSchema = z
   .strict();
 export type AiImageRequest = z.infer<typeof aiImageRequestSchema>;
 
-/** Usage the App sees for one call. `costUsd` is null when unpriced. */
+/** Token usage the App sees for one call. */
 export type AiUsageView = {
   inputTokens: number;
   outputTokens: number;
   cacheReadTokens: number;
   cacheWriteTokens: number;
-  costUsd: number | null;
 };
 
 export type AiAssistantPart =

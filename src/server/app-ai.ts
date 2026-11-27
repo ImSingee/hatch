@@ -1,21 +1,27 @@
-/** Server functions for an App's AI settings (the App manage page). */
+/**
+ * Server functions for App AI settings: the default models for Apps
+ * (Settings · Providers) and one App's roles and calls (the App manage page).
+ */
 import { createServerFn } from '@tanstack/react-start';
 import { z } from 'zod';
 import { authMiddleware } from './auth';
-import { MAX_AI_BUDGET_USD } from './apps/ai/contract';
 import { idSchema } from './validation';
 import {
+  type AppAiDefaultsView,
   type AppAiUsageItem,
   type AppAiUsageSummaryRow,
   type AppAiView,
+  getAppAiDefaults,
   getAppAiSettings,
   listAppAiUsage,
-  setAppAiBudget,
+  setAppAiDefaults,
   setAppAiRoleModel,
   summarizeAppAiUsage,
 } from './apps/ai/settings';
 
 export type {
+  AiDefaultView,
+  AppAiDefaultsView,
   AppAiRoleView,
   AppAiUsageItem,
   AppAiUsageSummaryRow,
@@ -42,18 +48,22 @@ export const setAppAiRoleModelFn = createServerFn({ method: 'POST' })
     setAppAiRoleModel(data.id, data.role, data.model),
   );
 
-export const setAppAiBudgetFn = createServerFn({ method: 'POST' })
+export const getAppAiDefaultsFn = createServerFn({ method: 'GET' })
   .middleware([authMiddleware])
-  .validator((input: { id: string; budgetUsd: number | null }) =>
+  .handler(async (): Promise<AppAiDefaultsView> => getAppAiDefaults());
+
+export const setAppAiDefaultsFn = createServerFn({ method: 'POST' })
+  .middleware([authMiddleware])
+  .validator((input: { chat?: string | null; image?: string | null }) =>
     z
       .object({
-        id: idSchema,
-        budgetUsd: z.number().min(0).max(MAX_AI_BUDGET_USD).nullable(),
+        chat: z.string().min(1).max(400).nullable().optional(),
+        image: z.string().min(1).max(400).nullable().optional(),
       })
       .parse(input),
   )
-  .handler(async ({ data }): Promise<AppAiView> =>
-    setAppAiBudget(data.id, data.budgetUsd),
+  .handler(async ({ data }): Promise<AppAiDefaultsView> =>
+    setAppAiDefaults(data),
   );
 
 export const listAppAiUsageFn = createServerFn({ method: 'GET' })

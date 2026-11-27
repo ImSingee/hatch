@@ -24,6 +24,8 @@ import { createConnectTransport } from '@connectrpc/connect-web';
 import { refreshRunEnvironment } from './run-credential';
 import {
   type AppAi,
+  type AppAiDefault,
+  type AppAiDefaults,
   type AppAiModel,
   type AppBackend,
   type AppTask,
@@ -611,18 +613,35 @@ function appAiView(value: AppAi | undefined) {
       needs: role.needs,
       model: role.model ? aiModelView(role.model) : null,
       bound: role.bound,
+      defaultSource: role.defaultSource ?? null,
       unavailable: role.unavailable,
       missingNeeds: role.missingNeeds,
     })),
-    budgetUsd: ai.budgetUsd ?? null,
-    monthSpendUsd: ai.monthSpendUsd,
-    monthUnpricedCalls: ai.monthUnpricedCalls,
-    monthStart: ai.monthStart,
     chatModels: ai.chatModels.map(aiModelView),
     imageModels: ai.imageModels.map(aiModelView),
   };
 }
 export type AppAiView = ReturnType<typeof appAiView>;
+
+function appAiDefaultView(value: AppAiDefault | undefined) {
+  const entry = required(value);
+  return {
+    model: entry.model ? aiModelView(entry.model) : null,
+    source: entry.source,
+    unavailable: entry.unavailable,
+  };
+}
+
+function appAiDefaultsView(value: AppAiDefaults | undefined) {
+  const defaults = required(value);
+  return {
+    chat: appAiDefaultView(defaults.chat),
+    image: appAiDefaultView(defaults.image),
+    chatModels: defaults.chatModels.map(aiModelView),
+    imageModels: defaults.imageModels.map(aiModelView),
+  };
+}
+export type AppAiDefaultsView = ReturnType<typeof appAiDefaultsView>;
 
 export function cliClient(transport: Transport) {
   const apps = createClient(AppService, transport);
@@ -1491,8 +1510,14 @@ export function cliClient(transport: Transport) {
           appAiView((await apps.getAppAi(input)).ai),
         setModel: async (input: { id: string; role: string; model?: string }) =>
           appAiView((await apps.setAppAiRoleModel(input)).ai),
-        setBudget: async (input: { id: string; budgetUsd?: number }) =>
-          appAiView((await apps.setAppAiBudget(input)).ai),
+        defaults: async () =>
+          appAiDefaultsView((await apps.getAppAiDefaults({})).defaults),
+        setDefaults: async (input: {
+          chatModel?: string;
+          clearChatModel: boolean;
+          imageModel?: string;
+          clearImageModel: boolean;
+        }) => appAiDefaultsView((await apps.setAppAiDefaults(input)).defaults),
         usage: async (input: {
           id: string;
           limit?: number;
@@ -1515,7 +1540,6 @@ export function cliClient(transport: Transport) {
               cacheReadTokens: call.cacheReadTokens,
               cacheWriteTokens: call.cacheWriteTokens,
               images: call.images,
-              costUsd: call.costUsd ?? null,
               durationMs: call.durationMs,
             })),
             nextCursor: result.nextCursor ?? null,
@@ -1528,8 +1552,6 @@ export function cliClient(transport: Transport) {
               inputTokens: Number(row.inputTokens),
               outputTokens: Number(row.outputTokens),
               images: row.images,
-              costUsd: row.costUsd,
-              unpricedCalls: row.unpricedCalls,
             })),
           };
         },

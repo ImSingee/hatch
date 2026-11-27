@@ -1,23 +1,31 @@
 /**
- * App AI settings: the model each declared AI role uses, the monthly budget,
- * and the record of the App's AI calls.
+ * App AI settings: the default chat and image models for Apps, the model
+ * each declared AI role of an App uses, and the record of an App's AI calls.
  */
 import { parseArgs } from 'node:util';
 import { configPath, resolveCredential } from './config';
-import { type AppAiView, platformClient } from './client';
+import {
+  type AppAiDefaultsView,
+  type AppAiView,
+  platformClient,
+} from './client';
 import { CliError, argumentsError } from './error';
 
-const ACTIONS = ['show', 'set-model', 'budget', 'usage'] as const;
+const ACTIONS = ['show', 'set-model', 'usage', 'defaults'] as const;
 type Action = (typeof ACTIONS)[number];
+
+/** A model to set, or null to clear; undefined leaves it unchanged. */
+type ModelChange = string | null | undefined;
 
 export type AiCommand = {
   action: Action;
-  id: string;
+  /** App id or slug; absent for `defaults`. */
+  id?: string;
   role?: string;
   /** Model id or `<provider>/<model>`; null clears the pick. */
   model?: string | null;
-  /** Monthly cap in US dollars; null removes it. */
-  budgetUsd?: number | null;
+  chatModel?: ModelChange;
+  imageModel?: ModelChange;
   limit?: number;
   cursor?: string;
   json: boolean;
@@ -30,6 +38,25 @@ function invalid(message: string): CliError {
   return new CliError('invalid_arguments', message);
 }
 
+function modelRef(flag: string, value: string): string {
+  const trimmed = value.trim();
+  if (!trimmed || trimmed.length > 400)
+    throw invalid(`--${flag} must be a model id or <provider>/<model>.`);
+  return trimmed;
+}
+
+/** One model flag pair: `--<name> <ref>` sets it, `--clear-<name>` clears it. */
+function modelChange(
+  name: string,
+  value: string | undefined,
+  clear: boolean | undefined,
+): ModelChange {
+  if (value !== undefined && clear)
+    throw invalid(`Supply either --${name} or --clear-${name}, not both.`);
+  if (clear) return null;
+  return value === undefined ? undefined : modelRef(name, value);
+}
+
 /** Validate arguments locally; nothing is sent until this succeeds. */
 export function parseAiCommand(
   args: readonly string[],
@@ -38,7 +65,7 @@ export function parseAiCommand(
   const action = args[offset + 2] as Action | undefined;
   if (!action || !ACTIONS.includes(action))
     throw invalid(
-      'Use hatch app ai show, set-model, budget or usage. See hatch help app ai.',
+      'Use hatch app ai show, set-model, usage or defaults. See hatch help app ai.',
     );
   let parsed;
   try {
@@ -53,7 +80,10 @@ export function parseAiCommand(
         role: { type: 'string' },
         model: { type: 'string' },
         clear: { type: 'boolean' },
-        'monthly-usd': { type: 'string' },
+        'chat-model': { type: 'string' },
+        'clear-chat-model': { type: 'boolean' },
+        'image-model': { type: 'string' },
+        'clear-image-model': { type: 'boolean' },
         limit: { type: 'string' },
         cursor: { type: 'string' },
       },
@@ -63,7 +93,13 @@ export function parseAiCommand(
     throw argumentsError(error, `app ai ${action}`);
   }
   const v = parsed.values;
-  if (parsed.positionals.length !== 1 || !parsed.positionals[0])
+  const positionals = parsed.positionals;
+  if (action === 'defaults') {
+    if (positionals.length)
+      throw invalid(
+        'app ai defaults takes no App: the defaults apply to every App.',
+      );
+  } else if (positionals.length !== 1 || !positionals[0])
     throw invalid(`Supply exactly one App ID or slug to app ai ${action}.`);
   const only = (flag: keyof typeof v, allowed: Action[]) => {
     if (v[flag] !== undefined && !allowed.includes(action))
@@ -73,8 +109,14 @@ export function parseAiCommand(
   };
   only('role', ['set-model']);
   only('model', ['set-model']);
-  only('clear', ['set-model', 'budget']);
-  only('monthly-usd', ['budget']);
+  only('clear', ['set-model']);
+  for (const flag of [
+    'chat-model',
+    'clear-chat-model',
+    'image-model',
+    'clear-image-model',
+  ] as const)
+    only(flag, ['defaults']);
   only('limit', ['usage']);
   only('cursor', ['usage']);
 
@@ -90,31 +132,18 @@ export function parseAiCommand(
       throw invalid(
         'app ai set-model needs --model <id|provider/model> or --clear.',
       );
-    if (v.model !== undefined && (!v.model.trim() || v.model.length > 400))
-      throw invalid('--model must be a model id or <provider>/<model>.');
-    model = v.clear ? null : (v.model as string).trim();
+    model = v.clear ? null : modelRef('model', v.model as string);
   }
-
-  let budgetUsd: number | null | undefined;
-  if (action === 'budget') {
-    const raw = v['monthly-usd'];
-    if (raw !== undefined && v.clear)
-      throw invalid('Supply either --monthly-usd or --clear, not both.');
-    if (raw === undefined && !v.clear)
-      throw invalid('app ai budget needs --monthly-usd <amount> or --clear.');
-    if (raw !== undefined) {
-      const amount = Number(raw);
-      if (
-        !/^[0-9]+(\.[0-9]{1,6})?$/.test(raw) ||
-        !Number.isFinite(amount) ||
-        amount > 1_000_000
-      )
-        throw invalid(
-          '--monthly-usd must be an amount in US dollars from 0 to 1000000.',
-        );
-      budgetUsd = amount;
-    } else budgetUsd = null;
-  }
+  const chatModel = modelChange(
+    'chat-model',
+    v['chat-model'],
+    v['clear-chat-model'],
+  );
+  const imageModel = modelChange(
+    'image-model',
+    v['image-model'],
+    v['clear-image-model'],
+  );
 
   const limit = v.limit === undefined ? undefined : Number(v.limit);
   if (
@@ -139,10 +168,11 @@ export function parseAiCommand(
   if (v.config === '') throw invalid('--config must not be empty.');
   return {
     action,
-    id: parsed.positionals[0],
+    id: positionals[0],
     role,
     model,
-    budgetUsd,
+    chatModel,
+    imageModel,
     limit,
     cursor: v.cursor,
     json: v.json === true,
@@ -152,25 +182,42 @@ export function parseAiCommand(
   };
 }
 
-const usd = (value: number) => `$${value.toFixed(value < 1 ? 4 : 2)}`;
+const modelText = (model: { ref: string; id: string } | null) =>
+  model ? `${model.ref} (${model.id})` : 'no model configured';
 
 /** Every identifier a follow-up `set-model` needs, one role per line. */
 export function aiText(view: AppAiView): string {
   if (!view.available)
     return `${view.appId}  No AI roles (the live deployment declares none).`;
-  const lines = [
-    `${view.appId}  month since ${view.monthStart.slice(0, 10)}: ${usd(view.monthSpendUsd)}${view.monthUnpricedCalls ? ` (+${view.monthUnpricedCalls} unpriced calls)` : ''}  budget: ${view.budgetUsd === null ? 'none' : usd(view.budgetUsd)}`,
-  ];
+  const lines = [view.appId];
   for (const role of view.roles) {
-    const model = role.model
-      ? `${role.model.ref} (${role.model.id})${role.bound ? '' : ' default'}${role.unavailable ? ' UNAVAILABLE' : ''}`
-      : 'no model configured';
-    const warn = role.missingNeeds.length
-      ? `  missing: ${role.missingNeeds.join(',')}`
-      : '';
-    lines.push(`  ${role.name}  ${role.kind}  ${model}${warn}`);
+    const source = role.bound
+      ? 'picked'
+      : role.defaultSource === 'setting'
+        ? 'default for Apps'
+        : 'first model';
+    const warn = [
+      ...(role.unavailable ? ['UNAVAILABLE'] : []),
+      ...(role.missingNeeds.length
+        ? [`missing: ${role.missingNeeds.join(',')}`]
+        : []),
+    ];
+    lines.push(
+      `  ${role.name}  ${role.kind}  ${modelText(role.model)}  ${source}${warn.length ? `  ${warn.join('  ')}` : ''}`,
+    );
   }
   return lines.join('\n');
+}
+
+export function defaultsText(view: AppAiDefaultsView): string {
+  return (['chat', 'image'] as const)
+    .map((kind) => {
+      const entry = view[kind];
+      const source =
+        entry.source === 'setting' ? 'set' : 'not set, first model';
+      return `${kind}  ${modelText(entry.model)}  ${source}${entry.unavailable ? '  UNAVAILABLE' : ''}`;
+    })
+    .join('\n');
 }
 
 export async function runAi(
@@ -194,32 +241,37 @@ export async function runAi(
       command.json ? `${JSON.stringify(json)}\n` : `${text}\n`,
     );
 
+  if (command.action === 'defaults') {
+    const change =
+      command.chatModel !== undefined || command.imageModel !== undefined;
+    const view = change
+      ? await ai.setDefaults({
+          ...(command.chatModel ? { chatModel: command.chatModel } : {}),
+          clearChatModel: command.chatModel === null,
+          ...(command.imageModel ? { imageModel: command.imageModel } : {}),
+          clearImageModel: command.imageModel === null,
+        })
+      : await ai.defaults();
+    write(view, defaultsText(view));
+    return;
+  }
+  const id = command.id as string;
   if (command.action === 'show') {
-    const view = await ai.show({ id: command.id });
+    const view = await ai.show({ id });
     write(view, aiText(view));
     return;
   }
   if (command.action === 'set-model') {
     const view = await ai.setModel({
-      id: command.id,
+      id,
       role: command.role as string,
       ...(command.model ? { model: command.model } : {}),
     });
     write(view, aiText(view));
     return;
   }
-  if (command.action === 'budget') {
-    const view = await ai.setBudget({
-      id: command.id,
-      ...(command.budgetUsd === null || command.budgetUsd === undefined
-        ? {}
-        : { budgetUsd: command.budgetUsd }),
-    });
-    write(view, aiText(view));
-    return;
-  }
   const page = await ai.usage({
-    id: command.id,
+    id,
     limit: command.limit,
     cursor: command.cursor,
   });
@@ -229,12 +281,12 @@ export async function runAi(
       `${page.appId}  month since ${page.monthStart.slice(0, 10)}`,
       ...page.monthTotals.map(
         (row) =>
-          `  ${row.role}  ${row.providerName}/${row.modelId}  calls=${row.calls}  in=${row.inputTokens}  out=${row.outputTokens}${row.images ? `  images=${row.images}` : ''}  ${usd(row.costUsd)}${row.unpricedCalls ? ` (+${row.unpricedCalls} unpriced)` : ''}`,
+          `  ${row.role}  ${row.providerName}/${row.modelId}  calls=${row.calls}  in=${row.inputTokens}  out=${row.outputTokens}${row.images ? `  images=${row.images}` : ''}`,
       ),
       ...(page.calls.length
         ? page.calls.map(
             (call) =>
-              `${call.id}  ${call.createdAt}  ${call.role}  ${call.providerName}/${call.modelId}  ${call.status}${call.errorCode ? `:${call.errorCode}` : ''}  in=${call.inputTokens}  out=${call.outputTokens}  ${call.costUsd === null ? 'unpriced' : usd(call.costUsd)}  ${call.durationMs}ms`,
+              `${call.id}  ${call.createdAt}  ${call.role}  ${call.providerName}/${call.modelId}  ${call.status}${call.errorCode ? `:${call.errorCode}` : ''}  in=${call.inputTokens}  out=${call.outputTokens}  ${call.durationMs}ms`,
           )
         : ['No calls.']),
       ...(page.nextCursor === null ? [] : [`next cursor: ${page.nextCursor}`]),

@@ -1,7 +1,8 @@
 /**
  * Server-only: which configured model serves an App's AI role. The owner's
- * binding wins; an unbound role uses the default model of its kind, the same
- * one a new Agent chat (chat roles) or an icon generation (image roles) uses.
+ * pick for the role wins; otherwise the platform's default model for Apps of
+ * that kind (`apps.aiDefaults`); otherwise the first usable model of that
+ * kind in provider and model order.
  */
 import { db } from '~/db';
 import type { RunModelConfig } from '~agent/protocol';
@@ -11,7 +12,10 @@ import { AppError } from '~server/errors';
 import type { ImageDriver, ImageProvider } from '~server/images/drivers';
 import { listImageModels, resolveImageModel } from '~server/images/model';
 import { chatModelConfig } from '~server/model-resolution';
+import { getPlatformConfig } from '~server/platform-config';
 import { AiCallError } from './contract';
+
+export type AiRoleKind = AiRole['kind'];
 
 export type ResolvedChatRole = {
   kind: 'chat';
@@ -26,89 +30,9 @@ export type ResolvedImageRole = {
   provider: ImageProvider;
 };
 
-async function bindingFor(appId: string, role: string) {
-  return db.query.appAiRoleBindings.findFirst({
-    where: { appId, role },
-    columns: { modelRowId: true },
-  });
-}
-
-/** Resolve the model for one call, with the provider key. Never returned to Apps. */
-export async function resolveChatRole(
-  appId: string,
-  role: AiRole,
-): Promise<ResolvedChatRole> {
-  const binding = await bindingFor(appId, role.name);
-  let modelRowId = binding?.modelRowId;
-  if (!modelRowId) {
-    const first = (await listAgentModels())[0]?.models[0];
-    if (!first)
-      throw new AiCallError(
-        'ai_no_model',
-        'No chat model is configured on the platform.',
-      );
-    modelRowId = first.id;
-  }
-  const model = await db.query.agentModels.findFirst({
-    where: { id: modelRowId, kind: 'chat', enabled: true },
-  });
-  const provider = model
-    ? await db.query.agentProviders.findFirst({
-        where: { id: model.providerId, enabled: true },
-      })
-    : undefined;
-  if (!model || !provider)
-    throw new AiCallError(
-      'ai_model_unavailable',
-      `The model chosen for AI role "${role.name}" is disabled.`,
-    );
-  return { kind: 'chat', config: chatModelConfig(provider, model, null) };
-}
-
-export async function resolveImageRole(
-  appId: string,
-  role: AiRole,
-): Promise<ResolvedImageRole> {
-  const binding = await bindingFor(appId, role.name);
-  let resolved: Awaited<ReturnType<typeof resolveImageModel>>;
-  try {
-    resolved = await resolveImageModel(binding?.modelRowId);
-  } catch (error) {
-    if (error instanceof AppError) {
-      throw binding
-        ? new AiCallError(
-            'ai_model_unavailable',
-            `The model chosen for AI role "${role.name}" cannot generate images.`,
-          )
-        : new AiCallError(
-            'ai_no_model',
-            'No usable image model is configured on the platform.',
-          );
-    }
-    throw error;
-  }
-  const row = await db.query.agentModels.findFirst({
-    where: { id: resolved.id },
-    columns: { providerId: true },
-  });
-  const provider = row
-    ? await db.query.agentProviders.findFirst({
-        where: { id: row.providerId },
-        columns: { name: true },
-      })
-    : undefined;
-  return {
-    kind: 'image',
-    providerName: provider?.name ?? '',
-    modelId: resolved.modelId,
-    driver: resolved.driver,
-    provider: resolved.provider,
-  };
-}
-
-/** A model a role may be bound to, as the settings UI and CLI show it. */
+/** A model a role or the default may be set to, as the UI and CLI show it. */
 export type AiModelOption = {
-  /** `agent_models.id`: what a binding stores. */
+  /** `agent_models.id`: what a pick stores. */
   id: string;
   providerName: string;
   /** Model id sent to the provider. */
@@ -120,11 +44,10 @@ export type AiModelOption = {
   reasoning: boolean;
 };
 
-/** Models each role kind can use right now, in default order. */
-export async function listAiModelOptions(): Promise<{
-  chat: AiModelOption[];
-  image: AiModelOption[];
-}> {
+/** Models each role kind can use right now, in model order. */
+export async function listAiModelOptions(): Promise<
+  Record<AiRoleKind, AiModelOption[]>
+> {
   const [chatProviders, images] = await Promise.all([
     listAgentModels(),
     listImageModels(),
@@ -150,4 +73,111 @@ export async function listAiModelOptions(): Promise<{
       reasoning: false,
     }));
   return { chat, image };
+}
+
+/** Where the model an unpicked role uses came from. */
+export type AiDefaultSource = 'setting' | 'order';
+
+/**
+ * The default model id of a kind: the configured one while its model row
+ * exists (deleting the model clears it), else the first usable model.
+ */
+export async function defaultModelRowId(
+  kind: AiRoleKind,
+  options?: Record<AiRoleKind, AiModelOption[]>,
+): Promise<{ id: string | null; source: AiDefaultSource }> {
+  const defaults = await getPlatformConfig('apps.aiDefaults');
+  const configured =
+    kind === 'chat' ? defaults.chatModelId : defaults.imageModelId;
+  if (configured) {
+    const row = await db.query.agentModels.findFirst({
+      where: { id: configured, kind },
+      columns: { id: true },
+    });
+    if (row) return { id: row.id, source: 'setting' };
+  }
+  const list = (options ?? (await listAiModelOptions()))[kind];
+  return { id: list[0]?.id ?? null, source: 'order' };
+}
+
+async function bindingFor(appId: string, role: string) {
+  return db.query.appAiRoleBindings.findFirst({
+    where: { appId, role },
+    columns: { modelRowId: true },
+  });
+}
+
+/** Resolve the model for one call, with the provider key. Never returned to Apps. */
+export async function resolveChatRole(
+  appId: string,
+  role: AiRole,
+): Promise<ResolvedChatRole> {
+  const binding = await bindingFor(appId, role.name);
+  const fallback = binding ? null : await defaultModelRowId('chat');
+  const modelRowId = binding?.modelRowId ?? fallback?.id;
+  if (!modelRowId)
+    throw new AiCallError(
+      'ai_no_model',
+      'No chat model is configured on the platform.',
+    );
+  const model = await db.query.agentModels.findFirst({
+    where: { id: modelRowId, kind: 'chat', enabled: true },
+  });
+  const provider = model
+    ? await db.query.agentProviders.findFirst({
+        where: { id: model.providerId, enabled: true },
+      })
+    : undefined;
+  if (!model || !provider)
+    throw new AiCallError(
+      'ai_model_unavailable',
+      binding
+        ? `The model chosen for AI role "${role.name}" is disabled.`
+        : 'The default chat model for Apps is disabled.',
+    );
+  return { kind: 'chat', config: chatModelConfig(provider, model, null) };
+}
+
+export async function resolveImageRole(
+  appId: string,
+  role: AiRole,
+): Promise<ResolvedImageRole> {
+  const binding = await bindingFor(appId, role.name);
+  const fallback = binding ? null : await defaultModelRowId('image');
+  const chosen = binding?.modelRowId ?? fallback?.id ?? null;
+  if (!chosen)
+    throw new AiCallError(
+      'ai_no_model',
+      'No usable image model is configured on the platform.',
+    );
+  let resolved: Awaited<ReturnType<typeof resolveImageModel>>;
+  try {
+    resolved = await resolveImageModel(chosen);
+  } catch (error) {
+    if (error instanceof AppError)
+      throw new AiCallError(
+        'ai_model_unavailable',
+        binding
+          ? `The model chosen for AI role "${role.name}" cannot generate images.`
+          : 'The default image model for Apps cannot generate images.',
+      );
+    throw error;
+  }
+  const row = await db.query.agentModels.findFirst({
+    where: { id: resolved.id },
+    columns: { providerId: true },
+  });
+  const provider = row
+    ? await db.query.agentProviders.findFirst({
+        where: { id: row.providerId },
+        columns: { name: true },
+      })
+    : undefined;
+  return {
+    kind: 'image',
+    providerName: provider?.name ?? '',
+    modelId: resolved.modelId,
+    driver: resolved.driver,
+    provider: resolved.provider,
+  };
 }

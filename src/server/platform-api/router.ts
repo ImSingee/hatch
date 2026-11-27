@@ -9,11 +9,17 @@ import {
   startTaskRun,
 } from '~server/apps/tasks/service';
 import { runMessage, runSummaryMessage, tasksMessage } from './app-tasks';
-import { appAiCallMessage, appAiMessage, appAiTotalMessage } from './app-ai';
 import {
+  appAiCallMessage,
+  appAiDefaultsMessage,
+  appAiMessage,
+  appAiTotalMessage,
+} from './app-ai';
+import {
+  getAppAiDefaults,
   getAppAiSettings,
   listAppAiUsage,
-  setAppAiBudget,
+  setAppAiDefaults,
   setAppAiRoleModel,
   summarizeAppAiUsage,
 } from '~server/apps/ai/settings';
@@ -806,11 +812,31 @@ export function registerPlatformApi(
       throw publicError(error);
     }
   });
-  router.rpc(AppService.method.setAppAiBudget, async (input) => {
+  router.rpc(AppService.method.getAppAiDefaults, async () => {
     try {
-      const { id } = await find(input.id);
+      return { defaults: appAiDefaultsMessage(await getAppAiDefaults()) };
+    } catch (error) {
+      throw publicError(error);
+    }
+  });
+  router.rpc(AppService.method.setAppAiDefaults, async (input) => {
+    try {
+      for (const [kind, value, clear] of [
+        ['chat', input.chatModel, input.clearChatModel],
+        ['image', input.imageModel, input.clearImageModel],
+      ] as const)
+        if (value !== undefined && clear)
+          throw new AppError(
+            `Set the ${kind} model or clear it, not both.`,
+            400,
+          );
       return {
-        ai: appAiMessage(await setAppAiBudget(id, input.budgetUsd ?? null)),
+        defaults: appAiDefaultsMessage(
+          await setAppAiDefaults({
+            chat: input.clearChatModel ? null : input.chatModel,
+            image: input.clearImageModel ? null : input.imageModel,
+          }),
+        ),
       };
     } catch (error) {
       throw publicError(error);

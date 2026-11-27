@@ -1,5 +1,9 @@
 import { queryOptions } from '@tanstack/react-query';
-import { getAppAiFn, listAppAiUsageFn } from '~server/app-ai';
+import {
+  getAppAiDefaultsFn,
+  getAppAiFn,
+  listAppAiUsageFn,
+} from '~server/app-ai';
 
 export const appAiQueryOptions = (appId: string) =>
   queryOptions({
@@ -13,3 +17,9 @@ export const appAiUsageQueryOptions = (appId: string) =>
     queryFn: () => listAppAiUsageFn({ data: { id: appId } }),
     refetchInterval: 30_000,
   });
+
+/** The default chat and image models for Apps (Settings · Providers). */
+export const appAiDefaultsQueryOptions = queryOptions({
+  queryKey: ['app-ai-defaults'],
+  queryFn: () => getAppAiDefaultsFn(),
+});

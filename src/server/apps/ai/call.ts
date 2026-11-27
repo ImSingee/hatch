@@ -210,17 +210,12 @@ export function assistantParts(message: AssistantMessage): AiAssistantPart[] {
   });
 }
 
-export function usageView(
-  usage: Usage | undefined,
-  priced: boolean,
-): AiUsageView {
+export function usageView(usage: Usage | undefined): AiUsageView {
   return {
     inputTokens: usage?.input ?? 0,
     outputTokens: usage?.output ?? 0,
     cacheReadTokens: usage?.cacheRead ?? 0,
     cacheWriteTokens: usage?.cacheWrite ?? 0,
-    costUsd:
-      priced || usage?.cost.totalFromProvider ? (usage?.cost.total ?? 0) : null,
   };
 }
 
@@ -270,7 +265,6 @@ export async function* streamChat(
   signal: AbortSignal,
 ): AsyncGenerator<ChatStreamEvent> {
   const { models, picked } = buildRunModels(config);
-  const priced = Boolean(config.model.cost);
   // Every error text the App receives passes through here.
   const redact = (text: string) => providerErrorText(text, config.apiKey);
   const maxTokens = Math.min(
@@ -294,7 +288,7 @@ export async function* streamChat(
       type: 'error',
       aborted: false,
       message: redact(error instanceof Error ? error.message : String(error)),
-      usage: usageView(undefined, priced),
+      usage: usageView(undefined),
     };
     return;
   }
@@ -319,7 +313,7 @@ export async function* streamChat(
             type: 'error',
             aborted: false,
             message: 'The provider deferred the response.',
-            usage: usageView(event.message.usage, priced),
+            usage: usageView(event.message.usage),
           };
           return;
         }
@@ -332,7 +326,7 @@ export async function* streamChat(
               content: assistantParts(event.message),
             },
             stopReason: event.reason,
-            usage: usageView(event.message.usage, priced),
+            usage: usageView(event.message.usage),
             model: { provider: config.providerName, id: config.model.id },
           },
         };
@@ -347,7 +341,7 @@ export async function* streamChat(
                 ? 'The call was cancelled.'
                 : 'The provider returned an error.'),
           ),
-          usage: usageView(event.error.usage, priced),
+          usage: usageView(event.error.usage),
         };
         return;
       }
@@ -357,7 +351,7 @@ export async function* streamChat(
       type: 'error',
       aborted: signal.aborted,
       message: redact(error instanceof Error ? error.message : String(error)),
-      usage: usageView(undefined, priced),
+      usage: usageView(undefined),
     };
     return;
   }
@@ -365,7 +359,7 @@ export async function* streamChat(
     type: 'error',
     aborted: signal.aborted,
     message: 'The provider stream ended without a result.',
-    usage: usageView(undefined, priced),
+    usage: usageView(undefined),
   };
 }
 

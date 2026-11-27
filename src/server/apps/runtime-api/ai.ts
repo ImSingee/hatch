@@ -27,12 +27,7 @@ import {
   type AiImageResult,
 } from '../ai/contract';
 import { resolveChatRole, resolveImageRole } from '../ai/models';
-import {
-  acquireCallSlot,
-  assertWithinBudget,
-  recordUsage,
-  type UsageRecord,
-} from '../ai/usage';
+import { acquireCallSlot, recordUsage, type UsageRecord } from '../ai/usage';
 import { parseAppApiPath } from './path';
 
 const ACTIONS = { '/ai/chat': 'chat', '/ai/image': 'image' } as const;
@@ -40,7 +35,6 @@ const ACTIONS = { '/ai/chat': 'chat', '/ai/image': 'image' } as const;
 type CallApp = {
   id: string;
   currentDeploymentId: string;
-  aiMonthlyBudgetMicros: number | null;
 };
 
 /**
@@ -51,8 +45,8 @@ type CallApp = {
  *
  * Called by the App's own backend and authenticated like notifications: an
  * HMAC over `<timestamp>.<rawBody>` with the per-app signing secret. The App
- * may only use roles its live deployment declares and only spends its own
- * budget. The provider key never leaves the platform process.
+ * may only use roles its live deployment declares. The provider key never
+ * leaves the platform process.
  */
 export async function handleAiRequest({
   request,
@@ -79,7 +73,6 @@ export async function handleAiRequest({
       currentDeploymentId: true,
       capabilities: true,
       signingSecret: true,
-      aiMonthlyBudgetMicros: true,
     },
   });
   if (
@@ -122,7 +115,6 @@ export async function handleAiRequest({
   const callApp: CallApp = {
     id: app.id,
     currentDeploymentId: app.currentDeploymentId,
-    aiMonthlyBudgetMicros: app.aiMonthlyBudgetMicros,
   };
   try {
     if (action === 'chat') {
@@ -184,13 +176,12 @@ async function handleChat(
   const role = await declaredRole(app, body.role, 'chat');
   const { config } = await resolveChatRole(app.id, role);
   const context = chatContext(config, body);
-  await assertWithinBudget(app.id, app.aiMonthlyBudgetMicros);
   const release = acquireCallSlot(app.id);
 
   const controller = new AbortController();
   const onAbort = () => controller.abort();
   // Abort events are not replayed: a caller that left while the role, model
-  // or budget was being checked must not start a provider call.
+  // or history was being checked must not start a provider call.
   if (requestSignal.aborted) controller.abort();
   else requestSignal.addEventListener('abort', onAbort, { once: true });
   const startedAt = performance.now();
@@ -217,7 +208,6 @@ async function handleChat(
       outputTokens: usage?.outputTokens,
       cacheReadTokens: usage?.cacheReadTokens,
       cacheWriteTokens: usage?.cacheWriteTokens,
-      costUsd: usage?.costUsd ?? (config.model.cost ? 0 : null),
       status:
         event.type === 'done'
           ? 'ok'
@@ -249,7 +239,6 @@ async function handleChat(
             outputTokens: 0,
             cacheReadTokens: 0,
             cacheWriteTokens: 0,
-            costUsd: null,
           },
         },
       );
@@ -325,7 +314,6 @@ async function handleImage(
 ): Promise<Response> {
   const role = await declaredRole(app, body.role, 'image');
   const resolved = await resolveImageRole(app.id, role);
-  await assertWithinBudget(app.id, app.aiMonthlyBudgetMicros);
   const release = acquireCallSlot(app.id);
   const startedAt = performance.now();
   const base = {
@@ -335,8 +323,6 @@ async function handleImage(
     kind: 'image' as const,
     providerName: resolved.providerName,
     modelId: resolved.modelId,
-    // Image models carry no catalog price.
-    costUsd: null,
   };
   try {
     const png = await generateImage(
