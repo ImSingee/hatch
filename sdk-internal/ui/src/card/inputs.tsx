@@ -11,6 +11,7 @@ import {
   Radio,
   RadioGroup as BaseRadioGroup,
 } from 'nsh/base';
+import { byLook } from '../core/env';
 import { FOCUS_RING } from '../core/styles';
 import { Glyph } from '../icons/Icon';
 import { IconArrowUpRight, IconCheck } from '../icons/icons.gen';
@@ -31,6 +32,19 @@ import {
   TONE_ON_TINT,
   TYPE,
 } from './styles';
+
+/** A multiple choice's box: the library's, with the Desk card's rounder
+ * corner on the web. */
+const CHECKBOX = byLook({
+  web: CHOICE_STYLE.checkbox.replace(
+    'rounded-(--radius-xs)',
+    'rounded-(--radius-sm)',
+  ),
+  ios: CHOICE_STYLE.checkbox,
+  android: CHOICE_STYLE.checkbox,
+  macos: CHOICE_STYLE.checkbox,
+  windows: CHOICE_STYLE.checkbox,
+});
 
 /** An option as it registers with its `Choice` or `Buttons`. */
 type OptionEntry = ReplyOptionInput & {
@@ -161,10 +175,10 @@ export function Choice(props: ChoiceProps): JSX.Element {
     if (!props.multiple || card?.mode() !== 'live') return undefined;
     const min = props.min ?? 1;
     const max = props.max ?? options().length;
-    return min === max ? `Choose ${min}.` : `Choose ${min} to ${max}.`;
+    return min === max ? `Choose ${min}` : `Choose ${min}–${max}`;
   };
   const description = () =>
-    [props.description, range()].filter(Boolean).join(' ') || undefined;
+    [props.description, range()].filter(Boolean).join(' · ') || undefined;
   const content = (
     <GroupContext.Provider
       value={{
@@ -286,7 +300,7 @@ export function Option(props: OptionProps): JSX.Element {
       onChange={toggle}
       accessibilityLabel={props.children}
       class={rowClass()}
-      indicatorClass={CHOICE_STYLE.checkbox}
+      indicatorClass={CHECKBOX}
       indicator={
         chosen() ? (
           <Glyph icon={IconCheck} size="sm" color="primary-foreground" />
@@ -436,7 +450,7 @@ export function Button(props: ButtonProps): JSX.Element {
   const kind = (): ButtonKind => {
     if (selected()) return props.destructive ? 'danger' : 'primary';
     if (props.primary) return submits() || !answer() ? 'primary' : 'tint';
-    if (props.destructive) return answer() ? 'default' : 'danger';
+    if (props.destructive) return 'danger-tint';
     return 'default';
   };
   if (props.href) {

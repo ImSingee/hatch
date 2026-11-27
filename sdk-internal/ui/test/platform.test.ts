@@ -132,6 +132,7 @@ const PLATFORM_TEXT_PAIRS: readonly (readonly [string, string])[] = [
   // Filled, tonal and gray buttons, the selected tab's pill.
   ['primary-foreground', 'primary'],
   ['primary-tint-foreground', 'primary-tint'],
+  ['danger-tint-foreground', 'danger-tint'],
   // iOS's gray buttons: the ground on a card, a card on the ground.
   ['foreground', 'background'],
   ['foreground', 'card'],
@@ -156,6 +157,8 @@ const PLATFORM_TEXT_PAIRS: readonly (readonly [string, string])[] = [
 const VALIDATED_ROLE: Record<string, string> = {
   'primary-strong': 'primary-text',
   'primary-tint-foreground': 'primary-ink',
+  'danger-tint-foreground': 'destructive-ink',
+  'danger-tint': 'destructive-tint',
   danger: 'destructive',
   'danger-strong': 'destructive-strong',
   'success-strong': 'green-text',

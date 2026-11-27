@@ -9,6 +9,7 @@ import { Text as NshText, View, context, locale, signal } from 'nsh';
 import type { JSX } from 'nsh';
 import { Progress as BaseProgress } from 'nsh/base';
 import { Each } from '../core/control';
+import { byLook, mobileLook } from '../core/env';
 import { FOCUS_RING } from '../core/styles';
 import { Glyph } from '../icons/Icon';
 import type { GlyphColor } from '../icons/Icon';
@@ -623,7 +624,24 @@ export function Stat(props: StatProps): JSX.Element {
   );
 }
 
-const FieldsContext = context<() => boolean>(() => false);
+/** Labels share one column: the widest label's width, at most 45% of the
+ * row, as the Desk card lays them out. iOS and Android give labels 30% of
+ * the row, as the Mobile card does. */
+const FieldsContext = context<{
+  mono: () => boolean;
+  labelWidth: () => number;
+  measured: (width: number) => void;
+}>({ mono: () => false, labelWidth: () => 0, measured: () => {} });
+
+const LABEL_COLUMN = byLook({
+  web: 'shrink-0 max-w-[45%]',
+  ios: 'w-[30%] min-w-14 max-w-30',
+  android: 'w-[30%] min-w-14 max-w-30',
+  macos: 'shrink-0 max-w-[45%]',
+  windows: 'shrink-0 max-w-[45%]',
+});
+
+const SHARED_COLUMN = !mobileLook;
 
 export type FieldsProps = {
   children?: JSX.Element;
@@ -633,8 +651,17 @@ export type FieldsProps = {
 
 /** Label and value pairs. */
 export function Fields(props: FieldsProps): JSX.Element {
+  const width = signal(0);
   return (
-    <FieldsContext.Provider value={() => props.mono === true}>
+    <FieldsContext.Provider
+      value={{
+        mono: () => props.mono === true,
+        labelWidth: () => width(),
+        measured: (value) => {
+          if (value > width()) width.set(value);
+        },
+      }}
+    >
       <View class="min-w-0 gap-1">{props.children}</View>
     </FieldsContext.Provider>
   );
@@ -651,13 +678,23 @@ export type FieldProps = {
 
 /** One label and its value, inside `Fields`. */
 export function Field(props: FieldProps): JSX.Element {
-  const fieldsMono = FieldsContext();
-  const mono = () => props.mono === true || fieldsMono();
+  const fields = FieldsContext();
+  const mono = () => props.mono === true || fields.mono();
   return (
     <View class="min-w-0 flex-row items-baseline gap-3">
-      <NshText class={`w-[30%] min-w-14 ${TYPE.data} text-muted-foreground`}>
-        {props.label}
-      </NshText>
+      <View
+        class={`min-w-13 ${LABEL_COLUMN}`}
+        style={SHARED_COLUMN ? { minWidth: fields.labelWidth() } : undefined}
+        onLayout={
+          SHARED_COLUMN
+            ? (event) => fields.measured(event.bounds.size.width)
+            : undefined
+        }
+      >
+        <NshText class={`${TYPE.data} text-muted-foreground`}>
+          {props.label}
+        </NshText>
+      </View>
       <NshText
         class={`min-w-0 flex-1 ${mono() ? `${TYPE.mono} font-mono` : TYPE.data} text-foreground`}
       >
@@ -1015,7 +1052,7 @@ export function Trend(props: TrendProps): JSX.Element {
       >
         {props.threshold !== undefined && top() > 0 ? (
           <View
-            class="absolute inset-x-0 h-px border-t border-dashed border-danger"
+            class="absolute inset-x-0 h-px border-t border-dashed border-danger-strong"
             style={{
               bottom:
                 `${(Math.max(0, props.threshold) / top()) * 100}%` as `${number}%`,
@@ -1025,7 +1062,7 @@ export function Trend(props: TrendProps): JSX.Element {
         <Each of={values()} key="index">
           {(value) => (
             <View
-              class={`min-w-0 flex-1 rounded-t-(--radius-xs) ${props.threshold !== undefined && value() > props.threshold ? 'bg-danger' : 'bg-primary-tint-hover'}`}
+              class={`min-w-0 flex-1 rounded-t-(--radius-xs) ${props.threshold !== undefined && value() > props.threshold ? 'bg-danger-strong' : 'bg-primary/45'}`}
               style={{ height: height(value()) }}
             />
           )}
@@ -1050,7 +1087,7 @@ export function Callout(props: CalloutProps): JSX.Element {
       class={`min-w-0 gap-0.5 ${BLOCK_RADIUS} ${TONE_SURFACE[props.tone ?? 'neutral']} px-3 py-2.5`}
     >
       {props.title ? (
-        <NshText class={`${TYPE.data} ${TYPE.bold} ${ink()}`}>
+        <NshText class={`${TYPE.text.md} ${TYPE.bold} ${ink()}`}>
           {props.title}
         </NshText>
       ) : null}

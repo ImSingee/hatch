@@ -21,9 +21,16 @@ import { FormContext } from './form-context';
  * `primary` for the one main action of a view; `default` for others;
  * `tint` for a secondary action that should still read as the accent;
  * `subtle` for low-emphasis actions in toolbars and rows; `danger` for
- * destructive actions.
+ * destructive actions; `danger-tint` for a destructive action beside the
+ * main one (a card's "Deny"), red without the weight of a fill.
  */
-export type ButtonKind = 'primary' | 'default' | 'tint' | 'subtle' | 'danger';
+export type ButtonKind =
+  | 'primary'
+  | 'default'
+  | 'tint'
+  | 'subtle'
+  | 'danger'
+  | 'danger-tint';
 
 const KIND: Record<ButtonKind, string> = {
   primary:
@@ -34,6 +41,8 @@ const KIND: Record<ButtonKind, string> = {
   subtle: 'hover:bg-surface-hover active:bg-surface-pressed',
   danger:
     'bg-danger hover:bg-danger-pressed active:bg-danger-pressed active:translate-y-px',
+  'danger-tint':
+    'bg-danger-tint hover:bg-danger-tint-hover active:bg-danger-tint-hover',
 };
 
 const LABEL_COLOR: Record<ButtonKind, string> = {
@@ -42,6 +51,7 @@ const LABEL_COLOR: Record<ButtonKind, string> = {
   tint: 'text-primary-tint-foreground',
   subtle: 'text-foreground',
   danger: 'text-destructive-foreground',
+  'danger-tint': 'text-danger-tint-foreground',
 };
 
 const GLYPH_COLOR: Record<ButtonKind, GlyphColor> = {
@@ -50,6 +60,7 @@ const GLYPH_COLOR: Record<ButtonKind, GlyphColor> = {
   tint: 'primary-tint-foreground',
   subtle: 'foreground',
   danger: 'destructive-foreground',
+  'danger-tint': 'danger-tint-foreground',
 };
 
 /** DESIGN.md "Button"; touch screens get 44-point targets. */
@@ -101,6 +112,7 @@ const IOS_KIND: Record<ButtonKind, string> = {
   tint: 'bg-primary-tint active:bg-primary-tint-hover',
   subtle: 'active:opacity-50',
   danger: 'bg-danger active:bg-danger-pressed',
+  'danger-tint': 'bg-danger-tint active:bg-danger-tint-hover',
 };
 
 const IOS_LABEL_COLOR: Record<ButtonKind, string> = {
@@ -142,6 +154,7 @@ const ANDROID_KIND: Record<ButtonKind, string> = {
   tint: 'bg-primary-tint active:bg-primary-tint-hover',
   subtle: 'active:bg-surface-pressed',
   danger: 'bg-danger active:bg-danger-pressed',
+  'danger-tint': 'bg-danger-tint active:bg-danger-tint-hover',
 };
 
 const ANDROID_LABEL_COLOR: Record<ButtonKind, string> = {
@@ -186,6 +199,8 @@ const MAC_KIND: Record<ButtonKind, string> = {
   tint: 'bg-primary-tint hover:bg-primary-tint-hover active:bg-primary-tint-hover',
   subtle: 'hover:bg-surface-hover active:bg-surface-pressed',
   danger: 'bg-danger hover:bg-danger-pressed active:bg-danger-pressed',
+  'danger-tint':
+    'bg-danger-tint hover:bg-danger-tint-hover active:bg-danger-tint-hover',
 };
 
 const MAC_SIZE: Record<ControlSize, string> = {
@@ -217,6 +232,8 @@ const WIN_KIND: Record<ButtonKind, string> = {
   tint: 'bg-primary-tint hover:bg-primary-tint-hover active:bg-primary-tint-hover',
   subtle: 'hover:bg-surface-hover active:bg-surface-pressed',
   danger: 'bg-danger hover:bg-danger-pressed active:bg-danger-pressed',
+  'danger-tint':
+    'bg-danger-tint hover:bg-danger-tint-hover active:bg-danger-tint-hover',
 };
 
 const WIN_SIZE: Record<ControlSize, string> = {
