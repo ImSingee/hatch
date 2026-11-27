@@ -399,6 +399,11 @@ export function fieldFromTree(node: ContentNode): ReplyField | null {
             : {}),
         }));
       const required = propBool(node, 'required');
+      const defaults = options
+        .filter(
+          (child) => child.type === 'Option' && propBool(child, 'default'),
+        )
+        .map((child) => propString(child, 'id') ?? '');
       return propBool(node, 'multiple')
         ? {
             ...base,
@@ -407,8 +412,15 @@ export function fieldFromTree(node: ContentNode): ReplyField | null {
             options: choices,
             minSelected: propNumber(node, 'min') ?? 1,
             maxSelected: propNumber(node, 'max') ?? choices.length,
+            ...(defaults.length > 0 ? { default: defaults } : {}),
           }
-        : { ...base, type: 'single', required, options: choices };
+        : {
+            ...base,
+            type: 'single',
+            required,
+            options: choices,
+            ...(defaults[0] ? { default: defaults[0] } : {}),
+          };
     }
     case 'Buttons':
       return {
