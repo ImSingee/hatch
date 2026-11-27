@@ -74,6 +74,7 @@ async function call(method: string, body: unknown = {}) {
 beforeEach(async () => {
   fixture.credential = CREDENTIALS.session;
   await db.delete(schema.platformConfig);
+  await db.delete(schema.themes);
   await db.delete(schema.sidebarItems);
   await db.delete(schema.apps);
   await db
@@ -139,10 +140,129 @@ describe('theme and pin RPCs', () => {
         status: (await call(method, body)).status,
       }).toEqual({ method, body, status: 400 });
     expect((await call('PinService/PinApp', { app: 'nope' })).status).toBe(404);
-    expect((await call('ThemeService/GetTheme')).data.theme.accent).toBe(
-      'indigo',
+    // Still the fresh state: no accent.
+    expect((await call('ThemeService/GetTheme')).data.theme.accent ?? '').toBe(
+      '',
     );
     expect((await call('PinService/ListPins')).data.appPins ?? []).toEqual([]);
+  });
+
+  it('give every credential type the same authority over the theme library', async () => {
+    const meadow = {
+      name: 'Meadow',
+      appearance: 'light',
+      colors: {
+        background: '#F3F6EF',
+        foreground: '#1C2A1F',
+        card: '#FFFFFF',
+        primary: '#2F6B3A',
+        secondary: '#E8EFE3',
+        muted: '#E8EFE3',
+        'muted-foreground': '#4B5B4E',
+        border: '#D9E3D3',
+        destructive: '#B91C1C',
+      },
+    };
+    for (const [type, credential] of Object.entries(CREDENTIALS)) {
+      fixture.credential = credential;
+      const ok = (result: { status: number }) =>
+        expect({ type, status: result.status }).toEqual({ type, status: 200 });
+      const created = await call('ThemeService/CreateTheme', {
+        document: meadow,
+      });
+      ok(created);
+      const id = created.data.theme.id;
+      expect(created.data.theme).toMatchObject({
+        name: 'Meadow',
+        source: 'custom',
+        valid: true,
+      });
+      const listed = await call('ThemeService/ListThemes', { limit: 2 });
+      ok(listed);
+      expect(
+        listed.data.themes.map((theme: { id: string }) => theme.id),
+      ).toEqual(['desk', 'desk-dark']);
+      expect(listed.data.nextCursor).toBe('2');
+      const rest = await call('ThemeService/ListThemes', { cursor: '2' });
+      expect(rest.data.themes[0].id).toBe(id);
+      const dark = await call('ThemeService/SetTheme', {
+        theme: 'desk-dark',
+        clearAccent: true,
+      });
+      ok(dark);
+      expect(dark.data.theme.theme).toMatchObject({
+        id: 'desk-dark',
+        appearance: 'dark',
+      });
+      const activated = await call('ThemeService/SetTheme', { theme: id });
+      ok(activated);
+      const resolved = await call('ThemeService/GetTheme', { resolve: true });
+      ok(resolved);
+      expect(resolved.data.resolved.colors.primary).toBe('#2F6B3A');
+      expect(resolved.data.resolved.ramps.primary.shades).toHaveLength(10);
+      const updated = await call('ThemeService/UpdateTheme', {
+        id,
+        document: { ...meadow, name: 'Meadow two' },
+      });
+      ok(updated);
+      expect(updated.data.theme.name).toBe('Meadow two');
+      const busy = await call('ThemeService/DeleteTheme', { id });
+      expect({ type, status: busy.status }).toEqual({ type, status: 409 });
+      const check = await call('ThemeService/ValidateTheme', {
+        document: {
+          ...meadow,
+          colors: { ...meadow.colors, 'muted-foreground': '#B0B8B2' },
+        },
+      });
+      ok(check);
+      expect(check.data.ok ?? false).toBe(false);
+      expect(check.data.problems[0]).toMatchObject({
+        code: 'low_contrast',
+        foreground: 'muted-foreground',
+        background: 'background',
+        requiredRatio: 4.5,
+      });
+      const rejected = await call('ThemeService/CreateTheme', {
+        document: { ...meadow, colors: { ...meadow.colors, card: 'cream' } },
+      });
+      expect(rejected.status).toBe(400);
+      expect(rejected.data.message).toContain(
+        'colors.card is not an opaque colour',
+      );
+      const reset = await call('ThemeService/ResetTheme');
+      ok(reset);
+      expect(reset.data.theme.theme).toMatchObject({
+        id: 'desk',
+        primary: '#3F51C7',
+      });
+      expect(reset.data.theme.accent ?? '').toBe('');
+      const removed = await call('ThemeService/DeleteTheme', { id });
+      ok(removed);
+    }
+  });
+
+  it('reject malformed theme requests at the edge', async () => {
+    for (const [method, body] of [
+      ['ThemeService/SetTheme', { accent: 'teal', clearAccent: true }],
+      ['ThemeService/SetTheme', { theme: 'Not An Id' }],
+      ['ThemeService/ListThemes', { limit: 500 }],
+      ['ThemeService/ListThemes', { cursor: 'next' }],
+      ['ThemeService/CreateTheme', {}],
+      ['ThemeService/UpdateTheme', { id: 'x' }],
+      ['ThemeService/DeleteTheme', {}],
+      ['ThemeService/ValidateTheme', {}],
+    ] as const)
+      expect({
+        method,
+        body,
+        status: (await call(method, body)).status,
+      }).toEqual({ method, body, status: 400 });
+    expect(
+      (await call('ThemeService/SetTheme', { theme: 'missing' })).status,
+    ).toBe(404);
+    expect((await call('ThemeService/GetTheme')).data.theme.theme.id).toBe(
+      'desk',
+    );
   });
 
   it('page one sequence of App pins and dashboards', async () => {

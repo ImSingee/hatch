@@ -1,5 +1,5 @@
-import { Stack, Text } from '@mantine/core';
-import { IconCheck } from '@tabler/icons-react';
+import { Alert, Stack, Text } from '@mantine/core';
+import { IconCheck, IconInfoCircle } from '@tabler/icons-react';
 import {
   useMutation,
   useQueryClient,
@@ -8,7 +8,7 @@ import {
 import { type PlainTranslationKey, useI18n } from '~i18n';
 import { themeQueryOptions } from '~queries/theme';
 import { setThemeAccentFn } from '~server/theme';
-import { applyAccent, type AccentName } from '~ui/theme';
+import type { AccentName } from '~ui/theme';
 import classes from './accent-panel.module.css';
 
 /** Display name of each accent; the stored value stays the token name. */
@@ -19,25 +19,41 @@ const ACCENT_LABELS = {
   violet: 'appearance.accent.violet',
 } as const satisfies Record<AccentName, PlainTranslationKey>;
 
-/** Choose the instance accent; the change shows at once and is then saved. */
+/** The radio value of "no accent": each theme shows its own primary. */
+const THEME_COLOUR = 'theme';
+
+/** Choose the instance accent; the theme follows once it is saved. */
 export function AccentPanel() {
   const { t } = useI18n();
   const queryClient = useQueryClient();
   const { data: theme } = useSuspenseQuery(themeQueryOptions);
   const save = useMutation({
-    mutationFn: (accent: AccentName) => setThemeAccentFn({ data: accent }),
-    onMutate: (accent) => {
-      const previous = theme.accent;
-      applyAccent(accent);
-      return { previous };
-    },
+    mutationFn: (accent: AccentName | null) =>
+      setThemeAccentFn({ data: accent }),
     onSuccess: (saved) =>
       queryClient.setQueryData(themeQueryOptions.queryKey, saved),
-    onError: (_error, _accent, context) => {
-      if (context) applyAccent(context.previous);
-    },
   });
   const selected = save.isPending ? save.variables : theme.accent;
+  const ownPrimary = theme.theme.primary;
+  // A custom theme whose own primary the chosen accent hides.
+  const overridden =
+    theme.accentOverridesPrimary && theme.theme.source === 'custom'
+      ? theme.theme
+      : null;
+  const options = [
+    ...theme.accents.map((accent) => ({
+      value: accent.name as string,
+      accent: accent.name as AccentName | null,
+      color: accent.color,
+      label: t(ACCENT_LABELS[accent.name]),
+    })),
+    {
+      value: THEME_COLOUR,
+      accent: null,
+      color: ownPrimary,
+      label: t('appearance.accent.theme'),
+    },
+  ];
 
   return (
     <div>
@@ -50,32 +66,40 @@ export function AccentPanel() {
             {t('appearance.accent.description')}
           </Text>
         </Stack>
+        {overridden ? (
+          <Alert
+            variant="light"
+            color="gray"
+            icon={<IconInfoCircle size={18} aria-hidden />}
+          >
+            {t('appearance.accent.overrides', { name: overridden.name })}
+          </Alert>
+        ) : null}
         <div
           role="radiogroup"
           aria-labelledby="accent-label"
           className={classes.swatches}
         >
-          {theme.accents.map((accent) => (
-            <label key={accent.name} className={classes.swatch}>
+          {options.map((option) => (
+            <label key={option.value} className={classes.swatch}>
               <input
                 type="radio"
                 name="accent"
                 className={classes.input}
-                value={accent.name}
-                checked={accent.name === selected}
-                onChange={() => save.mutate(accent.name)}
+                value={option.value}
+                checked={option.accent === selected}
+                disabled={save.isPending}
+                onChange={() => save.mutate(option.accent)}
               />
               <span
                 className={classes.dot}
-                style={{ backgroundColor: accent.color }}
+                style={{ backgroundColor: option.color }}
               >
-                {accent.name === selected ? (
+                {option.accent === selected ? (
                   <IconCheck size={18} stroke={3} aria-hidden />
                 ) : null}
               </span>
-              <span className={classes.name}>
-                {t(ACCENT_LABELS[accent.name])}
-              </span>
+              <span className={classes.name}>{option.label}</span>
             </label>
           ))}
         </div>

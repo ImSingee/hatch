@@ -2,18 +2,12 @@
   "type": "diff",
   "version": "10",
   "dialect": "postgres",
-  "id": "386c0421-973c-410c-ae8e-c2d19b64bb6c",
-  "prevIds": [
-    "2682c654-0df9-4463-be10-e7edda881446"
-  ],
+  "id": "66d7b3ca-ead1-468b-a64f-3bad3f87c7cb",
+  "prevIds": ["dc150875-020c-44bc-8f6c-9def61003b5c"],
   "footprints": [
     {
       "statementType": "create_table",
-      "statementTarget": [
-        "table",
-        "public",
-        "app_build_logs"
-      ],
+      "statementTarget": ["table", "public", "app_build_logs"],
       "writes": [
         "s|tbl|public.app_build_logs",
         "n|tbl|public.app_build_logs",
@@ -22,17 +16,11 @@
         "n|type|public.app_build_logs",
         "n|rel|public.app_build_logs_pkey"
       ],
-      "reads": [
-        "n|sch|public"
-      ]
+      "reads": ["n|sch|public"]
     },
     {
       "statementType": "create_table",
-      "statementTarget": [
-        "table",
-        "public",
-        "app_build_requests"
-      ],
+      "statementTarget": ["table", "public", "app_build_requests"],
       "writes": [
         "s|tbl|public.app_build_requests",
         "n|tbl|public.app_build_requests",
@@ -41,17 +29,11 @@
         "n|type|public.app_build_requests",
         "n|rel|public.app_build_requests_pkey"
       ],
-      "reads": [
-        "n|sch|public"
-      ]
+      "reads": ["n|sch|public"]
     },
     {
       "statementType": "create_table",
-      "statementTarget": [
-        "table",
-        "public",
-        "app_builds"
-      ],
+      "statementTarget": ["table", "public", "app_builds"],
       "writes": [
         "s|tbl|public.app_builds",
         "n|tbl|public.app_builds",
@@ -60,45 +42,27 @@
         "n|type|public.app_builds",
         "n|rel|public.app_builds_pkey"
       ],
-      "reads": [
-        "n|sch|public"
-      ]
+      "reads": ["n|sch|public"]
     },
     {
       "statementType": "add_column",
-      "statementTarget": [
-        "column",
-        "public",
-        "deployments",
-        "build_id"
-      ],
+      "statementTarget": ["column", "public", "deployments", "build_id"],
       "writes": [
         "s|col|public.deployments.build_id",
         "n|col|public.deployments.build_id",
         "e|col|public.deployments.build_id"
       ],
-      "reads": [
-        "n|tbl|public.deployments",
-        "n|sch|public"
-      ]
+      "reads": ["n|tbl|public.deployments", "n|sch|public"]
     },
     {
       "statementType": "add_column",
-      "statementTarget": [
-        "column",
-        "public",
-        "deployments",
-        "build_origin"
-      ],
+      "statementTarget": ["column", "public", "deployments", "build_origin"],
       "writes": [
         "s|col|public.deployments.build_origin",
         "n|col|public.deployments.build_origin",
         "e|col|public.deployments.build_origin"
       ],
-      "reads": [
-        "n|tbl|public.deployments",
-        "n|sch|public"
-      ]
+      "reads": ["n|tbl|public.deployments", "n|sch|public"]
     },
     {
       "statementType": "create_index",
@@ -185,11 +149,7 @@
     },
     {
       "statementType": "create_fk",
-      "statementTarget": [
-        "table",
-        "public",
-        "app_build_logs"
-      ],
+      "statementTarget": ["table", "public", "app_build_logs"],
       "writes": [
         "s|fk|public.app_build_logs.app_build_logs_build_id_app_builds_id_fkey",
         "n|fk|public.app_build_logs.app_build_logs_build_id_app_builds_id_fkey",
@@ -208,11 +168,7 @@
     },
     {
       "statementType": "create_fk",
-      "statementTarget": [
-        "table",
-        "public",
-        "app_build_requests"
-      ],
+      "statementTarget": ["table", "public", "app_build_requests"],
       "writes": [
         "s|fk|public.app_build_requests.app_build_requests_app_id_apps_id_fkey",
         "n|fk|public.app_build_requests.app_build_requests_app_id_apps_id_fkey",
@@ -231,11 +187,7 @@
     },
     {
       "statementType": "create_fk",
-      "statementTarget": [
-        "table",
-        "public",
-        "app_build_requests"
-      ],
+      "statementTarget": ["table", "public", "app_build_requests"],
       "writes": [
         "s|fk|public.app_build_requests.app_build_requests_build_id_app_builds_id_fkey",
         "n|fk|public.app_build_requests.app_build_requests_build_id_app_builds_id_fkey",
@@ -254,11 +206,7 @@
     },
     {
       "statementType": "create_fk",
-      "statementTarget": [
-        "table",
-        "public",
-        "app_builds"
-      ],
+      "statementTarget": ["table", "public", "app_builds"],
       "writes": [
         "s|fk|public.app_builds.app_builds_app_id_apps_id_fkey",
         "n|fk|public.app_builds.app_builds_app_id_apps_id_fkey",
@@ -1016,14 +964,10 @@
         "table": "app_build_logs",
         "name": "app_build_logs_build_id_app_builds_id_fkey",
         "nameExplicit": false,
-        "columns": [
-          "build_id"
-        ],
+        "columns": ["build_id"],
         "schemaTo": "public",
         "tableTo": "app_builds",
-        "columnsTo": [
-          "id"
-        ],
+        "columnsTo": ["id"],
         "onUpdate": "NO ACTION",
         "onDelete": "CASCADE",
         "entityType": "fks"
@@ -1036,14 +980,10 @@
         "table": "app_build_requests",
         "name": "app_build_requests_app_id_apps_id_fkey",
         "nameExplicit": false,
-        "columns": [
-          "app_id"
-        ],
+        "columns": ["app_id"],
         "schemaTo": "public",
         "tableTo": "apps",
-        "columnsTo": [
-          "id"
-        ],
+        "columnsTo": ["id"],
         "onUpdate": "NO ACTION",
         "onDelete": "CASCADE",
         "entityType": "fks"
@@ -1056,14 +996,10 @@
         "table": "app_build_requests",
         "name": "app_build_requests_build_id_app_builds_id_fkey",
         "nameExplicit": false,
-        "columns": [
-          "build_id"
-        ],
+        "columns": ["build_id"],
         "schemaTo": "public",
         "tableTo": "app_builds",
-        "columnsTo": [
-          "id"
-        ],
+        "columnsTo": ["id"],
         "onUpdate": "NO ACTION",
         "onDelete": "CASCADE",
         "entityType": "fks"
@@ -1076,14 +1012,10 @@
         "table": "app_builds",
         "name": "app_builds_app_id_apps_id_fkey",
         "nameExplicit": false,
-        "columns": [
-          "app_id"
-        ],
+        "columns": ["app_id"],
         "schemaTo": "public",
         "tableTo": "apps",
-        "columnsTo": [
-          "id"
-        ],
+        "columnsTo": ["id"],
         "onUpdate": "NO ACTION",
         "onDelete": "CASCADE",
         "entityType": "fks"
@@ -1095,10 +1027,7 @@
         "schema": "public",
         "table": "app_build_logs",
         "name": "app_build_logs_pkey",
-        "columns": [
-          "build_id",
-          "seq"
-        ],
+        "columns": ["build_id", "seq"],
         "nameExplicit": false,
         "entityType": "pks"
       }
@@ -1109,10 +1038,7 @@
         "schema": "public",
         "table": "app_build_requests",
         "name": "app_build_requests_pkey",
-        "columns": [
-          "app_id",
-          "request_id"
-        ],
+        "columns": ["app_id", "request_id"],
         "nameExplicit": false,
         "entityType": "pks"
       }
@@ -1123,9 +1049,7 @@
         "schema": "public",
         "table": "app_builds",
         "name": "app_builds_pkey",
-        "columns": [
-          "id"
-        ],
+        "columns": ["id"],
         "nameExplicit": false,
         "entityType": "pks"
       }

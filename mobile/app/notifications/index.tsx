@@ -50,15 +50,14 @@ import {
 } from '../../src/ui/primitives';
 import { AnswerLine } from '../../src/ui/reply-card';
 import { ScrollScreen } from '../../src/ui/screen';
-import { Text, type } from '../../src/ui/text';
-import { useAccent } from '../../src/ui/accent';
+import { Text, useType } from '../../src/ui/text';
+import { pill, tileFor, weights } from '../../src/ui/theme';
 import {
-  palette as c,
-  pill,
-  radii,
-  tileFor,
-  weights,
-} from '../../src/ui/theme';
+  themedStyles,
+  useAccent,
+  usePalette,
+  useTheme,
+} from '../../src/ui/theme-context';
 
 /** How close to the end, in points, still counts as reading the newest. */
 const AT_END = 80;
@@ -107,6 +106,9 @@ function dayLabel(iso: string): string {
 export default function NotificationsScreen() {
   const { api, origin } = useSession();
   const accent = useAccent();
+  const c = usePalette();
+  const type = useType();
+  const styles = useStyles();
   const queryClient = useQueryClient();
   const focused = useIsFocused();
   const query = useInfiniteQuery({
@@ -530,6 +532,10 @@ function TimelineEntry({
   onDelete: () => void;
 }) {
   const accent = useAccent();
+  const c = usePalette();
+  const { radii } = useTheme();
+  const type = useType();
+  const styles = useStyles();
   const respond = useRespondToNotification(item.id);
   const bubble =
     item.format === 'text' &&
@@ -549,7 +555,7 @@ function TimelineEntry({
             { backgroundColor: c.ink, borderRadius: radii.sm },
           ]}
         >
-          <Glyph name={icon} size={14} color={c.onFill} />
+          <Glyph name={icon} size={14} color={c.card} />
         </View>
       ) : (
         <View
@@ -676,119 +682,123 @@ function TimelineEntry({
   );
 }
 
-const styles = StyleSheet.create({
-  column: { paddingHorizontal: 16, gap: 16 },
-  divider: { flexDirection: 'row', alignItems: 'center', gap: 10 },
-  rule: {
-    flex: 1,
-    height: StyleSheet.hairlineWidth,
-    backgroundColor: c.hairline,
-  },
-  moved: {
-    alignSelf: 'flex-start',
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    marginLeft: 38,
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: pill,
-    borderWidth: 1,
-    borderStyle: 'dashed',
-    borderColor: c.input,
-  },
-  recalled: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 10,
-    minHeight: 44,
-    marginLeft: 26,
-    paddingHorizontal: 12,
-    borderRadius: radii.md,
-  },
-  historyOpen: {
-    alignSelf: 'flex-start',
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    minHeight: 44,
-    paddingHorizontal: 10,
-    marginLeft: -10,
-    borderRadius: radii.md,
-  },
-  quiet: {
-    borderRadius: radii.lg,
-    backgroundColor: c.card,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: c.hairline,
-    overflow: 'hidden',
-  },
-  quietToggle: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 10,
-    minHeight: 44,
-    paddingHorizontal: 14,
-  },
-  quietLine: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 10,
-    minHeight: 44,
-    paddingHorizontal: 14,
-    paddingVertical: 8,
-    borderTopWidth: StyleSheet.hairlineWidth,
-    borderTopColor: c.hairline,
-  },
-  entry: { flexDirection: 'row', gap: 10, alignItems: 'flex-start' },
-  tile: {
-    width: 28,
-    height: 28,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginTop: 1,
-  },
-  tileText: { color: c.onFill, fontSize: 13, fontWeight: weights.heading },
-  main: { flex: 1, minWidth: 0, gap: 5 },
-  meta: { flexDirection: 'row', alignItems: 'baseline', gap: 8 },
-  card: {
-    gap: 10,
-    padding: 14,
-    borderRadius: radii.lg,
-    backgroundColor: c.card,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: c.hairline,
-  },
-  bubble: {
-    alignSelf: 'flex-start',
-    gap: 2,
-    paddingHorizontal: 14,
-    paddingVertical: 10,
-    borderTopLeftRadius: radii.xl,
-    borderTopRightRadius: radii.xl,
-    borderBottomRightRadius: radii.xl,
-    borderBottomLeftRadius: radii.xs,
-    backgroundColor: c.muted,
-  },
-  jumpWrap: {
-    position: 'absolute',
-    top: 12,
-    left: 0,
-    right: 0,
-    alignItems: 'center',
-  },
-  jump: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    minHeight: 44,
-    paddingHorizontal: 14,
-    borderRadius: pill,
-    backgroundColor: c.card,
-    shadowColor: c.ink,
-    shadowOpacity: 0.12,
-    shadowRadius: 14,
-    shadowOffset: { width: 0, height: 10 },
-    elevation: 4,
-  },
-});
+const useStyles = themedStyles((t) =>
+  StyleSheet.create({
+    column: { paddingHorizontal: 16, gap: 16 },
+    divider: { flexDirection: 'row', alignItems: 'center', gap: 10 },
+    rule: {
+      flex: 1,
+      height: StyleSheet.hairlineWidth,
+      backgroundColor: t.palette.hairline,
+    },
+    moved: {
+      alignSelf: 'flex-start',
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 6,
+      marginLeft: 38,
+      paddingHorizontal: 12,
+      paddingVertical: 6,
+      borderRadius: pill,
+      borderWidth: 1,
+      borderStyle: 'dashed',
+      borderColor: t.palette.input,
+    },
+    recalled: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 10,
+      minHeight: 44,
+      marginLeft: 26,
+      paddingHorizontal: 12,
+      borderRadius: t.radii.md,
+    },
+    historyOpen: {
+      alignSelf: 'flex-start',
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 6,
+      minHeight: 44,
+      paddingHorizontal: 10,
+      marginLeft: -10,
+      borderRadius: t.radii.md,
+    },
+    quiet: {
+      borderRadius: t.radii.lg,
+      backgroundColor: t.palette.card,
+      borderWidth: StyleSheet.hairlineWidth,
+      borderColor: t.palette.hairline,
+      overflow: 'hidden',
+    },
+    quietToggle: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 10,
+      minHeight: 44,
+      paddingHorizontal: 14,
+    },
+    quietLine: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 10,
+      minHeight: 44,
+      paddingHorizontal: 14,
+      paddingVertical: 8,
+      borderTopWidth: StyleSheet.hairlineWidth,
+      borderTopColor: t.palette.hairline,
+    },
+    entry: { flexDirection: 'row', gap: 10, alignItems: 'flex-start' },
+    tile: {
+      width: 28,
+      height: 28,
+      alignItems: 'center',
+      justifyContent: 'center',
+      marginTop: 1,
+    },
+    tileText: {
+      color: t.palette.onTile,
+      fontSize: 13,
+      fontWeight: weights.heading,
+    },
+    main: { flex: 1, minWidth: 0, gap: 5 },
+    meta: { flexDirection: 'row', alignItems: 'baseline', gap: 8 },
+    card: {
+      gap: 10,
+      padding: 14,
+      borderRadius: t.radii.lg,
+      backgroundColor: t.palette.card,
+      borderWidth: StyleSheet.hairlineWidth,
+      borderColor: t.palette.hairline,
+    },
+    bubble: {
+      alignSelf: 'flex-start',
+      gap: 2,
+      paddingHorizontal: 14,
+      paddingVertical: 10,
+      borderTopLeftRadius: t.radii.xl,
+      borderTopRightRadius: t.radii.xl,
+      borderBottomRightRadius: t.radii.xl,
+      borderBottomLeftRadius: t.radii.xs,
+      backgroundColor: t.palette.muted,
+    },
+    jumpWrap: {
+      position: 'absolute',
+      top: 12,
+      left: 0,
+      right: 0,
+      alignItems: 'center',
+    },
+    jump: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 8,
+      minHeight: 44,
+      paddingHorizontal: 14,
+      borderRadius: pill,
+      backgroundColor: t.palette.card,
+      // The dock's float: the same offset, blur and ink as before, and a
+      // dark theme's own shadow ink.
+      boxShadow: t.shadows.dock,
+    },
+  }),
+);

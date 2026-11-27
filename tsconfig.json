@@ -4,6 +4,8 @@
     "src/**/*.tsx",
     "scripts/**/*.ts",
     "packages/hatch-cli/src/**/*.ts",
+    "packages/hatch-design-tokens/src/**/*.ts",
+    "packages/hatch-design-tokens/test/**/*.ts",
     "sdk-internal/ui/theme/**/*.ts",
     "sdk-internal/ui/scripts/**/*.ts",
     "sdk-internal/ui/test/*.ts",

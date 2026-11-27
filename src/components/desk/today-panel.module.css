@@ -5,7 +5,7 @@
   gap: 12px;
   min-height: 0;
   padding: 20px 22px;
-  border: 1px solid var(--mantine-color-white);
+  border: 1px solid var(--border-glass);
   border-radius: var(--radius-widget);
   background: var(--surface-widget);
   box-shadow: var(--shadow-card);
@@ -25,7 +25,7 @@
   height: 26px;
   border-radius: 8px;
   background: var(--mantine-primary-color-filled);
-  color: var(--mantine-color-white);
+  color: var(--mantine-primary-color-contrast);
 }
 
 .title {

@@ -164,7 +164,8 @@ export function createFontLoader(
 export function createNativeHost(
   config: NativePlayerConfig,
   shell: {
-    accent(): string;
+    /** The NSH theme to answer `hatch.theme.get` with. */
+    theme(): unknown;
     post(message: PlayerMessage): boolean;
     setTitle(title: string | null): void;
     setRoute(route: string): void;
@@ -374,14 +375,8 @@ export function createNativeHost(
             return await data('mutate', input);
           case 'hatch.data.events':
             return await events(input);
-          case 'hatch.theme.get': {
-            const accent = shell.accent();
-            return {
-              ok: true,
-              theme:
-                config.themes[accent] ?? config.themes[config.defaultAccent],
-            };
-          }
+          case 'hatch.theme.get':
+            return { ok: true, theme: shell.theme() };
           case 'hatch.nav.setTitle': {
             const { title } = input;
             if (
@@ -524,6 +519,90 @@ function connectSurface(onMessage: (message: SurfaceMessage) => void): {
   return { ready };
 }
 
+/** The platform's answer for the instance theme (`/api/theme/native`). */
+export type InstanceNativeTheme = { key: string; theme: unknown };
+
+const THEME_URL = '/api/theme/native';
+
+/**
+ * Read the instance's active theme. Null when the platform does not answer
+ * with a theme (an older platform, offline): the theme baked into the page
+ * stays.
+ */
+/** Waits before asking again after a failed theme refresh. */
+export const THEME_RETRY_DELAYS_MS = [1_000, 4_000, 15_000];
+
+/**
+ * Keeps the player's instance theme current. Only the newest answer
+ * applies. A refresh the platform does not answer stays pending: it is
+ * retried after each of `THEME_RETRY_DELAYS_MS`, and `refreshIfStale` (the
+ * App being shown) asks again after those run out, so one failed request
+ * never leaves the App on an old theme.
+ */
+export function createThemeRefresher(options: {
+  fetchTheme: () => Promise<InstanceNativeTheme | null>;
+  /** The key of the theme drawn now. */
+  current: () => string | undefined;
+  apply: (theme: InstanceNativeTheme) => void;
+}) {
+  let request = 0;
+  let stale = false;
+  let failures = 0;
+  let retry: ReturnType<typeof setTimeout> | undefined;
+  const run = async () => {
+    clearTimeout(retry);
+    stale = true;
+    const mine = ++request;
+    const next = await options.fetchTheme();
+    if (mine !== request) return;
+    if (!next) {
+      if (failures < THEME_RETRY_DELAYS_MS.length)
+        retry = setTimeout(() => void run(), THEME_RETRY_DELAYS_MS[failures++]);
+      return;
+    }
+    stale = false;
+    failures = 0;
+    if (next.key !== options.current()) options.apply(next);
+  };
+  return {
+    /** Ask now, with a fresh set of retries. */
+    refresh() {
+      failures = 0;
+      void run();
+    },
+    /** Ask again only when the last refresh never got an answer. */
+    refreshIfStale() {
+      if (!stale) return;
+      failures = 0;
+      void run();
+    },
+  };
+}
+
+export async function fetchInstanceTheme(
+  fetcher: typeof fetch = fetch,
+): Promise<InstanceNativeTheme | null> {
+  try {
+    const response = await fetcher(THEME_URL, {
+      credentials: 'same-origin',
+      cache: 'no-store',
+    });
+    if (!response.ok) return null;
+    const body: unknown = await response.json();
+    if (
+      !isRecord(body) ||
+      typeof body.key !== 'string' ||
+      !isRecord(body.theme) ||
+      !isRecord(body.theme.cssVars) ||
+      !isRecord(body.theme.cssVars.light)
+    )
+      return null;
+    return { key: body.key, theme: body.theme };
+  } catch {
+    return null;
+  }
+}
+
 /** Start the player page. */
 export async function startNativePlayer(): Promise<void> {
   const config = readConfig();
@@ -537,8 +616,22 @@ export async function startNativePlayer(): Promise<void> {
     port.postMessage(message);
     return true;
   };
+  // The instance theme once the platform has answered; until then, and on
+  // a platform that does not, the page's own theme for the accent.
+  let instance: InstanceNativeTheme | null = null;
+  let themeKey: string | undefined;
   const theme = () =>
-    config.themes[accent] ?? config.themes[config.defaultAccent];
+    instance?.theme ??
+    config.themes[accent] ??
+    config.themes[config.defaultAccent];
+  const themes = createThemeRefresher({
+    fetchTheme: () => fetchInstanceTheme(),
+    current: () => instance?.key,
+    apply: (next) => {
+      instance = next;
+      player?.hostEvent('hatch.theme', { theme: theme() });
+    },
+  });
 
   const apply = (message: SurfaceMessage) => {
     if (!player) {
@@ -553,13 +646,19 @@ export async function startNativePlayer(): Promise<void> {
         history.replaceState(history.state, '', `#${message.route}`);
         player.hostEvent('hatch.nav', { route: message.route });
         break;
-      case 'theme':
-        if (message.accent !== accent) {
-          accent = message.accent;
+      case 'theme': {
+        const accentChanged = message.accent !== accent;
+        const changed = accentChanged || message.themeKey !== themeKey;
+        themeKey = message.themeKey;
+        accent = message.accent;
+        // Without an instance theme the accent alone recolours the App.
+        if (accentChanged && !instance)
           player.hostEvent('hatch.theme', { theme: theme() });
-        }
+        if (changed) themes.refresh();
         break;
+      }
       case 'visibility':
+        if (message.visible) themes.refreshIfStale();
         player.hostEvent('hatch.visibility', { visible: message.visible });
         break;
       case 'update-available':
@@ -577,6 +676,7 @@ export async function startNativePlayer(): Promise<void> {
   if (connected.init?.type === 'init') {
     route = connected.init.route;
     accent = connected.init.accent;
+    themeKey = connected.init.themeKey;
     if (rawHash() !== route) {
       history.replaceState(history.state, '', `#${route}`);
     }
@@ -587,8 +687,18 @@ export async function startNativePlayer(): Promise<void> {
     deploymentId: config.deploymentId,
   });
 
+  // Embedded, the surface reports every theme change. Opened on its own (the
+  // mobile app's WebView), the page asks again when it returns to the
+  // foreground.
+  themes.refresh();
+  if (!port) {
+    document.addEventListener('visibilitychange', () => {
+      if (document.visibilityState === 'visible') themes.refresh();
+    });
+  }
+
   const host = createNativeHost(config, {
-    accent: () => accent,
+    theme,
     post,
     setTitle(title) {
       document.title = title ?? config.name;

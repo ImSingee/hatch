@@ -42,9 +42,12 @@ import {
 } from '../../src/ui/notification-status';
 import { AnswerCard, AnswerLine, ReplyFormCard } from '../../src/ui/reply-card';
 import { ScrollScreen, SectionLabel } from '../../src/ui/screen';
-import { Text, type } from '../../src/ui/text';
-import { useAccent } from '../../src/ui/accent';
-import { palette as c, radii } from '../../src/ui/theme';
+import { Text, useType } from '../../src/ui/text';
+import {
+  themedStyles,
+  useAccent,
+  usePalette,
+} from '../../src/ui/theme-context';
 
 const destinationLabels: Record<string, string> = {
   device: 'Device',
@@ -58,6 +61,9 @@ export default function NotificationScreen() {
   const navigation = useNavigation();
   const { api, origin } = useSession();
   const accent = useAccent();
+  const c = usePalette();
+  const type = useType();
+  const styles = useStyles();
   const deleted = useNotificationDeleted(id);
   const query = useQuery({
     queryKey: [origin, 'notification', id],
@@ -304,12 +310,14 @@ export default function NotificationScreen() {
   );
 }
 
-const styles = StyleSheet.create({
-  source: {
-    padding: 14,
-    borderRadius: radii.md,
-    backgroundColor: c.sunken,
-  },
-  delivery: { paddingVertical: 12, gap: 6 },
-  header: { flexDirection: 'row', gap: 10, alignItems: 'center' },
-});
+const useStyles = themedStyles((t) =>
+  StyleSheet.create({
+    source: {
+      padding: 14,
+      borderRadius: t.radii.md,
+      backgroundColor: t.palette.sunken,
+    },
+    delivery: { paddingVertical: 12, gap: 6 },
+    header: { flexDirection: 'row', gap: 10, alignItems: 'center' },
+  }),
+);

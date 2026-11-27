@@ -4,7 +4,7 @@
   gap: 18px;
   max-width: 100%;
   padding: 14px 18px 8px;
-  border: 1px solid var(--mantine-color-white);
+  border: 1px solid var(--border-glass);
   border-radius: var(--radius-dock);
   background: var(--surface-dock);
   box-shadow: var(--shadow-dock);

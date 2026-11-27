@@ -7,11 +7,7 @@ import {
 import { TanStackRouterDevtoolsPanel } from '@tanstack/react-router-devtools';
 import { ReactQueryDevtoolsPanel } from '@tanstack/react-query-devtools';
 import { TanStackDevtools } from '@tanstack/react-devtools';
-import {
-  ColorSchemeScript,
-  MantineProvider,
-  mantineHtmlProps,
-} from '@mantine/core';
+import { MantineProvider, mantineHtmlProps } from '@mantine/core';
 import { Toaster } from 'sonner';
 import { NavigationProgress } from '@mantine/nprogress';
 import { ModalsProvider } from '@mantine/modals';
@@ -23,13 +19,13 @@ import { useI18n } from '~i18n';
 import { themeQueryOptions } from '~queries/theme';
 import { DESKTOP_HOST_BOOT_SCRIPT } from '~components/desktop-host/host';
 import {
-  ACCENT_BOOT_SCRIPT,
-  ACCENT_CSS,
   NATIVE_HOST_BOOT_SCRIPT,
+  THEME_BOOT_SCRIPT,
   appCssVariablesResolver,
-  applyAccent,
+  applyDocumentTheme,
+  applyThemeState,
   deskThemeFor,
-  useAccent,
+  useActiveTheme,
 } from '~ui/theme';
 
 /**
@@ -93,28 +89,26 @@ export const Route = createRootRouteWithContext<{
 });
 
 /**
- * Keeps this browser on the instance accent: applies the stored setting as
+ * Keeps this browser on the instance theme: applies the stored setting as
  * soon as it is fetched, and again whenever the query is refreshed.
  */
-function AccentSync() {
+function ThemeSync() {
   const { data } = useQuery(themeQueryOptions);
-  const accent = data?.accent;
   useEffect(() => {
-    if (accent) applyAccent(accent);
-  }, [accent]);
+    if (data) applyThemeState({ accent: data.accent, theme: data.resolved });
+  }, [data]);
   return null;
 }
 
 function RootDocument({ children }: { children: React.ReactNode }) {
   const { t } = useI18n();
-  const accent = useAccent();
+  const theme = useActiveTheme();
+  useEffect(() => applyDocumentTheme(theme), [theme]);
   return (
     <html lang="en" {...mantineHtmlProps}>
       <head>
         <HeadContent />
-        <ColorSchemeScript forceColorScheme="light" />
-        <style dangerouslySetInnerHTML={{ __html: ACCENT_CSS }} />
-        <script dangerouslySetInnerHTML={{ __html: ACCENT_BOOT_SCRIPT }} />
+        <script dangerouslySetInnerHTML={{ __html: THEME_BOOT_SCRIPT }} />
         <script dangerouslySetInnerHTML={{ __html: NATIVE_HOST_BOOT_SCRIPT }} />
         <script
           dangerouslySetInnerHTML={{ __html: DESKTOP_HOST_BOOT_SCRIPT }}
@@ -122,11 +116,11 @@ function RootDocument({ children }: { children: React.ReactNode }) {
       </head>
       <body>
         <MantineProvider
-          theme={deskThemeFor(accent)}
+          theme={deskThemeFor(theme)}
           cssVariablesResolver={appCssVariablesResolver}
-          forceColorScheme="light"
+          forceColorScheme={theme.appearance}
         >
-          <AccentSync />
+          <ThemeSync />
           <ModalsProvider>{children}</ModalsProvider>
 
           {/* Client-only: the shell is prerendered in English, and hydration

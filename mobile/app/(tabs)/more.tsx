@@ -10,9 +10,10 @@ import { Tag, Wordmark } from '../../src/ui/primitives';
 import { GlyphTile, Group, ListRow } from '../../src/ui/rows';
 import { Columns } from '../../src/ui/columns';
 import { ScrollScreen, SectionLabel } from '../../src/ui/screen';
-import { Text, type } from '../../src/ui/text';
+import { Text, useType } from '../../src/ui/text';
 
 export default function MoreScreen() {
+  const type = useType();
   const { origin } = useSession();
   const { preferences } = useNavigationPreferences();
   const host = origin?.replace(/^https?:\/\//, '') ?? 'Not connected';

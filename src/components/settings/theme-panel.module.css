@@ -1,0 +1,121 @@
+.options {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(168px, 1fr));
+  gap: var(--mantine-spacing-xs);
+}
+
+.option {
+  border: 1px solid var(--border-hairline);
+  border-radius: var(--mantine-radius-lg);
+  position: relative;
+  color: var(--mantine-color-text);
+  transition: background-color var(--transition-fast);
+}
+
+.optionLabel {
+  display: flex;
+  flex-direction: column;
+  gap: var(--mantine-spacing-2xs);
+  padding: var(--mantine-spacing-2xs);
+  cursor: pointer;
+}
+
+.optionLabel:has(.input:disabled) {
+  cursor: not-allowed;
+}
+
+.menu {
+  position: absolute;
+  top: var(--mantine-spacing-xs);
+  inset-inline-end: var(--mantine-spacing-xs);
+  background-color: var(--surface-raised);
+}
+
+.badges {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--mantine-spacing-3xs);
+  padding: 0 var(--mantine-spacing-3xs) var(--mantine-spacing-3xs);
+}
+
+.option:hover {
+  background-color: var(--surface-hover);
+}
+
+.option:has(.input:focus-visible) {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: 2px;
+}
+
+.option:has(.input:checked) {
+  border-color: var(--mantine-color-primary-6);
+  box-shadow: inset 0 0 0 1px var(--mantine-color-primary-6);
+}
+
+/* Kept in the accessibility tree and focusable; the label is the target. */
+.input {
+  position: absolute;
+  inset: 0;
+  margin: 0;
+  opacity: 0;
+  cursor: pointer;
+}
+
+.preview {
+  display: flex;
+  align-items: flex-end;
+  height: 72px;
+  padding: var(--mantine-spacing-xs) var(--mantine-spacing-sm) 0;
+  border-radius: var(--mantine-radius-md);
+  overflow: hidden;
+}
+
+.previewCard {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  width: 100%;
+  height: 56px;
+  padding: var(--mantine-spacing-xs);
+  border: 1px solid;
+  border-bottom: 0;
+  border-radius: var(--mantine-radius-sm) var(--mantine-radius-sm) 0 0;
+}
+
+.previewLine,
+.previewLineShort {
+  height: 5px;
+  border-radius: 3px;
+}
+
+.previewLine {
+  width: 70%;
+}
+
+.previewLineShort {
+  width: 45%;
+}
+
+.previewButton {
+  width: 36px;
+  height: 12px;
+  margin-top: auto;
+  border-radius: 6px;
+}
+
+.caption {
+  display: flex;
+  align-items: center;
+  gap: var(--mantine-spacing-3xs);
+  padding: 0 var(--mantine-spacing-3xs);
+}
+
+.name {
+  font-size: var(--mantine-font-size-sm);
+  font-weight: var(--font-weight-label);
+}
+
+.check {
+  margin-left: auto;
+  color: var(--mantine-color-primary-7);
+}

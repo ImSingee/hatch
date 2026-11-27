@@ -9,7 +9,7 @@ import {
 import { fillMaxSize } from '@expo/ui/jetpack-compose/modifiers';
 import { useState } from 'react';
 import { StyleSheet, View } from 'react-native';
-import { palette as c } from './theme';
+import { usePalette, useTheme } from './theme-context';
 import type { TileMenuProps } from './tile-menu.types';
 
 /**
@@ -19,10 +19,16 @@ import type { TileMenuProps } from './tile-menu.types';
  * host only lies behind it, the size of the tile, to anchor the menu.
  */
 export function TileMenu({ actions, children }: TileMenuProps) {
+  const c = usePalette();
+  const { appearance } = useTheme();
   const [open, setOpen] = useState(false);
   return (
     <View>
-      <Host style={StyleSheet.absoluteFill} pointerEvents="none">
+      <Host
+        colorScheme={appearance}
+        style={StyleSheet.absoluteFill}
+        pointerEvents="none"
+      >
         <Box modifiers={[fillMaxSize()]}>
           <DropdownMenuPopup
             expanded={open}

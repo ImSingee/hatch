@@ -301,11 +301,24 @@ the one in the frame.
 
 ## Theme
 
-`nshTheme(accent)` (`src/server/apps/native/nsh-theme.ts`) is the theme every
-shell applies: the UI library's own complete theme when a definition in
-`NATIVE_APP_SDK_DEFINITIONS` provides `nsh.theme`, otherwise the shadcn
-tokens filled from `packages/hatch-design-tokens/tokens.json` with `primary`
-from the accent. `nsh.json` gets the default accent's theme; the player gets
-one per accent and pushes `hatch.theme` when the surface reports a new
-accent, so `hatch theme set --accent teal` recolours open Apps without a
-redeploy.
+`nshThemeFor(resolved)` (`src/server/apps/native/nsh-theme.ts`) turns a
+resolved instance theme into the theme every shell applies: the UI library's
+own complete theme when a definition in `NATIVE_APP_SDK_DEFINITIONS` provides
+`nsh.resolvedTheme` (or, for the built-in `desk`, `nsh.theme(accent)`),
+otherwise the shadcn tokens filled from the resolved theme. NSH applies the
+`light` block as the theme, so a dark theme's values go there too, and every
+theme names the same tokens (`setTheme` replaces the whole theme).
+
+`nsh.json` and the player's built-in themes are `desk` with each accent, for
+the first frame and for a platform that does not answer. The player then
+reads the active instance theme from `GET /api/theme/native` (public, like
+the theme itself, with no parameters: the instance has one active theme and no
+client follows the device's light or dark setting). `init` and `theme`
+messages carry a `themeKey` that changes with the resolved theme. The player
+asks again when the surface reports a change and, when it runs alone (the
+mobile app's WebView), when the page returns to the foreground, and pushes
+`hatch.theme` when the answer differs. A refresh the platform does not answer
+is retried after 1, 4 and 15 seconds, and again whenever the App is shown. So `hatch theme set --accent teal` or
+`--theme desk-dark` restyles open Apps without a redeploy. Players built before
+this (deployments made before themes became data) follow only the accent
+until the App is deployed again.

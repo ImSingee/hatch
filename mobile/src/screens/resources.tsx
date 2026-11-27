@@ -7,7 +7,6 @@ import { useNavigationPreferences } from '../state/navigation';
 import { openSection } from '../state/open-section';
 import { useSession } from '../state/session';
 import { usePullToRefresh } from '../state/use-pull-to-refresh';
-import { useAccent } from '../ui/accent';
 import { IconButton } from '../ui/button';
 import { TileGrid } from '../ui/columns';
 import { NativeField } from '../ui/native-field';
@@ -15,6 +14,7 @@ import { Busy, EmptyState, Notice, errorText } from '../ui/primitives';
 import { AppTile, ShortcutTile, useShortcutGrid } from '../ui/rows';
 import { ScopeTabs } from '../ui/scope-tabs';
 import { ScrollScreen, SectionLabel } from '../ui/screen';
+import { useAccent } from '../ui/theme-context';
 import { TileMenu } from '../ui/tile-menu';
 
 type Order = 'name' | 'recent';

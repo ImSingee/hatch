@@ -17,21 +17,40 @@
 import { sql } from 'drizzle-orm';
 import { z } from 'zod';
 import { tailscaleConfigSchema, type TailscaleConfig } from '../tailscale';
+import { DEFAULT_THEME } from '../../packages/hatch-design-tokens/src';
 import { ACCENT_NAMES, DEFAULT_ACCENT } from '../ui/theme/accents';
 import { db, schema } from '../db';
+import type { TX } from '../db/db';
 import type { JsonValue } from '../db/schema';
 
 /**
  * The accents come from the design tokens; nothing else lists them. Each
  * field falls back on its own, so a retired accent does not also reset the
- * dock labels, and rows written before `dockLabels` existed stay valid.
+ * dock labels, and rows written before a field existed stay valid: `{ accent }`
+ * rows read as `desk`.
  */
 const uiThemeConfigSchema = z.object({
-  accent: z.enum(ACCENT_NAMES).catch(DEFAULT_ACCENT),
+  /** null: no accent, the active theme shows its own primary. */
+  accent: z.enum(ACCENT_NAMES).nullable().catch(DEFAULT_ACCENT),
   /** Whether the web dock shows each tile's name under it. */
   dockLabels: z.boolean().catch(false),
+  /**
+   * The active theme: a preset name or a custom theme's id (`themes`). An
+   * id that no longer names a usable theme draws `desk`.
+   */
+  theme: z.string().min(1).max(64).catch(DEFAULT_THEME),
 });
 export type UiThemeConfig = z.infer<typeof uiThemeConfigSchema>;
+
+/**
+ * A fresh instance, and `theme reset`: `desk` with no accent (desk's own
+ * primary is the default accent, so it looks the same).
+ */
+export const DEFAULT_UI_THEME: UiThemeConfig = {
+  accent: null,
+  dockLabels: false,
+  theme: DEFAULT_THEME,
+};
 
 /** Model catalog refresh settings (`~server/model-catalog/refresh`). */
 const modelCatalogConfigSchema = z.object({
@@ -99,7 +118,7 @@ const REGISTRY = {
    */
   'ui.theme': {
     schema: uiThemeConfigSchema,
-    fallback: { accent: DEFAULT_ACCENT, dockLabels: false },
+    fallback: DEFAULT_UI_THEME,
   } satisfies ConfigEntry<UiThemeConfig>,
   'models.catalog': {
     schema: modelCatalogConfigSchema,
@@ -172,25 +191,46 @@ export async function updatePlatformConfig<K extends PlatformConfigKey>(
   key: K,
   change: (current: PlatformConfigValue<K>) => PlatformConfigValue<K>,
 ): Promise<PlatformConfigValue<K>> {
-  const entry = REGISTRY[key];
+  return withPlatformConfigLock(key, (current, tx) =>
+    writeLockedPlatformConfig(tx, key, change(current)),
+  );
+}
+
+/**
+ * Run `work` in one transaction that holds the key's lock, with the value
+ * stored under it. Changes that check other tables against the setting (a
+ * theme being deleted is not the active one) run their checks and writes
+ * here, so a change to the setting cannot slip in between.
+ */
+export async function withPlatformConfigLock<K extends PlatformConfigKey, T>(
+  key: K,
+  work: (current: PlatformConfigValue<K>, tx: TX) => Promise<T>,
+): Promise<T> {
   return db.transaction(async (tx) => {
     // A lock on the key, not on its row: the first write has no row to lock.
     await tx.execute(
       sql`select pg_advisory_xact_lock(${PLATFORM_CONFIG_LOCK_NS}, hashtext(${key}))`,
     );
     const row = await tx.query.platformConfig.findFirst({ where: { key } });
-    const validated = entry.schema.parse(
-      change(readStored(key, row)),
-    ) as JsonValue;
-    await tx
-      .insert(schema.platformConfig)
-      .values({ key, value: validated })
-      .onConflictDoUpdate({
-        target: schema.platformConfig.key,
-        set: { value: validated, updatedAt: new Date() },
-      });
-    return validated as PlatformConfigValue<K>;
+    return work(readStored(key, row), tx);
   });
+}
+
+/** Write a setting inside `withPlatformConfigLock`, validated like any. */
+export async function writeLockedPlatformConfig<K extends PlatformConfigKey>(
+  tx: TX,
+  key: K,
+  value: PlatformConfigValue<K>,
+): Promise<PlatformConfigValue<K>> {
+  const validated = REGISTRY[key].schema.parse(value) as JsonValue;
+  await tx
+    .insert(schema.platformConfig)
+    .values({ key, value: validated })
+    .onConflictDoUpdate({
+      target: schema.platformConfig.key,
+      set: { value: validated, updatedAt: new Date() },
+    });
+  return validated as PlatformConfigValue<K>;
 }
 
 /**

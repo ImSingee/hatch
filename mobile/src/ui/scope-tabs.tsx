@@ -1,9 +1,9 @@
 import { Pressable, View } from 'react-native';
-import { Text, type } from './text';
-import { palette as c, radii, shadows } from './theme';
+import { Text, useType } from './text';
+import { usePalette, useTheme } from './theme-context';
 
 /**
- * Desk segmented control: a sunken track with a white thumb under the
+ * Desk segmented control: a sunken track with a card-coloured thumb under the
  * selected label. Segments share the width equally.
  */
 export function ScopeTabs<T extends string>({
@@ -17,6 +17,9 @@ export function ScopeTabs<T extends string>({
   onChange: (value: T) => void;
   label: string;
 }) {
+  const c = usePalette();
+  const { radii, shadows } = useTheme();
+  const type = useType();
   return (
     <View
       accessibilityRole="tablist"

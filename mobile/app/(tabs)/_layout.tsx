@@ -1,15 +1,16 @@
 import { NativeTabs } from 'expo-router/native-tabs';
 import { Platform } from 'react-native';
 import { useNavigationPreferences } from '../../src/state/navigation';
-import { useAccent } from '../../src/ui/accent';
 import { meTab, tabDetails } from '../../src/ui/navigation';
-import { palette as c, weights } from '../../src/ui/theme';
+import { weights } from '../../src/ui/theme';
+import { useAccent, usePalette } from '../../src/ui/theme-context';
 
 // The system tab bar: Home, Apps, Agent and Me by default. Which sections sit
 // in it, and in what order, stays the user's choice (Tabs & start page).
 export default function TabLayout() {
   const { preferences } = useNavigationPreferences();
   const accent = useAccent();
+  const c = usePalette();
   return (
     <NativeTabs
       tintColor={accent.fill}
@@ -20,7 +21,7 @@ export default function TabLayout() {
       }}
       minimizeBehavior="onScrollDown"
       // iOS keeps the system's glass bar. Android's navigation bar is drawn
-      // from the tokens: a sunken bar, an accent-tint pill under the open tab.
+      // from the theme: a sunken bar, an accent-tint pill under the open tab.
       {...(Platform.OS === 'android'
         ? {
             backgroundColor: c.sunken,

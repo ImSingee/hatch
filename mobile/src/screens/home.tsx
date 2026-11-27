@@ -5,7 +5,6 @@ import { Pressable, RefreshControl, ScrollView, View } from 'react-native';
 import { useSession } from '../state/session';
 import { useLifetimeSignal } from '../state/use-lifetime-signal';
 import { usePullToRefresh } from '../state/use-pull-to-refresh';
-import { useAccent } from '../ui/accent';
 import { FoldContainer, TileGrid, useFoldSplit } from '../ui/columns';
 import { Glyph } from '../ui/glyph';
 import { Busy, Notice, errorText } from '../ui/primitives';
@@ -16,7 +15,8 @@ import {
   SectionLabel,
   pageScrollProps,
 } from '../ui/screen';
-import { Text, type } from '../ui/text';
+import { Text, useType } from '../ui/text';
+import { useAccent } from '../ui/theme-context';
 import { TileMenu } from '../ui/tile-menu';
 import {
   DashboardNotices,
@@ -49,6 +49,7 @@ function greeting(hour: number) {
 export function HomeScreen({ nested = false }: { nested?: boolean }) {
   const { api, origin } = useSession();
   const accent = useAccent();
+  const type = useType();
   const focused = useIsFocused();
   const tile = useShortcutGrid();
   const queryClient = useQueryClient();

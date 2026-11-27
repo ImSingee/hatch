@@ -196,6 +196,19 @@ a.mantine-Text-root:not(.mantine-Anchor-root):active {
   font-size: var(--mantine-font-size-xs);
 }
 
+/* Mantine's dark scheme draws tooltips and highlighted text with `black`
+ * text, which is the ground on a dark theme. Keep them inverted ink, as on a
+ * light theme: the theme's text colour as the fill, its ground as the text. */
+[data-mantine-color-scheme='dark'] .mantine-Tooltip-tooltip {
+  background-color: var(--tooltip-bg, var(--mantine-color-gray-9));
+  color: var(--tooltip-color, var(--mantine-color-body));
+}
+
+[data-mantine-color-scheme='dark'] .mantine-Typography-root mark {
+  background-color: var(--mantine-color-yellow-2);
+  color: var(--mantine-color-text);
+}
+
 /* ---- Fields ------------------------------------------------------------- */
 
 /* A field is a white well with a hairline, on the ground and on a card. */
