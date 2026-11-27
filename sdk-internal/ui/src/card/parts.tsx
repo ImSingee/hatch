@@ -685,7 +685,12 @@ export function Field(props: FieldProps): JSX.Element {
     <View class="min-w-0 flex-row items-baseline gap-3">
       <NshText
         class={`min-w-13 ${LABEL_COLUMN} ${TYPE.data} text-muted-foreground`}
-        style={SHARED_COLUMN ? { minWidth: fields.labelWidth() } : undefined}
+        // Until a label is measured, the class's least width holds.
+        style={
+          SHARED_COLUMN && fields.labelWidth() > 0
+            ? { minWidth: fields.labelWidth() }
+            : undefined
+        }
         onLayout={
           SHARED_COLUMN
             ? (event) => fields.measured(event.bounds.size.width)
