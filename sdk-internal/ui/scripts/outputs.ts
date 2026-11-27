@@ -59,7 +59,7 @@ function copiedModule(source: string): string {
   const text = fs.readFileSync(path.join(PLATFORM_API, `${source}.ts`), 'utf8');
   const renamed = text.replace(
     /from '\.\/([a-z-]+)'/g,
-    (match, name: string) => {
+    (_match, name: string) => {
       const target = CARD_CONTENT_FILES[name];
       if (!target) {
         throw new Error(`${source}.ts imports ./${name}, which is not copied`);
