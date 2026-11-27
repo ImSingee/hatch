@@ -2,7 +2,8 @@
 import { removeAppIconFiles } from './icon';
 import { promises as fs } from 'node:fs';
 import path from 'node:path';
-import { eq } from 'drizzle-orm';
+import { eq, sql } from 'drizzle-orm';
+import { appNativePackagesDir, signActivatedPackage } from './native/packages';
 import {
   appCompatibility,
   appCompatibilityRollbackMessage,
@@ -503,6 +504,8 @@ async function rollbackAppInner(
         .set({
           status: 'deployed',
           currentDeploymentId: deployment.id,
+          // The build number of a native package; see native/packages.ts.
+          activationSeq: sql`${schema.apps.activationSeq} + 1`,
           currentSourceCommit: sourceCommit,
           name: restoredName,
           // Restore the rolled-back version's full metadata too. Otherwise the row
@@ -559,6 +562,8 @@ async function rollbackAppInner(
   }
   // Reload schedules from the restored deployment's manifest.
   await reloadScheduler();
+  // A restored native frontend ships under this activation's build number.
+  await signActivatedPackage(id, manifest);
   return {
     version: deployment.version,
     compatibility,
@@ -664,6 +669,7 @@ async function deleteAppInner(id: string): Promise<{ ok: true }> {
     fs.rm(appBuildDir(id), { recursive: true, force: true }),
     fs.rm(appVersionsDir(id), { recursive: true, force: true }),
     fs.rm(appArtifactsDir(id), { recursive: true, force: true }),
+    fs.rm(appNativePackagesDir(id), { recursive: true, force: true }),
     fs.rm(appRepoDir(id), { recursive: true, force: true }),
     fs.rm(appStorageDir(id), { recursive: true, force: true }),
     removeAppIconFiles(id),

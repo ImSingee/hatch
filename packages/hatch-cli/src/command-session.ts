@@ -140,17 +140,23 @@ export function pageFlags(flags: Flags): Page {
   return { limit, cursor };
 }
 
-/** Resolve the credential and open a client honouring the global flags. */
-export async function openClient(
-  flags: Flags,
-  signal: AbortSignal,
-): Promise<PlatformClient> {
+/** `--timeout` in seconds (default 60); checkable before any request. */
+export function timeoutSeconds(flags: Flags): number {
   const seconds = flags.timeout === undefined ? 60 : Number(flags.timeout);
   if (!Number.isFinite(seconds) || seconds <= 0 || seconds > 3600)
     throw new CliError(
       'invalid_timeout',
       '--timeout must be between 0 and 3600 seconds.',
     );
+  return seconds;
+}
+
+/** Resolve the credential and open a client honouring the global flags. */
+export async function openClient(
+  flags: Flags,
+  signal: AbortSignal,
+): Promise<PlatformClient> {
+  const seconds = timeoutSeconds(flags);
   if (
     flags.profile !== undefined &&
     !/^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$/.test(String(flags.profile))

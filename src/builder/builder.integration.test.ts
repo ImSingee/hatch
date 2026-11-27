@@ -18,6 +18,7 @@ import { migrate } from 'drizzle-orm/postgres-js/migrator';
 import postgres from 'postgres';
 import assert from 'node:assert/strict';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { BUILDER_PROTOCOL_VERSION } from './protocol';
 
 const adminUrl = process.env.HATCH_BUILDER_TEST_DATABASE_URL;
 const cliExecutable = fileURLToPath(
@@ -339,7 +340,10 @@ describe.runIf(Boolean(adminUrl))('the dedicated Builder', () => {
       {
         method: 'POST',
         headers: { authorization: 'Bearer disposable-runner-token' },
-        body: JSON.stringify({ builderId: 'x', protocolVersion: 1 }),
+        body: JSON.stringify({
+          builderId: 'x',
+          protocolVersion: BUILDER_PROTOCOL_VERSION,
+        }),
       },
     );
     expect(response.status).toBe(401);

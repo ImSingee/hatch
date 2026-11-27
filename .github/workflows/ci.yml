@@ -68,6 +68,24 @@ jobs:
           printf '{"version":"%s","commit":"%s"}' "$version" "$(arg NSH_COMMIT)" | sudo tee /opt/nsh/components/web.json
           echo "HATCH_NSH_BIN=/opt/nsh/bin/nsh" >> "$GITHUB_ENV"
 
+      # The Dockerfile's nshpkg stage pins the Rust release; native package
+      # tests sign and verify with the tool built the same way.
+      - name: Read Rust version from Dockerfile
+        id: rust
+        run: |
+          version="$(sed -nE 's#^FROM rust:([0-9.]+)-slim-trixie AS nshpkg$#\1#p' Dockerfile)"
+          test -n "$version"
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+
+      - uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: ${{ steps.rust.outputs.version }}
+
+      - name: Build the package signing tool
+        run: |
+          cargo build --locked --release --manifest-path packages/hatch-nshpkg/Cargo.toml
+          echo "HATCH_NSHPKG_BIN=$PWD/packages/hatch-nshpkg/target/release/hatch-nshpkg" >> "$GITHUB_ENV"
+
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 

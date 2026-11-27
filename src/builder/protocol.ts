@@ -27,8 +27,11 @@
  * expired and leased again) gets 409 {error: 'build_not_leased'}.
  *
  * Every call after the lease sends the lease token as `x-hatch-build-token`.
+ *
+ * Version 2: a native frontend's build package carries its `nsh publish`
+ * package (src/app-build/format.ts), which the platform signs from.
  */
-export const BUILDER_PROTOCOL_VERSION = 1;
+export const BUILDER_PROTOCOL_VERSION = 2;
 export const BUILDER_API_PREFIX = '/internal/api/builds';
 export const BUILD_TOKEN_HEADER = 'x-hatch-build-token';
 /** How long a lease request waits for queued work. */

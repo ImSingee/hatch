@@ -397,7 +397,9 @@ source and deploy again. Other ends of a deployment exit 6 with its code:
 `toolchain_mismatch` (upgrade the CLI), `app_build_invalid` (the platform
 refused the package), `COMMIT_NOT_ON_MASTER` (a rollback took the commit off
 `master` before it was released), `superseded`, `canceled`, `builder_lost`,
-`artifact_timeout`, `resource_generation_conflict` or `release_failed`.
+`artifact_timeout`, `resource_generation_conflict`,
+`platform_toolchain_unavailable` (the platform cannot sign native packages;
+its operator installs `hatch-nshpkg`) or `release_failed`.
 `BUILDER_UNAVAILABLE` and `BUILDER_OFFLINE` (exit 6) refuse a Builder
 deployment before it is created; deploy with `--local`. A
 source tree over 512 MiB or 100,000 files is refused (the platform checks it
@@ -753,6 +755,50 @@ Errors: a malformed doc id, a missing App or doc id, extra arguments, or a bad
 `--limit`/`--cursor` exit 2 with `invalid_arguments` before any request. An
 unknown App or doc exits 5 with `NOT_FOUND`. An archived App, or one that has
 never been deployed, exits 6 with `CONFLICT`.
+
+## Native App packages
+
+```sh
+hatch app package <id-or-slug> --out notes.nshpkg --json
+hatch app package <id-or-slug> --out - > notes.nshpkg
+hatch app runtime-trust --out-dir trust --json
+nsh verify --root trust/root-<keyId>.pub --revocations trust/revocations.json notes.nshpkg
+```
+
+`app package` downloads the signed package (`.nshpkg`) of the App's live
+native frontend, the file native shells load, and writes it to `--out` in one
+rename after its size and SHA-256 match what the platform announced. It
+prints `{ appId, deploymentId, version, build, nshAppId, nshVersion, sha256,
+size, keyId, bytecode, path }`. `build` grows with every deploy and rollback
+of the App, so a rolled-back version is a newer build of the older code;
+`bytecode` is false for packages of a `--local` build, which keep their
+source only. `--out -` writes the bytes to stdout instead. The platform signs
+the package the first time it is asked if it has not yet, so the command
+needs no other step. `hatch app get` shows `frontend.runtime`,
+`frontend.nshVersion` and `frontend.packageBuild`.
+
+`app runtime-trust` prints what shells verify packages with: `{ initialized,
+appIdPattern, roots, releaseKeys, revocations }`, each root and release key
+with its `keyId` and base64 `publicKey`, release keys with their
+`certificate` (the JSON nsh-package writes), `apps`, `notBefore`, `notAfter`,
+`active` and `revoked`, and the revocation list's `sequence`, `issuedAt`,
+`keyIds`, `packageSha256s` and `signed` JSON. It is public material; no
+private key is returned. `initialized` is false and the lists are empty until
+the first native deployment created the instance's keys. `--out-dir` writes
+`root-<keyId>.pub`, `release-<keyId>.cert` and `revocations.json` there,
+replacing files of those names, and adds their paths as `files`. Relative
+`--out` and `--out-dir` paths are read against `--workdir` (default: the
+current directory).
+
+Errors: a missing App or `--out`, extra arguments, an empty `--out` or
+`--out-dir`, `--out -` with `--json` or `--force`, and `runtime-trust` with an
+App exit 2 with `invalid_arguments` before any request. An existing `--out`
+file without `--force` exits 6 with `output_exists`. An unknown App exits 5
+with `NOT_FOUND`. `APP_NOT_DEPLOYED` (no live deployment), `APP_NOT_NATIVE` (a
+web frontend) and `APP_PACKAGE_UNAVAILABLE` (a native deployment released
+before the platform signed packages: deploy the App again) exit 6. A download
+that does not match its announced size and SHA-256 writes nothing and exits 7
+with `package_incomplete`.
 
 ## App icons and image generation
 

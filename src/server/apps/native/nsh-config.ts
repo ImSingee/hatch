@@ -10,6 +10,7 @@ import {
   sdkImports,
 } from '../../../../sdk-internal/definitions';
 import { composeNativeNshJson } from '../../../app-native-config';
+import { NATIVE_PACKAGE_APP_VERSION } from '../../../app-build/format';
 import { DEFAULT_ACCENT } from '../../../ui/theme/accents';
 import { nshTailwind, nshTheme } from './nsh-theme';
 
@@ -37,6 +38,32 @@ export function nativeGrant(): string {
   return JSON.stringify({ host: [...NATIVE_HOST_CALLS] });
 }
 
+/**
+ * The capabilities a native App's signed package declares, in the form NSH
+ * writes them into a package (`nsh.json` `capabilities` with every other
+ * capability denied). The platform derives them from the manifest it
+ * evaluated from the committed source, never from a build: a build whose
+ * package declares anything else is refused. Every native App gets the
+ * same host calls today; granted native capabilities add theirs later.
+ */
+export function nativePackageCapabilities(manifest: {
+  app?: { runtime?: 'native' | 'web' };
+}): Record<string, unknown> {
+  if (manifest.app?.runtime !== 'native') {
+    throw new Error('Only a native frontend has package capabilities.');
+  }
+  return {
+    network: { hosts: [], http: [] },
+    process: { execute: [], exit: false, env: [] },
+    fs: { read: [], write: [] },
+    statusBar: false,
+    clipboard: false,
+    picker: false,
+    host: [...NATIVE_HOST_CALLS],
+    openUrl: false,
+  };
+}
+
 /** Exact `nsh.json` aliases: one per entry of every native SDK, App-root relative. */
 export function nativeSdkAliases(): Record<string, string> {
   return Object.fromEntries(
@@ -49,7 +76,7 @@ export function nativeSdkAliases(): Record<string, string> {
 /** Every key of the root `nsh.json` that is the same for all Apps. */
 export function nativeNshBase(): Record<string, unknown> {
   return {
-    version: '1.0.0',
+    version: NATIVE_PACKAGE_APP_VERSION,
     build: 1,
     // Declared capabilities deny everything not listed.
     capabilities: { host: [...NATIVE_HOST_CALLS] },

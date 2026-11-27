@@ -10,6 +10,7 @@ import { runBackend } from './backend';
 import { parseTaskCommand, runTask } from './task';
 import { parseDeploymentsCommand, runDeployments } from './deployments';
 import { parseDocsCommand, runDocs } from './docs';
+import { parseNativePackageCommand, runNativePackage } from './native-package';
 import { runBackendInvocation, BackendInvocationError } from './invoke';
 import { runWebhook } from './webhook';
 import { parsePreferencesCommand, runPreferences } from './preferences';
@@ -87,6 +88,12 @@ try {
     parseDocsCommand(args, offset);
   if (!showHelp && name === 'app' && args[offset + 1] === 'deployments')
     parseDeploymentsCommand(args, offset);
+  if (
+    !showHelp &&
+    name === 'app' &&
+    ['package', 'runtime-trust'].includes(args[offset + 1])
+  )
+    parseNativePackageCommand(args, offset);
   if (!showHelp && !offline)
     await refreshRunEnvironment(process.env, controller.signal);
   if (showHelp) {
@@ -138,6 +145,8 @@ try {
     (name === 'app' && operation === 'icon')
   )
     await runImage(args, offset, controller.signal);
+  else if (name === 'app' && ['package', 'runtime-trust'].includes(operation))
+    await runNativePackage(args, offset, controller.signal);
   else if (name === 'app' && ['kv', 'data-table', 'db'].includes(operation))
     await runData(args, offset, controller.signal);
   else if (name === 'app') await runLifecycle(args, offset, controller.signal);

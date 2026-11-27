@@ -167,9 +167,15 @@ export type AppDetail = {
   manifest: NormalizedManifest | null;
   /**
    * How the live deployment's frontend runs; null without a live frontend.
-   * `nshVersion` is the NSH release a `native` frontend was built with.
+   * `nshVersion` is the NSH release a `native` frontend was built with;
+   * `packageBuild` the build number of its signed package (the App's
+   * activation counter), null for `web` or before the first activation.
    */
-  frontend: { runtime: 'web' | 'native'; nshVersion: string | null } | null;
+  frontend: {
+    runtime: 'web' | 'native';
+    nshVersion: string | null;
+    packageBuild: number | null;
+  } | null;
   ops: AppRuntimeOps;
   /** Deployment history, newest first (build logs omitted to stay compact). */
   deployments: AgentDeploymentSummary[];
@@ -236,6 +242,10 @@ export async function getAppDetailForAgent(
       ? {
           runtime: manifest.app.runtime ?? 'web',
           nshVersion: manifest.app.nshVersion ?? null,
+          packageBuild:
+            manifest.app.runtime === 'native' && app.activationSeq > 0
+              ? app.activationSeq
+              : null,
         }
       : null,
     ops: {
