@@ -3,10 +3,11 @@
  * render tree Markdown and card markup both compile into. Types, the
  * component catalog, limits and pure helpers shared by the platform, the CLI,
  * the web and the phone, with no dependencies (the phone bundles no zod and
- * no Markdown library). Validation lives in `notification-content-schema`,
- * the markup parser in `notification-card-markup`, the Markdown compiler in
- * `notification-markdown`, and the plain-text and markup serializers in
- * `notification-content-text`.
+ * no Markdown library). The compiler lives in `notification-content-compile`
+ * (dependency-free) and its sender entry points in
+ * `notification-content-schema`, the markup parser in
+ * `notification-card-markup`, the Markdown reader in `notification-markdown`,
+ * and the plain-text and markup serializers in `notification-content-text`.
  *
  * A tree node is `{ type, props?, children? }`; text leaves are strings.
  * Components are capitalized (`Card`, `Steps`), inline marks lowercase (`b`,

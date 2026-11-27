@@ -6,7 +6,7 @@
  * become links (a notification never loads a picture, which would reveal
  * the reader) and raw HTML is shown as the text it is.
  *
- * The result is not validated here; `notification-content-schema` holds it
+ * The result is not validated here; `notification-content-compile` holds it
  * to the catalog and the limits like any other tree.
  */
 import type {
