@@ -34,12 +34,17 @@ import {
   runCronJobNow,
 } from './apps/scheduler';
 import { authMiddleware, requireSession } from './auth';
-import { builderConfigured, builderOnline } from './apps/builders';
+import {
+  builderConfigured,
+  builderOnline,
+  builderStatus,
+} from './apps/builders';
 import {
   cancelDeployment as cancelBuildRequest,
   createDeployment,
   getDeployment as getBuildRequest,
   listDeployments as listBuildRequests,
+  listDeploymentQueue,
   readBuildLog,
   type AppBuild,
 } from './apps/builds';
@@ -272,6 +277,36 @@ export const listAppDeploymentRequestsFn = createServerFn({ method: 'GET' })
       deployments: page.items.map(deploymentRequestView),
     };
   });
+
+/** Queue entries the Builder settings page shows at most. */
+const QUEUE_PAGE = 100;
+
+/**
+ * The dedicated Builders and every unfinished deployment of every App,
+ * oldest first (Web Settings → Builder; `hatch server info` and
+ * `hatch app deployments queue` in the CLI).
+ */
+export const getBuilderOverviewFn = createServerFn({ method: 'GET' })
+  .middleware([authMiddleware])
+  .handler(async () => {
+    const [status, page] = await Promise.all([
+      builderStatus(),
+      listDeploymentQueue({ limit: QUEUE_PAGE }),
+    ]);
+    return {
+      status,
+      queue: page.items.map((item) => ({
+        app: item.app,
+        queuePosition: item.queuePosition,
+        builderId:
+          item.build.status === 'building' ? item.build.builderId : null,
+        deployment: deploymentRequestView(item.build),
+      })),
+      /** More unfinished deployments than the page shows. */
+      truncated: page.nextCursor !== null,
+    };
+  });
+export type BuilderOverview = Awaited<ReturnType<typeof getBuilderOverviewFn>>;
 
 /** Log lines one `getAppDeploymentLogFn` response carries at most. */
 const DEPLOYMENT_LOG_PAGE = 2000;

@@ -10,6 +10,10 @@ import { DeploymentHistory } from './deployment-history';
 const fixtures = vi.hoisted(() => ({
   list: vi.fn<() => Promise<DeploymentSummary[]>>(),
   redeploy: vi.fn<(input: unknown) => Promise<unknown>>(),
+  requests:
+    vi.fn<
+      () => Promise<{ builderEnabled: boolean; builderOnline?: boolean }>
+    >(),
 }));
 
 vi.mock('@tanstack/react-router', () => ({
@@ -26,7 +30,7 @@ vi.mock('~queries/apps', () => ({
   }),
   deploymentRequestsQueryOptions: (id: string) => ({
     queryKey: ['test-requests', id],
-    queryFn: async () => ({ builderEnabled: true, requests: [] }),
+    queryFn: async () => ({ ...(await fixtures.requests()), deployments: [] }),
   }),
   deploymentBuildLogQueryOptions: (id: string, deploymentId: string) => ({
     queryKey: ['test-log', id, deploymentId],
@@ -73,6 +77,31 @@ function version(
 
 beforeEach(() => {
   vi.clearAllMocks();
+  fixtures.requests.mockResolvedValue({
+    builderEnabled: true,
+    builderOnline: true,
+  });
+});
+
+test('Redeploy is disabled, saying why, while no Builder is online', async () => {
+  fixtures.requests.mockResolvedValue({
+    builderEnabled: true,
+    builderOnline: false,
+  });
+  fixtures.list.mockResolvedValue([version(2, { isCurrent: true })]);
+  render(
+    <QueryClientProvider client={new QueryClient()}>
+      <MantineProvider>
+        <DeploymentHistory appId="app-1" />
+      </MantineProvider>
+    </QueryClientProvider>,
+  );
+
+  const redeploy = page.getByRole('button', { name: 'Redeploy' });
+  await expect.element(redeploy).toHaveAttribute('data-disabled', 'true');
+  await redeploy.click();
+  await expect.element(page.getByText(/No Builder is online/)).toBeVisible();
+  expect(fixtures.redeploy).not.toHaveBeenCalled();
 });
 
 test('a refused redeploy reloads the history, so the stale action disappears', async () => {

@@ -15,7 +15,7 @@ import { useRouter } from '@tanstack/react-router';
 import { IconChevronRight, IconGitCommit } from '@tabler/icons-react';
 import { useEffect, useRef } from 'react';
 import { toast } from 'sonner';
-import { type PlainTranslationKey, useI18n } from '~i18n';
+import { useI18n } from '~i18n';
 import { formatRelativeTime } from '~lib/format';
 import { GroupCard, Section } from '~components/page/page';
 import {
@@ -29,60 +29,8 @@ import {
   type AppDeploymentRequestView,
   cancelAppDeploymentFn,
 } from '~server/apps';
+import { CANCELABLE, STATUS } from './deployment-status';
 import classes from './deployment-activity.module.css';
-
-const STATUS: Record<
-  string,
-  { label: PlainTranslationKey; color: string; active: boolean }
-> = {
-  queued: {
-    label: 'deployments.request.status.queued',
-    color: 'gray',
-    active: true,
-  },
-  awaiting_artifact: {
-    label: 'deployments.request.status.awaitingArtifact',
-    color: 'gray',
-    active: true,
-  },
-  building: {
-    label: 'deployments.request.status.building',
-    color: 'blue',
-    active: true,
-  },
-  verifying: {
-    label: 'deployments.request.status.verifying',
-    color: 'blue',
-    active: true,
-  },
-  releasing: {
-    label: 'deployments.request.status.releasing',
-    color: 'blue',
-    active: true,
-  },
-  ready: {
-    label: 'deployments.request.status.ready',
-    color: 'primary',
-    active: false,
-  },
-  failed: {
-    label: 'deployments.request.status.failed',
-    color: 'red',
-    active: false,
-  },
-  canceled: {
-    label: 'deployments.request.status.canceled',
-    color: 'gray',
-    active: false,
-  },
-  superseded: {
-    label: 'deployments.request.status.superseded',
-    color: 'gray',
-    active: false,
-  },
-};
-
-const CANCELABLE = new Set(['queued', 'awaiting_artifact', 'building']);
 
 function DeploymentLog({
   appId,

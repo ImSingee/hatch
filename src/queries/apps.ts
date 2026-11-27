@@ -13,6 +13,7 @@ import {
   listCronRunsFn,
   listDeployments,
   getAppDeploymentLogFn,
+  getBuilderOverviewFn,
   listAppDeploymentRequestsFn,
 } from '~server/apps';
 
@@ -71,6 +72,14 @@ export const deploymentBuildLogQueryOptions = (
  * Recent deployment requests. Poll quickly while one is still building or
  * releasing, so the page follows it; slowly otherwise to notice new ones.
  */
+/** Builders and the queue across Apps; refreshed while anything is queued. */
+export const builderOverviewQueryOptions = queryOptions({
+  queryKey: ['builder', 'overview'],
+  queryFn: () => getBuilderOverviewFn(),
+  refetchInterval: (query) =>
+    query.state.data && query.state.data.queue.length > 0 ? 3000 : 10000,
+});
+
 export const deploymentRequestsQueryOptions = (id: string) =>
   queryOptions({
     queryKey: ['apps', id, 'deployment-requests'],
