@@ -273,12 +273,18 @@ export async function writeDashboardOrder(
     sql`, `,
   );
   // Inserting from the dashboards that still exist, in one statement, keeps
-  // the foreign key satisfied however the order went stale.
+  // the foreign key satisfied however the order went stale. A dashboard being
+  // deleted right now is skipped too: the rows written are locked against
+  // deletion until this transaction ends, the others are left out.
   await tx.execute(sql`
+    with ${sql.identifier('kept')} as (
+      select ${schema.dashboards.id} as id, listed.pinned, listed.position
+      from (values ${listed}) as listed (id, pinned, position)
+      join ${schema.dashboards} on ${schema.dashboards.id} = listed.id
+      for key share of ${schema.dashboards} skip locked
+    )
     insert into ${view} (${sql.identifier('user_id')}, ${sql.identifier('dashboard_id')}, ${sql.identifier('pinned')}, ${sql.identifier('sort_order')})
-    select ${userId}::text, ${schema.dashboards.id}, listed.pinned, listed.position
-    from (values ${listed}) as listed (id, pinned, position)
-    join ${schema.dashboards} on ${schema.dashboards.id} = listed.id
+    select ${userId}::text, kept.id, kept.pinned, kept.position from ${sql.identifier('kept')} as kept
     on conflict (${sql.identifier('user_id')}, ${sql.identifier('dashboard_id')}) do update set
       ${sql.identifier('pinned')} = excluded.${sql.identifier('pinned')},
       ${sql.identifier('sort_order')} = excluded.${sql.identifier('sort_order')}
@@ -345,6 +351,16 @@ export async function setDashboardPinned(
       userId,
       current.map((entry) => (entry.id === id ? { id, pinned } : entry)),
     );
+    // Deleted while this change was being made: say so rather than report a
+    // pin nobody can see.
+    const written = await tx.query.userDashboards.findFirst({
+      where: { userId, dashboardId: id },
+      columns: { dashboardId: true },
+    });
+    if (!written)
+      throw new AppError('Dashboard not found.', 404, {
+        code: 'shell.dashboardNotFound',
+      });
   });
   pinsChanged(userId);
   return { id, pinned };

@@ -116,4 +116,25 @@ describe.skipIf(!adminUrl)('Dashboard order on PostgreSQL', () => {
         .where(eq(schema.dashboards.id, `next-${round}`));
     }
   });
+
+  it('reports a pin as not found when the dashboard is deleted at the same moment', async () => {
+    const { db, schema } = platform;
+    for (let round = 0; round < 12; round++) {
+      const id = `gone-${round}`;
+      await db.insert(schema.dashboards).values({ id, name: 'Gone' });
+      const [pin] = await Promise.allSettled([
+        pins.setDashboardPinned('u1', id, true),
+        db.delete(schema.dashboards).where(eq(schema.dashboards.id, id)),
+      ]);
+      // Either it was pinned before the delete, or the pin says not found;
+      // never a success for a dashboard that was not pinned.
+      expect(
+        pin.status === 'fulfilled'
+          ? 'pinned before the delete'
+          : (pin.reason as { status?: number }).status,
+      ).toSatisfy(
+        (outcome) => outcome === 'pinned before the delete' || outcome === 404,
+      );
+    }
+  });
 });
