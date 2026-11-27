@@ -450,6 +450,25 @@ function storedAccent(): string | null {
   }
 }
 
+/**
+ * The platforms a shell may name in the page's `platform` query parameter.
+ * The Mobile app's WebView opens `/app/<slug>/embed/?platform=ios`, so the
+ * App's components take that platform's look (`@hatch/ui`); a browser
+ * names none and keeps the web's.
+ */
+const SHELL_PLATFORMS = ['ios', 'android'];
+
+/** What the App reads as `host.params` when it starts. */
+export function launchParams(
+  route: string,
+  search: string,
+): { route: string; platform?: string } {
+  const platform = new URLSearchParams(search).get('platform');
+  return platform !== null && SHELL_PLATFORMS.includes(platform)
+    ? { route, platform }
+    : { route };
+}
+
 function rawHash(): string {
   return location.hash.replace(/^#/, '');
 }
@@ -817,7 +836,7 @@ export async function startNativePlayer(): Promise<void> {
       chunks: mapValues(config.app.chunks, appUrl),
       nativeExports: config.app.nativeExports,
       linked: true,
-      params: { route },
+      params: launchParams(route, location.search),
     });
     created.preloadSides(sides);
   } catch (error) {

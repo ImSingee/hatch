@@ -2,6 +2,7 @@ import { Text, View } from 'nsh';
 import type { JSX } from 'nsh';
 import { Button as BaseButton } from 'nsh/base';
 import { Each, If } from '../core/control';
+import { byLook, look } from '../core/env';
 import { FOCUS_RING_INSET } from '../core/styles';
 import type { Action, IconData } from '../core/types';
 import { Glyph } from '../icons/Icon';
@@ -28,57 +29,83 @@ export type ListProps<T> = {
   loading?: boolean;
 };
 
+/**
+ * The list's frame on each look: the Desk's sheet with hairlines, iOS's
+ * inset grouped list (no edge, separators inset to the text), Material's
+ * flat list on the page's ground.
+ */
+const FRAME = byLook({
+  web: {
+    title:
+      'px-1 text-eyebrow font-heading uppercase tracking-eyebrow text-muted-foreground',
+    sheet:
+      'self-stretch overflow-hidden rounded-(--radius-lg) border border-hairline bg-card',
+    rows: '',
+    empty: 'text-center text-body text-muted-foreground',
+  },
+  ios: {
+    title: 'px-4 text-ios-footnote font-regular text-muted-foreground',
+    sheet: 'self-stretch overflow-hidden rounded-(--radius-md) bg-card',
+    // Each row draws the separator under it; the sheet clips the last.
+    rows: 'self-stretch -mb-px',
+    empty: 'text-center text-ios-body font-regular text-muted-foreground',
+  },
+  android: {
+    title: 'text-m3-title-sm font-medium text-muted-foreground',
+    sheet: 'self-stretch',
+    rows: '',
+    empty: 'text-center text-m3-body-lg font-regular text-muted-foreground',
+  },
+});
+
 /** Rows of related items on one sheet, divided by hairlines. */
 export function List<T>(props: ListProps<T>): JSX.Element {
   const empty = () =>
     !props.loading && props.items !== undefined && props.items.length === 0;
+  // `If` on booleans, not ternaries over `items`: a ternary would rebuild
+  // every row (losing focus and row state) whenever the App passes a new
+  // array; `Each` keeps the rows by key instead.
+  const rows = (
+    <If
+      when={props.loading === true}
+      else={
+        <If
+          when={empty()}
+          else={
+            <If
+              when={props.items !== undefined && props.renderItem !== undefined}
+              else={props.children}
+            >
+              <Each of={props.items} key={props.getKey}>
+                {(item) => props.renderItem?.(item)}
+              </Each>
+            </If>
+          }
+        >
+          <View class="items-center px-4 py-6">
+            <Text class={FRAME.empty}>
+              {props.empty ?? 'Nothing here yet.'}
+            </Text>
+          </View>
+        </If>
+      }
+    >
+      <View class="gap-4 p-4">
+        <Skeleton lines={2} />
+        <Skeleton lines={2} />
+      </View>
+    </If>
+  );
   return (
     <View class="self-stretch gap-2">
-      {props.title ? (
-        <Text class="px-1 text-eyebrow font-heading uppercase tracking-eyebrow text-muted-foreground">
-          {props.title}
-        </Text>
-      ) : null}
+      {props.title ? <Text class={FRAME.title}>{props.title}</Text> : null}
       <View
         // oxlint-disable-next-line jsx-a11y/prefer-tag-over-role -- NSH has no list element; the role is its list.
         role="list"
         accessibilityLabel={props.title}
-        class="self-stretch overflow-hidden rounded-(--radius-lg) border border-hairline bg-card"
+        class={FRAME.sheet}
       >
-        {/* `If` on booleans, not ternaries over `items`: a ternary would
-            rebuild every row (losing focus and row state) whenever the App
-            passes a new array; `Each` keeps the rows by key instead. */}
-        <If
-          when={props.loading === true}
-          else={
-            <If
-              when={empty()}
-              else={
-                <If
-                  when={
-                    props.items !== undefined && props.renderItem !== undefined
-                  }
-                  else={props.children}
-                >
-                  <Each of={props.items} key={props.getKey}>
-                    {(item) => props.renderItem?.(item)}
-                  </Each>
-                </If>
-              }
-            >
-              <View class="items-center px-4 py-6">
-                <Text class="text-center text-body text-muted-foreground">
-                  {props.empty ?? 'Nothing here yet.'}
-                </Text>
-              </View>
-            </If>
-          }
-        >
-          <View class="gap-4 p-4">
-            <Skeleton lines={2} />
-            <Skeleton lines={2} />
-          </View>
-        </If>
+        {FRAME.rows ? <View class={FRAME.rows}>{rows}</View> : rows}
       </View>
     </View>
   );
@@ -110,6 +137,7 @@ export type ListItemProps = {
 
 /** One row of a `List` (DESIGN.md "List row"). */
 export function ListItem(props: ListItemProps): JSX.Element {
+  if (look !== 'web') return <PlatformListItem {...props} />;
   const body = (
     <>
       {props.icon ? (
@@ -189,6 +217,129 @@ export function ListItem(props: ListItemProps): JSX.Element {
           </Each>
         </View>
       </If>
+    </View>
+  );
+}
+
+/** A row's classes on iOS and Android. */
+const ROW = byLook({
+  web: null,
+  ios: {
+    row: 'group flex-row items-stretch',
+    content: 'flex-1 flex-row items-center gap-3 pl-4',
+    press: 'active:bg-surface-pressed',
+    tile: 'size-7.5 items-center justify-center rounded-(--radius-sm)',
+    // The separator starts at the text, as iOS's do.
+    body: 'min-h-11 flex-1 flex-row items-center gap-2 self-stretch border-b border-hairline pr-4',
+    text: 'flex-1 gap-0.5 py-2.5',
+    title: 'text-ios-body font-regular',
+    description: 'text-ios-footnote font-regular text-muted-foreground',
+    value: 'text-ios-body font-regular text-muted-foreground',
+    chevron: true,
+  },
+  android: {
+    row: 'group flex-row items-stretch',
+    content: 'flex-1 flex-row items-center gap-4 rounded-(--radius-md)',
+    press: 'active:bg-surface-pressed',
+    tile: 'size-10 items-center justify-center rounded-(--radius-md)',
+    body: 'min-h-14 flex-1 flex-row items-center gap-4 self-stretch',
+    text: 'flex-1 gap-0.5 py-2',
+    title: 'text-m3-body-lg font-regular',
+    description: 'text-m3-body-md font-regular text-muted-foreground',
+    value: 'text-m3-body-md font-regular text-muted-foreground',
+    chevron: false,
+  },
+});
+
+/** `ListItem` on iOS and Android. */
+function PlatformListItem(props: ListItemProps): JSX.Element {
+  const style = ROW as NonNullable<typeof ROW>;
+  // A control and actions stay out of the row's own button.
+  const trailing = (
+    <>
+      {props.control ? <View>{props.control}</View> : null}
+      <If when={(props.actions?.length ?? 0) > 0}>
+        <View class="flex-row gap-0.5">
+          <Each of={props.actions}>
+            {(action) => (
+              <IconButton
+                icon={action().icon ?? IconChevronRight}
+                label={action().label}
+                size="sm"
+                disabled={props.disabled === true || action().disabled}
+                onPress={action().onPress}
+              />
+            )}
+          </Each>
+        </View>
+      </If>
+    </>
+  );
+  const content = (
+    <>
+      {props.icon ? (
+        <View
+          class={`${style.tile} ${props.selected ? 'bg-card' : 'bg-muted'}`}
+        >
+          <Glyph
+            icon={props.icon}
+            size="lg"
+            color={props.selected ? 'primary-tint-foreground' : 'foreground'}
+          />
+        </View>
+      ) : null}
+      {props.avatar ? (
+        <Avatar name={props.avatar.name} src={props.avatar.src} size="md" />
+      ) : null}
+      <View class={style.body}>
+        <View class={style.text}>
+          <Text
+            class={`${style.title} truncate ${props.selected ? 'text-primary-tint-foreground' : 'text-foreground'}`}
+          >
+            {props.title}
+          </Text>
+          {props.description ? (
+            <Text class={`${style.description} truncate`}>
+              {props.description}
+            </Text>
+          ) : null}
+        </View>
+        {props.value ? <Text class={style.value}>{props.value}</Text> : null}
+        {props.badge ? <Badge {...props.badge} /> : null}
+        {props.onPress && style.chevron ? (
+          <Glyph icon={IconChevronRight} size="md" color="muted-foreground" />
+        ) : null}
+        {props.onPress ? null : trailing}
+      </View>
+    </>
+  );
+  return (
+    <View
+      class={`${style.row} ${props.selected ? 'bg-primary-tint' : ''}`}
+      classList={{ 'opacity-50': props.disabled === true }}
+    >
+      {props.onPress ? (
+        <>
+          <BaseButton
+            onPress={props.onPress}
+            disabled={props.disabled}
+            selected={props.selected}
+            accessibilityLabel={
+              props.description
+                ? `${props.title}, ${props.description}`
+                : props.title
+            }
+            class={`${style.content} ${props.selected ? '' : style.press} ${FOCUS_RING_INSET}`}
+          >
+            {content}
+          </BaseButton>
+          {props.control || (props.actions?.length ?? 0) > 0 ? (
+            <View class="flex-row items-center pr-2">{trailing}</View>
+          ) : null}
+        </>
+      ) : (
+        <View class={style.content}>{content}</View>
+      )}
     </View>
   );
 }

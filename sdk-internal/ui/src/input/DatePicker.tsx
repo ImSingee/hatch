@@ -20,6 +20,7 @@ import {
   Field,
   WELL,
   WELL_HEIGHT,
+  TRIGGER_STATE,
   WELL_TEXT,
   fieldError,
   wellState,
@@ -144,7 +145,7 @@ export function DatePicker(props: DatePickerProps): JSX.Element {
         segmentClass="text-body font-strong text-foreground focus:bg-primary-tint"
         trigger={
           <View
-            class={`${WELL} ${WELL_HEIGHT} ${wellState(error() !== undefined, disabled())} enabled:hover:bg-muted`}
+            class={`${WELL} ${WELL_HEIGHT} ${wellState(error() !== undefined, disabled())} ${TRIGGER_STATE}`}
           >
             <Glyph icon={IconCalendar} size="md" color="muted-foreground" />
             <Text

@@ -2,7 +2,8 @@
  * Drives the gallery in the web player and fails on anything the runtime
  * reports: an error, or a class it cannot resolve (`[nsh] unknown classes`),
  * which is how a class from a lookup table that names no token shows up.
- * Every section is shown and every popup opened, in each layout and accent,
+ * Every section is shown and every popup opened, on each platform (the web,
+ * and iOS and Android as the Mobile app names them) in each layout and accent,
  * and a screenshot of each is written: the catalogue screenshot suite.
  *
  *   node_modules/.bin/tsx sdk-internal/ui/gallery/check.ts <out-dir> [url]
@@ -15,6 +16,11 @@ import { chromium, type Page } from 'playwright';
 import sharp from 'sharp';
 
 const out = path.resolve(process.argv[2] ?? 'gallery-shots');
+/** The platforms the gallery is drawn as: the web player in a browser, and
+ * as the Mobile app's WebView names iOS and Android (`?platform=`). Web
+ * screenshots keep their names; the others start with the platform. */
+const platforms = ['web', 'ios', 'android'] as const;
+type Platform = (typeof platforms)[number];
 const base = process.argv[3] ?? 'http://127.0.0.1:8791/';
 const accents = ['indigo', 'teal', 'clay', 'violet'] as const;
 
@@ -41,8 +47,10 @@ const sections = [
   'Patterns',
 ];
 
-/** `ONLY=phone-390:teal` limits a run to one layout and accent. */
+/** `ONLY=phone-390:teal` limits a run to one layout and accent;
+ * `PLATFORMS=ios,android` to some platforms. */
 const only = process.env.ONLY?.split(':');
+const onlyPlatforms = process.env.PLATFORMS?.split(',');
 
 const problems: string[] = [];
 /** Behaviour of NSH itself (0.7.0) that the library cannot change; reported,
@@ -65,10 +73,16 @@ function watch(page: Page, context: string): void {
   );
 }
 
-async function open(page: Page, layout: Layout, accent: string): Promise<void> {
+async function open(
+  page: Page,
+  layout: Layout,
+  accent: string,
+  platform: Platform,
+): Promise<void> {
   const url = new URL(base);
   url.searchParams.set('accent', accent);
   if (layout.idiom) url.searchParams.set('idiom', layout.idiom);
+  if (platform !== 'web') url.searchParams.set('platform', platform);
   await page.goto(url.href);
   await page.waitForFunction(
     () => (window as { galleryReady?: boolean }).galleryReady,
@@ -271,8 +285,13 @@ async function settle(page: Page, heading: string): Promise<void> {
   problems.push(`page "${heading}" kept moving after 3 s`);
 }
 
-/** The window surface (`surface-window`) every page is drawn on. */
-const WINDOW = { r: 250, g: 249, b: 246 };
+/** The surface every page is drawn on: `surface-window` on the web, the
+ * theme's ground (`background`) on iOS and Android. */
+const PAGE_SURFACE: Record<Platform, { r: number; g: number; b: number }> = {
+  web: { r: 250, g: 249, b: 246 },
+  ios: { r: 237, g: 235, b: 230 },
+  android: { r: 237, g: 235, b: 230 },
+};
 
 /**
  * A settled page must cover its whole pane: the first columns of the pane
@@ -282,9 +301,13 @@ async function coversPane(
   page: Page,
   layout: Layout,
   label: string,
+  platform: Platform,
 ): Promise<void> {
+  const WINDOW = PAGE_SURFACE[platform];
   const left = layout.width >= 720 ? 241 : 0;
-  const top = 60;
+  // Below the tab row at the top of a narrow desktop pane: its icon button
+  // is 44 or 48 points tall on iOS and Android.
+  const top = platform === 'web' ? 60 : 80;
   const height = layout.height - top - (layout.touch ? 90 : 20);
   const png = await page.screenshot({
     clip: { x: left, y: top, width: 3, height },
@@ -313,12 +336,13 @@ async function patterns(
   page: Page,
   prefix: string,
   layout: Layout,
+  platform: Platform,
 ): Promise<void> {
   const push = async (opener: RegExp, heading: string, name: string) => {
     await page.getByRole('button', { name: opener }).click();
     await settle(page, heading);
     await shot(page, `${prefix}-${name}`);
-    await coversPane(page, layout, `${prefix}-${name}`);
+    await coversPane(page, layout, `${prefix}-${name}`, platform);
     await page
       .getByRole('button', { name: 'Back', exact: true })
       .first()
@@ -441,53 +465,59 @@ async function main(): Promise<void> {
   fs.mkdirSync(out, { recursive: true });
   const browser = await chromium.launch();
   try {
-    for (const layout of layouts) {
-      for (const accent of accents) {
-        if (
-          only &&
-          (only[0] !== layout.name || (only[1] && only[1] !== accent))
-        ) {
-          continue;
-        }
-        const context = await browser.newContext({
-          viewport: { width: layout.width, height: layout.height },
-          hasTouch: layout.touch,
-        });
-        const page = await context.newPage();
-        const prefix = `${layout.name}-${accent}`;
-        watch(page, prefix);
-        await open(page, layout, accent);
-        for (const name of sections) {
-          await section(page, name);
-          await sectionShots(page, `${prefix}-${name.toLowerCase()}`, layout);
-        }
-        if (layout.name === 'desktop-1280') {
-          const order = await keyboard(page, prefix);
-          fs.writeFileSync(
-            path.join(out, `${prefix}-focus-order.txt`),
-            order.join('\n'),
-          );
-        }
-        // Pages first: the toasts the popups step shows would otherwise
-        // shade the pane edge that patterns() samples.
-        await patterns(page, prefix, layout);
-        await popups(page, prefix, layout);
-        if (layout.name === 'desktop-1280' && accent === 'indigo') {
-          await liveAccent(page, prefix, 'teal');
-        }
-        if (layout.touch && accent === 'indigo') {
-          const heights = await targets(page);
-          fs.writeFileSync(
-            path.join(out, `${prefix}-touch-targets.txt`),
-            heights.join('\n'),
-          );
-          for (const line of heights) {
-            const points = Number(line.split(': ')[1]);
-            if (!(points >= 44)) problems.push(`${prefix}: ${line}, below 44`);
+    for (const platform of platforms) {
+      if (onlyPlatforms && !onlyPlatforms.includes(platform)) continue;
+      for (const layout of layouts) {
+        for (const accent of accents) {
+          if (
+            only &&
+            (only[0] !== layout.name || (only[1] && only[1] !== accent))
+          ) {
+            continue;
           }
+          const context = await browser.newContext({
+            viewport: { width: layout.width, height: layout.height },
+            hasTouch: layout.touch,
+          });
+          const page = await context.newPage();
+          const prefix = `${platform === 'web' ? '' : `${platform}-`}${layout.name}-${accent}`;
+          watch(page, prefix);
+          await open(page, layout, accent, platform);
+          for (const name of sections) {
+            await section(page, name);
+            await sectionShots(page, `${prefix}-${name.toLowerCase()}`, layout);
+          }
+          if (layout.name === 'desktop-1280') {
+            const order = await keyboard(page, prefix);
+            fs.writeFileSync(
+              path.join(out, `${prefix}-focus-order.txt`),
+              order.join('\n'),
+            );
+          }
+          // Pages first: the toasts the popups step shows would otherwise
+          // shade the pane edge that patterns() samples.
+          await patterns(page, prefix, layout, platform);
+          await popups(page, prefix, layout);
+          if (layout.name === 'desktop-1280' && accent === 'indigo') {
+            await liveAccent(page, prefix, 'teal');
+          }
+          if (layout.touch && accent === 'indigo') {
+            const heights = await targets(page);
+            fs.writeFileSync(
+              path.join(out, `${prefix}-touch-targets.txt`),
+              heights.join('\n'),
+            );
+            // Android's targets are 48 points, iOS's and the web's 44.
+            const least = platform === 'android' ? 48 : 44;
+            for (const line of heights) {
+              const points = Number(line.split(': ')[1]);
+              if (!(points >= least))
+                problems.push(`${prefix}: ${line}, below ${least}`);
+            }
+          }
+          await context.close();
+          console.log(`checked ${prefix}`);
         }
-        await context.close();
-        console.log(`checked ${prefix}`);
       }
     }
   } finally {

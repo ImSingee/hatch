@@ -32,12 +32,15 @@
   <script type="module">
     // A stand-in for the platform's web player: it hosts the App, answers
     // hatch.theme.get and sends hatch.theme when the accent changes.
+    // `?platform=ios|android` passes the platform as the Mobile app's
+    // WebView does, through `host.params.platform`.
     import { createPlayer } from '/runtime/nsh.js';
 
     const params = new URLSearchParams(location.search);
     const themes = await (await fetch('/themes.json')).json();
     let accent = params.get('accent') ?? 'indigo';
     const idiom = params.get('idiom') ?? undefined;
+    const platform = params.get('platform');
 
     const player = await createPlayer(document.getElementById('app'), {
       wasm: '/runtime/nsh-browser.wasm',
@@ -80,6 +83,7 @@
     await player.runModule(new URL('/bundle/bundle.js', location.href).href, {
       capabilities,
       appId: 'dev.hatch.app.ui-gallery',
+      ...(platform ? { params: { platform } } : {}),
     });
     window.galleryReady = true;
   </script>

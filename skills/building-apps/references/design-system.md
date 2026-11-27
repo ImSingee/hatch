@@ -147,6 +147,22 @@ The same source runs everywhere; the components adapt:
 | A narrow pane with a pointer    | `AppShell` shows a row of tabs at the top                                                        |
 | Compact panes (below 600)       | `Grid` shows one column, `Row collapse` stacks, page padding shrinks                             |
 
+The platform changes the habits, never the brand. On iOS and Android (the
+Mobile app, and native shells later) the components take that platform's
+font (SF Pro, Roboto), navigation, controls, sheets, touch targets and
+pressed feedback; the colours, the accent, the radius scale, the icons and
+the App's content stay the theme's. The web, macOS and Windows keep the Desk
+look.
+
+| Platform | What it looks like                                                                                                                                                                        |
+| -------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| iOS      | Large page titles; a back button that names the page it leads to; a floating tab bar; fields as inset rows (label above the value); sheets with a grabber and Cancel; 44-point targets    |
+| Android  | Material 3: a top app bar; a navigation bar with a tinted pill; outlined fields with the label on the border; pill buttons; bottom sheets with a drag handle; snackbars; 48-point targets |
+| Web      | The Desk look (`DESIGN.md`)                                                                                                                                                               |
+
+Write the same App for all of them: never read the platform in App code,
+never pass sizes or colours to make one platform look like another.
+
 ## Addresses and titles
 
 The library keeps the App's address and title in the shell; App code does
@@ -202,7 +218,7 @@ do not edit between the markers.
 
 #### Page
 
-One screen of the App: a scrolling body with the title row. In a `NavStack` above its first page, the title row starts with a back button. While it is shown (the selected section, the top of its stack) its title is the App's title in the shell; the deepest shown page wins.
+One screen of the App: a scrolling body with the title row. In a `NavStack` above its first page, the title row starts with a back button. While it is shown (the selected section, the top of its stack) its title is the App's title in the shell; the deepest shown page wins. On iOS the first page of a stack shows a large title that scrolls with the content, and a page above it a navigation bar: back with the title of the page it leads to, the title in the middle, the actions at the end. On Android every page has a top app bar.
 
 | Prop               | Type          | Description                                                                                                                             |
 | ------------------ | ------------- | --------------------------------------------------------------------------------------------------------------------------------------- |
@@ -596,7 +612,7 @@ A heading, announced as one by screen readers.
 
 #### Badge
 
-A short label for a status or a count (DESIGN.md "Status chip").
+A short label for a status or a count (DESIGN.md "Status chip"). On Android it is Material's outlined chip, the tone in its text and dot.
 
 | Prop               | Type      | Description                                           |
 | ------------------ | --------- | ----------------------------------------------------- |

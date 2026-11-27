@@ -2,13 +2,14 @@ import { Text as NshText, View } from 'nsh';
 import type { JSX } from 'nsh';
 import { Avatar as BaseAvatar, Progress as BaseProgress } from 'nsh/base';
 import { Each } from '../core/control';
-import { TONE_FILL, TONE_TINT } from '../core/styles';
+import { byLook } from '../core/env';
+import { TONE_FILL, TONE_TEXT, TONE_TINT } from '../core/styles';
 import type { Action, IconData, Tone } from '../core/types';
 import { Glyph } from '../icons/Icon';
 import type { GlyphColor } from '../icons/Icon';
 import { IconArrowDown, IconArrowUp, IconMinus } from '../icons/icons.gen';
 import { Button } from '../input/Button';
-import { HeadingText } from './Text';
+import { BODY, HeadingText, TITLE } from './Text';
 
 export type BadgeProps = {
   /** One or two words in sentence case: "Active", "3 due". */
@@ -19,9 +20,28 @@ export type BadgeProps = {
   dot?: boolean;
 };
 
-/** A short label for a status or a count (DESIGN.md "Status chip"). */
+/** A short label for a status or a count (DESIGN.md "Status chip"). On
+ * Android it is Material's outlined chip, the tone in its text and dot. */
 export function Badge(props: BadgeProps): JSX.Element {
   const tone = () => props.tone ?? 'neutral';
+  if (BADGE) {
+    return (
+      <View class="flex-row">
+        <View
+          class={`${BADGE.chip} ${BADGE.outlined ? '' : TONE_TINT[tone()]}`}
+        >
+          {props.dot ? (
+            <View class={`size-2 rounded-full ${TONE_FILL[tone()]}`} />
+          ) : null}
+          <NshText
+            class={`${BADGE.text} ${BADGE.outlined ? (tone() === 'neutral' ? 'text-foreground' : TONE_TEXT[tone()]) : ''}`}
+          >
+            {props.label}
+          </NshText>
+        </View>
+      </View>
+    );
+  }
   return (
     <View class="flex-row">
       <View
@@ -35,6 +55,28 @@ export function Badge(props: BadgeProps): JSX.Element {
     </View>
   );
 }
+
+const BADGE = byLook({
+  web: null,
+  ios: {
+    chip: 'h-5.5 flex-row items-center gap-1.5 rounded-full px-2.5',
+    text: 'text-ios-caption font-semibold',
+    outlined: false,
+  },
+  android: {
+    chip: 'h-8 flex-row items-center gap-2 rounded-(--radius-sm) border border-control-border px-3',
+    text: 'text-m3-label-lg font-medium',
+    outlined: true,
+  },
+});
+
+/** A figure's sheet: on iOS and Android, as a `Card` there, without an
+ * edge. */
+const STAT = byLook({
+  web: 'self-stretch gap-1.5 rounded-(--radius-lg) border border-hairline bg-card p-4',
+  ios: 'self-stretch gap-1.5 rounded-(--radius-lg) bg-card p-4',
+  android: 'self-stretch gap-1.5 rounded-(--radius-lg) bg-card p-4',
+});
 
 export type AvatarSize = 'sm' | 'md' | 'lg' | 'xl';
 
@@ -160,7 +202,7 @@ export function Stat(props: StatProps): JSX.Element {
         ? 'text-success-strong'
         : 'text-danger-strong';
   return (
-    <View class="self-stretch gap-1.5 rounded-(--radius-lg) border border-hairline bg-card p-4">
+    <View class={STAT}>
       <View class="flex-row items-center gap-2">
         {props.icon ? (
           <Glyph icon={props.icon} size="md" color="muted-foreground" />
@@ -261,7 +303,7 @@ export function EmptyState(props: EmptyStateProps): JSX.Element {
   if (props.compact) {
     return (
       <View class="self-stretch items-center px-4 py-6">
-        <NshText class="text-center text-body text-muted-foreground">
+        <NshText class={`text-center ${BODY.body} text-muted-foreground`}>
           {props.title}
         </NshText>
       </View>
@@ -286,12 +328,14 @@ export function EmptyState(props: EmptyStateProps): JSX.Element {
       ) : null}
       <HeadingText
         level={2}
-        class="text-center text-section text-foreground text-balance"
+        class={`text-center ${TITLE.section} text-foreground text-balance`}
       >
         {props.title}
       </HeadingText>
       {props.description ? (
-        <NshText class="text-center text-body text-muted-foreground text-pretty">
+        <NshText
+          class={`text-center ${BODY.body} text-muted-foreground text-pretty`}
+        >
           {props.description}
         </NshText>
       ) : null}

@@ -28,7 +28,12 @@ describe('native App themes', () => {
     );
     const expected = {
       cssVars: {
-        theme: library.cssVars.theme,
+        // Added since: a sheet's corner, which iOS and Android set to their
+        // own (`@hatch/ui` `platformTheme`); the window's on the web.
+        theme: {
+          ...library.cssVars.theme,
+          'radius-sheet': library.cssVars.theme['radius-window'],
+        },
         light: { ...library.cssVars.light, ...pressed },
       },
     };
