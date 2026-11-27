@@ -5,7 +5,7 @@
  * TSX draw through the same components.
  */
 /* oxlint-disable jsx-a11y/prefer-tag-over-role, jsx-a11y/aria-role, jsx-a11y/role-has-required-aria-props -- NSH has no HTML elements: a view's role and state are its semantics. */
-import { Text as NshText, View, context, locale, signal } from 'nsh';
+import { Text as NshText, Scroll, View, context, locale, signal } from 'nsh';
 import type { JSX } from 'nsh';
 import { Progress as BaseProgress } from 'nsh/base';
 import { Each } from '../core/control';
@@ -187,12 +187,18 @@ const STACK_BELOW = 400;
 export function Row(props: RowProps): JSX.Element {
   const buttons = signal(0);
   const width = CardWidthContext();
+  // A row holds buttons when one is inside it, however deep: it tells the
+  // rows around it in turn.
   const parent = RowContext();
-  parent?.holdButtons();
   const stacked = () => buttons() > 0 && width() < STACK_BELOW;
   return (
     <RowContext.Provider
-      value={{ holdButtons: () => buttons.update((n) => n + 1) }}
+      value={{
+        holdButtons: () => {
+          buttons.update((n) => n + 1);
+          parent?.holdButtons();
+        },
+      }}
     >
       <View
         class={
@@ -995,16 +1001,18 @@ export function Code(props: CodeProps): JSX.Element {
           ? 'bg-danger-tint text-danger-tint-foreground'
           : 'text-muted-foreground';
   return (
-    <View class={`min-w-0 ${BLOCK_RADIUS} bg-muted py-2.5`}>
-      <View class="px-3" selectable>
-        <Each of={lines()} key="index">
-          {(line) => (
-            <NshText class={`${TYPE.mono} font-mono ${change(line())}`}>
-              {line() || ' '}
-            </NshText>
-          )}
-        </Each>
-      </View>
+    <View class={`min-w-0 overflow-hidden ${BLOCK_RADIUS} bg-muted py-2.5`}>
+      <Scroll horizontal class="self-stretch">
+        <View class="min-w-full px-3" selectable>
+          <Each of={lines()} key="index">
+            {(line) => (
+              <NshText class={`${TYPE.mono} font-mono ${change(line())}`}>
+                {line() || ' '}
+              </NshText>
+            )}
+          </Each>
+        </View>
+      </Scroll>
     </View>
   );
 }

@@ -190,6 +190,23 @@ test('opens the address a link button shows now', async () => {
   await app.waitFor('text:submitted: link hatch://app/notes#/two');
 });
 
+test('keeps a row without buttons in one line on a phone', async () => {
+  const app = await openCard('ios', { example: 'rows' });
+  const left = app.layout('text:Left side')!;
+  const right = app.layout('text:Right side')!;
+  expect(right.x).toBeGreaterThan(left.x);
+  expect(Math.abs(right.y - left.y)).toBeLessThan(left.height);
+});
+
+test('keeps each line of code on one line', async () => {
+  const app = await openCard('ios', { example: 'rows' });
+  const short = app.layout('text:short line')!;
+  const long = app.layout(
+    `text:${'a long log line that is wider than any phone '.repeat(3).trim()}`,
+  )!;
+  expect(long.height).toBe(short.height);
+});
+
 test('shows an answer given elsewhere read-only, with its status', async () => {
   const app = await openCard('web', {
     example: 'perm',

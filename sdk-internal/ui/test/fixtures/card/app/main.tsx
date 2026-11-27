@@ -105,6 +105,21 @@ function LayoutCard() {
   );
 }
 
+/** Rows inside rows, and a log line longer than the card. */
+function RowsCard() {
+  return (
+    <Card.Card>
+      <Card.Row justify="between">
+        <Card.Row>
+          <Card.Text>Left side</Card.Text>
+        </Card.Row>
+        <Card.Badge>Right side</Card.Badge>
+      </Card.Row>
+      <Card.Code>{`short line\n${'a long log line that is wider than any phone '.repeat(3)}`}</Card.Code>
+    </Card.Card>
+  );
+}
+
 function App() {
   const params = host.available() ? host.params : {};
   const id = typeof params.example === 'string' ? params.example : '';
@@ -122,6 +137,7 @@ function App() {
           {id === 'form-removable' ? <RemovableCard /> : null}
           {id === 'form-pending' ? <PendingCard /> : null}
           {id === 'layout' ? <LayoutCard /> : null}
+          {id === 'rows' ? <RowsCard /> : null}
           {example ? (
             <Card.CardMarkup
               source={example.markup}
