@@ -436,41 +436,6 @@ fn start(app: &AppHandle, instance: Instance, request: OpenRequest, prepared: Pr
             },
         )
     });
-    #[cfg(debug_assertions)]
-    {
-        let report = app.clone();
-        tauri::async_runtime::spawn(async move {
-            tokio::time::sleep(Duration::from_secs(3)).await;
-            let _ = report.run_on_main_thread(|| {
-                let mtm = MainThreadMarker::new().unwrap();
-                for window in objc2_app_kit::NSApplication::sharedApplication(mtm)
-                    .windows()
-                    .iter()
-                {
-                    let content = window.contentView();
-                    eprintln!(
-                        "window #{} {:?} visible {} frame {:?} content {:?} subviews {:?}",
-                        window.windowNumber(),
-                        window.class().name(),
-                        window.isVisible(),
-                        window.frame(),
-                        content
-                            .as_ref()
-                            .map(|c| c.class().name().to_string_lossy().into_owned()),
-                        content.map(|c| c
-                            .subviews()
-                            .iter()
-                            .map(|v| format!(
-                                "{}:{:?}",
-                                v.class().name().to_string_lossy(),
-                                v.frame()
-                            ))
-                            .collect::<Vec<_>>())
-                    );
-                }
-            });
-        });
-    }
     notify(
         app,
         &PageEvent::Ready {

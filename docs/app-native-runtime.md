@@ -386,6 +386,25 @@ accent the browser used. "Update available" is sent when a platform
 `app.deployment.activated` event names another deployment of the App than
 the one in the frame.
 
+## The macOS app
+
+The macOS app (`desktop/`) runs a `native` App in an NSH view of its own, not
+in the web player: `AppSurface` keeps the App's place in the page and drives
+the app over its IPC (`src/components/desktop-host/native-apps.ts`,
+`desktop/src-tauri/src/native/`). The app downloads the live package with
+`GetAppPackage` and the trust material with `GetAppRuntimeTrust`, verifies
+the package with `nsh-package` against a trust store it keeps per instance
+(the instance's roots and newest revocation list, the highest build accepted
+per App), checks it is signed for `dev.hatch.app.<id>` of the App the surface
+opened, and runs the verified bundle with a grant of exactly the host calls
+above (NSH gives an App what it declared when the host grants nothing, so the
+grant is always explicit). It answers the host calls itself, with its own
+session, under the same rules as the player, scoped to the App's id and the
+deployment the package names. It has no list of the App's unary methods:
+`hatch.rpc` checks the names and posts to the App's own RPC path, and the
+backend refuses a method it does not serve. The surface channel's messages
+become IPC commands and the same `hatch.*` events; `platform.os` is `macos`.
+
 ## Theme
 
 `nshThemeFor(resolved)` (`src/server/apps/native/nsh-theme.ts`) turns a
