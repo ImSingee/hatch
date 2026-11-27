@@ -2,8 +2,8 @@
   "type": "diff",
   "version": "10",
   "dialect": "postgres",
-  "id": "1a19c4cf-0890-4c3b-86cc-984115506a57",
-  "prevIds": ["bbaadf53-e782-4955-9ec0-f7f9760398ba"],
+  "id": "357b644d-30a7-4ac1-8ae2-481045e7195d",
+  "prevIds": ["64a7310a-f328-455f-a467-7256cac8955f"],
   "footprints": [
     {
       "statementType": "create_table",
@@ -50,6 +50,36 @@
         "s|col|public.user_preferences.dock_labels",
         "n|col|public.user_preferences.dock_labels",
         "e|col|public.user_preferences.dock_labels"
+      ],
+      "reads": ["n|tbl|public.user_preferences", "n|sch|public"]
+    },
+    {
+      "statementType": "add_column",
+      "statementTarget": [
+        "column",
+        "public",
+        "user_preferences",
+        "theme_preset"
+      ],
+      "writes": [
+        "s|col|public.user_preferences.theme_preset",
+        "n|col|public.user_preferences.theme_preset",
+        "e|col|public.user_preferences.theme_preset"
+      ],
+      "reads": ["n|tbl|public.user_preferences", "n|sch|public"]
+    },
+    {
+      "statementType": "add_column",
+      "statementTarget": [
+        "column",
+        "public",
+        "user_preferences",
+        "custom_theme_id"
+      ],
+      "writes": [
+        "s|col|public.user_preferences.custom_theme_id",
+        "n|col|public.user_preferences.custom_theme_id",
+        "e|col|public.user_preferences.custom_theme_id"
       ],
       "reads": ["n|tbl|public.user_preferences", "n|sch|public"]
     },
@@ -164,6 +194,25 @@
         "n|col|public.user_dashboards.dashboard_id",
         "n|col|public.dashboards.id",
         "e|uniqueness|public.dashboards.id"
+      ]
+    },
+    {
+      "statementType": "create_fk",
+      "statementTarget": ["table", "public", "user_preferences"],
+      "writes": [
+        "s|fk|public.user_preferences.user_preferences_custom_theme_id_themes_id_fkey",
+        "n|fk|public.user_preferences.user_preferences_custom_theme_id_themes_id_fkey",
+        "e|fk|public.user_preferences.user_preferences_custom_theme_id_themes_id_fkey",
+        "n|con|public.user_preferences.user_preferences_custom_theme_id_themes_id_fkey"
+      ],
+      "reads": [
+        "n|tbl|public.user_preferences",
+        "n|sch|public",
+        "n|tbl|public.themes",
+        "n|sch|public",
+        "n|col|public.user_preferences.custom_theme_id",
+        "n|col|public.themes.id",
+        "e|uniqueness|public.themes.id"
       ]
     }
   ],
@@ -294,6 +343,38 @@
       "row": {
         "schema": "public",
         "table": "user_preferences",
+        "name": "theme_preset",
+        "type": "text",
+        "typeSchema": null,
+        "notNull": false,
+        "dimensions": 0,
+        "default": null,
+        "generated": null,
+        "identity": null,
+        "entityType": "columns"
+      }
+    },
+    {
+      "op": "create",
+      "row": {
+        "schema": "public",
+        "table": "user_preferences",
+        "name": "custom_theme_id",
+        "type": "text",
+        "typeSchema": null,
+        "notNull": false,
+        "dimensions": 0,
+        "default": null,
+        "generated": null,
+        "identity": null,
+        "entityType": "columns"
+      }
+    },
+    {
+      "op": "create",
+      "row": {
+        "schema": "public",
+        "table": "user_preferences",
         "name": "dashboard_defaults_applied",
         "type": "boolean",
         "typeSchema": null,
@@ -380,6 +461,22 @@
         "columnsTo": ["id"],
         "onUpdate": "NO ACTION",
         "onDelete": "CASCADE",
+        "entityType": "fks"
+      }
+    },
+    {
+      "op": "create",
+      "row": {
+        "schema": "public",
+        "table": "user_preferences",
+        "name": "user_preferences_custom_theme_id_themes_id_fkey",
+        "nameExplicit": false,
+        "columns": ["custom_theme_id"],
+        "schemaTo": "public",
+        "tableTo": "themes",
+        "columnsTo": ["id"],
+        "onUpdate": "NO ACTION",
+        "onDelete": "SET NULL",
         "entityType": "fks"
       }
     },

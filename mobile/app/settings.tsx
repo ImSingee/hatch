@@ -16,7 +16,7 @@ import {
   readable,
   PageRoot,
 } from '../src/ui/screen';
-import { Text, type } from '../src/ui/text';
+import { Text, useType } from '../src/ui/text';
 
 const notes: { glyph: GlyphName; title: string; detail: string }[] = [
   {
@@ -60,6 +60,7 @@ const MESSAGE_MODES: {
 
 /** What a message sent while the Agent works does; saved to the account. */
 function MessageModeCard() {
+  const type = useType();
   const { api, origin } = useSession();
   const queryClient = useQueryClient();
   const key = [origin, 'agent-message-mode'];
@@ -101,6 +102,7 @@ function MessageModeCard() {
 }
 
 export default function SettingsScreen() {
+  const type = useType();
   const { origin, disconnect } = useSession();
   const [busy, setBusy] = useState(false);
   const host = origin?.replace(/^https?:\/\//, '') ?? '';

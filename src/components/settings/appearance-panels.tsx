@@ -3,6 +3,7 @@ import { GroupCard } from '~components/page/page';
 import { AccentPanel } from './accent-panel';
 import { DockLabelsPanel } from './dock-labels-panel';
 import { LanguagePanel } from './language-panel';
+import { ThemeLibraryPanel } from './theme-panel';
 
 /**
  * The signed-in user's appearance settings. The user comes from the live
@@ -14,6 +15,9 @@ export function AppearancePanels() {
   if (!userId) return null;
   return (
     <>
+      <GroupCard padded>
+        <ThemeLibraryPanel key={userId} userId={userId} />
+      </GroupCard>
       <GroupCard padded>
         <AccentPanel key={userId} userId={userId} />
       </GroupCard>

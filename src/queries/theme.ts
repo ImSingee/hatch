@@ -1,7 +1,10 @@
 import { queryOptions, type QueryFilters } from '@tanstack/react-query';
-import { getThemeFn } from '~server/theme';
+import { getThemeFn, listThemesFn } from '~server/theme';
 
-/** The signed-in user's theme; their accent and dock labels are their own. */
+/**
+ * The signed-in user's theme: their active theme, accent and dock labels
+ * are their own.
+ */
 export const themeQueryOptions = (userId: string) =>
   queryOptions({
     queryKey: ['account', userId, 'theme'],
@@ -13,8 +16,18 @@ export const themeQueryOptions = (userId: string) =>
     },
   });
 
-/** Every cached theme, to re-read after a change elsewhere or a reconnect. */
+/** The shared theme library: presets, then custom themes. */
+export const themesQueryOptions = queryOptions({
+  queryKey: ['theme', 'library'],
+  queryFn: () => listThemesFn(),
+});
+
+/**
+ * Every cached theme and the library, to re-read after a change elsewhere
+ * or a reconnect.
+ */
 export const themeQueries: QueryFilters = {
   predicate: ({ queryKey }) =>
-    queryKey[0] === 'account' && queryKey[2] === 'theme',
+    (queryKey[0] === 'account' && queryKey[2] === 'theme') ||
+    queryKey[0] === 'theme',
 };

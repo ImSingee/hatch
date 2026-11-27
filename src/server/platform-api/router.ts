@@ -105,7 +105,22 @@ import { ThemeService } from '../../../packages/hatch-platform-api/gen/hatch/pla
 import { ServerService } from '../../../packages/hatch-platform-api/gen/hatch/platform/v1/server_pb';
 import { buildInfo } from '~/build-info';
 import { registerModelServices } from './model-rpc';
-import { readTheme, updateTheme } from '~server/theme-settings';
+import {
+  createTheme,
+  deleteTheme,
+  getTheme,
+  listThemes,
+  resetTheme,
+  updateCustomTheme,
+  updateTheme,
+  validateTheme,
+} from '~server/theme-settings';
+import {
+  resolvedThemeMessage,
+  themeEntryMessage,
+  themeProblemMessage,
+  themeStateMessage,
+} from '~server/platform-api/theme';
 import { PinService } from '../../../packages/hatch-platform-api/gen/hatch/platform/v1/pin_pb';
 import {
   listPins,
@@ -897,15 +912,69 @@ export function registerPlatformApi(
   });
   registerModelServices(router);
   router.service(ThemeService, {
-    getTheme: async (_input, context) => ({
-      theme: await readTheme(await preferenceUserId(context)),
-    }),
+    // The active theme, accent and dock labels are the caller's own (409 for
+    // a Run no user prompted); the library operations are shared.
+    getTheme: async (input, context) => {
+      const { theme, resolved } = await getTheme(
+        await preferenceUserId(context),
+        { resolve: input.resolve },
+      );
+      return {
+        theme: themeStateMessage(theme),
+        resolved: resolved ? resolvedThemeMessage(resolved) : undefined,
+      };
+    },
     setTheme: async (input, context) => ({
-      theme: await updateTheme(await preferenceUserId(context), {
-        accent: input.accent,
-        dockLabels: input.dockLabels,
-      }),
+      theme: themeStateMessage(
+        await updateTheme(await preferenceUserId(context), {
+          accent: input.clearAccent ? null : input.accent,
+          dockLabels: input.dockLabels,
+          theme: input.theme,
+        }),
+      ),
     }),
+    resetTheme: async (_input, context) => ({
+      theme: themeStateMessage(
+        await resetTheme(await preferenceUserId(context)),
+      ),
+    }),
+    listThemes: async (input) => {
+      const page = listPage(await listThemes(), input);
+      return {
+        themes: page.items.map(themeEntryMessage),
+        nextCursor: page.nextCursor,
+      };
+    },
+    createTheme: async (input) => ({
+      theme: themeEntryMessage(await createTheme(input.document)),
+    }),
+    updateTheme: async (input, context) => ({
+      theme: themeEntryMessage(
+        await updateCustomTheme(
+          await actingUserId(context),
+          input.id,
+          input.document,
+        ),
+      ),
+    }),
+    deleteTheme: async (input, context) => {
+      await deleteTheme(await actingUserId(context), input.id);
+      return {};
+    },
+    validateTheme: async (input, context) => {
+      // A Run no user prompted has no accent, so it checks without one.
+      const result = await validateTheme(input.document, {
+        withCurrentAccent: input.withCurrentAccent,
+        accentOf: input.withCurrentAccent ? await actingUserId(context) : null,
+      });
+      return {
+        ok: result.ok,
+        problems: result.problems.map(themeProblemMessage),
+        resolved: result.resolved
+          ? resolvedThemeMessage(result.resolved)
+          : undefined,
+      };
+    },
   });
   router.service(ServerService, {
     getServerInfo: () => ({

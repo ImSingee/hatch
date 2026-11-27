@@ -2,12 +2,15 @@ import { Host } from '@expo/ui';
 import { Image } from '@expo/ui/swift-ui';
 import { accessibilityHidden } from '@expo/ui/swift-ui/modifiers';
 import { useWindowDimensions, View } from 'react-native';
-import { palette } from './theme';
+import { usePalette, useTheme } from './theme-context';
 import { glyphs, type GlyphProps } from './glyph.types';
 
 // Decorative SF Symbol in a square box, so symbols of different proportions
 // share one optical line. The surrounding control owns its accessible name.
-export function Glyph({ name, size = 18, color = palette.ink }: GlyphProps) {
+export function Glyph({ name, size = 18, color }: GlyphProps) {
+  const c = usePalette();
+  const { appearance } = useTheme();
+  const tint = color ?? c.ink;
   const { fontScale } = useWindowDimensions();
   const scaled = Math.round(size * Math.min(Math.max(fontScale, 1), 1.6));
   const box = Math.round(scaled * 1.25);
@@ -24,11 +27,11 @@ export function Glyph({ name, size = 18, color = palette.ink }: GlyphProps) {
         justifyContent: 'center',
       }}
     >
-      <Host colorScheme="light" matchContents ignoreSafeArea="all">
+      <Host colorScheme={appearance} matchContents ignoreSafeArea="all">
         <Image
           systemName={glyphs[name]}
           size={scaled}
-          color={color}
+          color={tint}
           modifiers={[accessibilityHidden(true)]}
         />
       </Host>

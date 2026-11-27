@@ -28,14 +28,17 @@ import {
   SectionLabel,
   pageScrollProps,
 } from '../ui/screen';
-import { Text, type } from '../ui/text';
-import { useAccent } from '../ui/accent';
-import { palette as c, pill, radii, shadows, weights } from '../ui/theme';
+import { Text, useType } from '../ui/text';
+import { pill, weights } from '../ui/theme';
+import { useAccent, usePalette, useTheme } from '../ui/theme-context';
 import { Conversation } from './conversation';
 
 export function AgentScreen({ nested = false }: { nested?: boolean }) {
   const { api, origin } = useSession();
   const accent = useAccent();
+  const c = usePalette();
+  const { radii } = useTheme();
+  const type = useType();
   const focused = useIsFocused();
   const queryClient = useQueryClient();
   const signal = useLifetimeSignal();
@@ -292,6 +295,9 @@ export function AgentScreen({ nested = false }: { nested?: boolean }) {
 
 function StartCard({ busy, onPress }: { busy: boolean; onPress: () => void }) {
   const accent = useAccent();
+  const c = usePalette();
+  const { radii, shadows } = useTheme();
+  const type = useType();
   return (
     <Pressable
       accessibilityRole="button"

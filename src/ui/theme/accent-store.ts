@@ -1,7 +1,7 @@
 /**
- * The accent this browser applies. The instance setting is the source of
- * truth; the last value seen is cached in localStorage so a reload paints in
- * the right accent before the setting has been fetched.
+ * The accent name this browser applies, kept in localStorage under
+ * `hatch.accent`: native App players read it before their surface connects.
+ * The colours themselves come from the resolved theme (`theme-store.ts`).
  */
 import { useSyncExternalStore } from 'react';
 import { DEFAULT_ACCENT, isAccentName, type AccentName } from './accents';
@@ -31,7 +31,6 @@ function subscribe(listener: () => void): () => void {
 
 /** Apply an accent now and remember it for the next load. */
 export function applyAccent(accent: AccentName): void {
-  document.documentElement.dataset.accent = accent;
   try {
     localStorage.setItem(STORAGE_KEY, accent);
   } catch {
@@ -42,17 +41,7 @@ export function applyAccent(accent: AccentName): void {
   for (const listener of listeners) listener();
 }
 
-/**
- * The accent to build the theme from. The prerendered shell uses the default
- * accent; the browser switches to the cached one while hydrating.
- */
+/** The accent name native App surfaces send to their players. */
 export function useAccent(): AccentName {
   return useSyncExternalStore(subscribe, read, () => DEFAULT_ACCENT);
 }
-
-/**
- * Runs in `<head>` before the first paint: marks `<html>` with the cached
- * accent so the `ACCENT_CSS` rules colour the shell. The value is only ever
- * matched against those rules' selectors, so an unknown one has no effect.
- */
-export const ACCENT_BOOT_SCRIPT = `try{var a=localStorage.getItem(${JSON.stringify(STORAGE_KEY)});if(a)document.documentElement.dataset.accent=a}catch(e){}`;

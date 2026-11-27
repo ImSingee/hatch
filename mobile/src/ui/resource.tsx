@@ -2,8 +2,8 @@ import { StyleSheet, View } from 'react-native';
 import { AppTile } from './rows';
 import { StatusTag } from './status';
 import { Tag } from './primitives';
-import { Text, type } from './text';
-import { palette as c, radii, shadows } from './theme';
+import { Text, useType } from './text';
+import { themedStyles, usePalette } from './theme-context';
 
 /** Identity of an App at the top of its page. */
 export function ResourceHeader({
@@ -21,6 +21,7 @@ export function ResourceHeader({
   status: string;
   pinned?: boolean;
 }) {
+  const type = useType();
   return (
     <View style={{ flexDirection: 'row', alignItems: 'center', gap: 16 }}>
       <AppTile name={name} seed={seed} iconPath={iconPath} size={72} lifted />
@@ -47,6 +48,9 @@ export function ResourceHeader({
 
 /** Label and value pairs on one sheet, separated by hairlines. */
 export function Facts({ items }: { items: [label: string, value: string][] }) {
+  const c = usePalette();
+  const type = useType();
+  const styles = useStyles();
   return (
     <View style={styles.sheet}>
       {items.map(([label, value], index) => (
@@ -79,24 +83,26 @@ export function when(iso: string) {
   });
 }
 
-const styles = StyleSheet.create({
-  sheet: {
-    backgroundColor: c.card,
-    borderRadius: radii.lg,
-    boxShadow: shadows.card,
-    paddingHorizontal: 16,
-  },
-  fact: {
-    minHeight: 48,
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    gap: 12,
-    paddingVertical: 10,
-  },
-  rule: {
-    borderTopWidth: StyleSheet.hairlineWidth,
-    borderTopColor: c.hairline,
-  },
-});
+const useStyles = themedStyles((t) =>
+  StyleSheet.create({
+    sheet: {
+      backgroundColor: t.palette.card,
+      borderRadius: t.radii.lg,
+      boxShadow: t.shadows.card,
+      paddingHorizontal: 16,
+    },
+    fact: {
+      minHeight: 48,
+      flexDirection: 'row',
+      flexWrap: 'wrap',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+      gap: 12,
+      paddingVertical: 10,
+    },
+    rule: {
+      borderTopWidth: StyleSheet.hairlineWidth,
+      borderTopColor: t.palette.hairline,
+    },
+  }),
+);

@@ -7,28 +7,25 @@ import {
 import { TanStackRouterDevtoolsPanel } from '@tanstack/react-router-devtools';
 import { ReactQueryDevtoolsPanel } from '@tanstack/react-query-devtools';
 import { TanStackDevtools } from '@tanstack/react-devtools';
-import {
-  ColorSchemeScript,
-  MantineProvider,
-  mantineHtmlProps,
-} from '@mantine/core';
+import { MantineProvider, mantineHtmlProps } from '@mantine/core';
 import { Toaster } from 'sonner';
 import { NavigationProgress } from '@mantine/nprogress';
 import { ModalsProvider } from '@mantine/modals';
 import type { QueryClient } from '@tanstack/react-query';
+import { useEffect } from 'react';
 import appCss from '~styles.css?url';
 // Starts the UI language (and <html lang>) before any route renders.
 import { useI18n } from '~i18n';
-import { AccentSync } from '~components/system/accent-sync';
+import { ThemeSync } from '~components/system/theme-sync';
 import { LocaleSync } from '~components/system/locale-sync';
 import { DESKTOP_HOST_BOOT_SCRIPT } from '~components/desktop-host/host';
 import {
-  ACCENT_BOOT_SCRIPT,
-  ACCENT_CSS,
   NATIVE_HOST_BOOT_SCRIPT,
+  THEME_BOOT_SCRIPT,
   appCssVariablesResolver,
+  applyDocumentTheme,
   deskThemeFor,
-  useAccent,
+  useActiveTheme,
 } from '~ui/theme';
 
 /**
@@ -93,14 +90,13 @@ export const Route = createRootRouteWithContext<{
 
 function RootDocument({ children }: { children: React.ReactNode }) {
   const { t } = useI18n();
-  const accent = useAccent();
+  const theme = useActiveTheme();
+  useEffect(() => applyDocumentTheme(theme), [theme]);
   return (
     <html lang="en" {...mantineHtmlProps}>
       <head>
         <HeadContent />
-        <ColorSchemeScript forceColorScheme="light" />
-        <style dangerouslySetInnerHTML={{ __html: ACCENT_CSS }} />
-        <script dangerouslySetInnerHTML={{ __html: ACCENT_BOOT_SCRIPT }} />
+        <script dangerouslySetInnerHTML={{ __html: THEME_BOOT_SCRIPT }} />
         <script dangerouslySetInnerHTML={{ __html: NATIVE_HOST_BOOT_SCRIPT }} />
         <script
           dangerouslySetInnerHTML={{ __html: DESKTOP_HOST_BOOT_SCRIPT }}
@@ -108,11 +104,11 @@ function RootDocument({ children }: { children: React.ReactNode }) {
       </head>
       <body>
         <MantineProvider
-          theme={deskThemeFor(accent)}
+          theme={deskThemeFor(theme)}
           cssVariablesResolver={appCssVariablesResolver}
-          forceColorScheme="light"
+          forceColorScheme={theme.appearance}
         >
-          <AccentSync />
+          <ThemeSync />
           <LocaleSync />
           <ModalsProvider>{children}</ModalsProvider>
 

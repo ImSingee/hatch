@@ -957,6 +957,28 @@ export const platformConfig = snakeCase.table('platform_config', {
 });
 
 /**
+ * Custom themes of the instance (`~server/theme-settings`): theme documents
+ * people and the Agent author on the web or with the CLI. Presets are not
+ * stored. The library is shared; which theme each user has active is in
+ * their `user_preferences`.
+ * `document` is checked when it is saved; a row that no longer passes the
+ * current rules is still listed (flagged) but cannot be activated.
+ */
+export const themes = snakeCase.table(
+  'themes',
+  {
+    id: text().primaryKey(),
+    name: text().notNull(),
+    document: jsonb().$type<JsonValue>().notNull(),
+    createdAt,
+    updatedAt,
+  },
+  // A name picks one theme, ignoring case (the service also keeps the
+  // preset names free).
+  (table) => [uniqueIndex('themes_name_idx').on(sql`lower(${table.name})`)],
+);
+
+/**
  * Model catalogs fetched by the background refresh (`~server/model-catalog`),
  * already trimmed and validated. The newest row is the candidate; the
  * bundled snapshot is used instead when it has newer data.
@@ -1000,13 +1022,28 @@ export const userPreferences = snakeCase.table(
       .notNull()
       .default(5),
     /**
-     * The accent the user picked (an `AccentName`); null keeps the built-in
-     * default. Validated by the service, so retiring an accent needs no
-     * migration: a stored one the tokens no longer define reads as null.
+     * The accent that replaces the active theme's primary (an `AccentName`);
+     * null draws the theme's own primary. Validated by the service, so
+     * retiring an accent needs no migration: a stored name the tokens no
+     * longer define reads as the default accent.
      */
     accent: text(),
     /** Whether the web dock shows tile names; null keeps the default (off). */
     dockLabels: boolean('dock_labels'),
+    /**
+     * The user's active theme when it is a preset (`desk`, `desk-dark`).
+     * With neither this nor `customThemeId` set, the user draws the default
+     * preset.
+     */
+    themePreset: text('theme_preset'),
+    /**
+     * The user's active theme when it is a custom theme of the shared
+     * library. Deleting that theme clears it, so the user falls back to the
+     * default preset.
+     */
+    customThemeId: text('custom_theme_id').references(() => themes.id, {
+      onDelete: 'set null',
+    }),
     /**
      * Whether the user's first visit already pinned the default dashboard.
      * Kept apart from `user_dashboards` so that losing those rows (their

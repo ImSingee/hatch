@@ -1,18 +1,18 @@
 import { View } from 'react-native';
-import { useAccent } from './accent';
-import { palette as c } from './theme';
+import { useAccent, usePalette } from './theme-context';
 
 /**
  * The Desk ground shapes (DESIGN.md, "Ground shapes"): three flat tints lying
  * behind a page, cut off by its edges. The circle follows the accent. Sizes,
  * positions and corner radii are geometry of the drawing, as on the web
- * shell's narrowest layout; the colours are tokens.
+ * shell's narrowest layout; the colours come from the theme.
  *
  * Rendered as the last child of a page so native tabs still find the page's
  * scroll view first, and drawn under its siblings.
  */
 export function Ground() {
   const accent = useAccent();
+  const c = usePalette();
   return (
     <View
       accessible={false}

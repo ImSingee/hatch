@@ -18,7 +18,14 @@ import {
 } from '@hatch/platform-api';
 // The shared package's index does not re-export these two services yet.
 import { PinService } from '../../../packages/hatch-platform-api/gen/hatch/platform/v1/pin_pb';
-import { ThemeService } from '../../../packages/hatch-platform-api/gen/hatch/platform/v1/theme_pb';
+import {
+  ThemeService,
+  type ResolvedTheme as ResolvedThemeMessage,
+} from '../../../packages/hatch-platform-api/gen/hatch/platform/v1/theme_pb';
+import {
+  isResolvedTheme,
+  type ResolvedTheme,
+} from '../../../packages/hatch-design-tokens/src';
 import {
   appProjection,
   catalogProjection,
@@ -106,6 +113,23 @@ function statusError(status: number): MobileError {
 }
 
 /** One client is permanently bound to one canonical origin. */
+
+/** A resolved theme as the shared token package types it. */
+export function resolvedTheme(message: ResolvedThemeMessage): ResolvedTheme {
+  return {
+    name: message.name,
+    source: message.source === 'custom' ? 'custom' : 'preset',
+    appearance: message.appearance === 'dark' ? 'dark' : 'light',
+    colors: message.colors as ResolvedTheme['colors'],
+    ramps: Object.fromEntries(
+      Object.entries(message.ramps).map(([name, ramp]) => [name, ramp.shades]),
+    ) as ResolvedTheme['ramps'],
+    radius: message.radius as ResolvedTheme['radius'],
+    fonts: message.fonts as ResolvedTheme['fonts'],
+    shadows: message.shadows as ResolvedTheme['shadows'],
+  };
+}
+
 export class HatchApiClient {
   readonly origin: string;
   readonly vault: InstanceVault;
@@ -373,18 +397,22 @@ export class HatchApiClient {
       signal,
     );
   }
-  /** The signed-in user's accent name, the same on every client. */
-  async themeAccent(signal?: AbortSignal): Promise<string> {
+  /**
+   * The signed-in user's theme (their active theme with their accent),
+   * resolved by the platform into every token.
+   */
+  async theme(signal?: AbortSignal): Promise<ResolvedTheme> {
     const response = await this.rpcRequest(
-      (signal) => this.themeRpc.getTheme({}, { signal }),
+      (signal) => this.themeRpc.getTheme({ resolve: true }, { signal }),
       signal,
     );
-    if (!response.theme)
+    const theme = response.resolved && resolvedTheme(response.resolved);
+    if (!isResolvedTheme(theme))
       throw new MobileError(
         'invalid_response',
-        'The instance returned no theme.',
+        'The instance returned no usable theme.',
       );
-    return response.theme.accent;
+    return theme;
   }
   /** The user's pinned Apps, in the order every client shows them. */
   async pins(signal?: AbortSignal): Promise<Pins> {

@@ -1,34 +1,57 @@
--- The accent, dock labels, App pins and dashboard pins/order become per user.
--- Every existing user starts from what the instance showed before, so nobody's
--- screen changes; users created later start from the built-in defaults.
+-- The active theme, accent, dock labels, App pins and dashboard pins/order
+-- become per user; the theme library (`themes`) stays shared. Every existing
+-- user starts from what the instance showed before, so nobody's screen
+-- changes; users created later start from the built-in defaults.
 
--- 1. Theme: each user gets the instance `ui.theme`, field by field. A field
--- that is missing or holds the wrong type stays null (the built-in default),
--- as the old reader fell back per field; the service drops a retired accent.
+-- 1. Theme: each user gets the instance `ui.theme`, field by field, read the
+-- way the instance setting was read:
+-- - accent: a string is copied (the service reads a retired name as the
+--   default accent); JSON null means no accent; missing or another type was
+--   the default accent (`indigo`, tokens.json `defaultAccent`).
+-- - dockLabels: a boolean is copied; anything else stays null (off).
+-- - theme: a custom theme's id goes to `custom_theme_id`, whose foreign key
+--   clears it when the theme is deleted; any other name to `theme_preset`
+--   (the service draws `desk` for a name that is no preset). Missing, it
+--   stays null: `desk`.
+-- Without a `ui.theme` row the instance drew the defaults, which is what a
+-- user without these columns set draws.
 ALTER TABLE "user_preferences" ADD COLUMN "accent" text;--> statement-breakpoint
 ALTER TABLE "user_preferences" ADD COLUMN "dock_labels" boolean;--> statement-breakpoint
+ALTER TABLE "user_preferences" ADD COLUMN "theme_preset" text;--> statement-breakpoint
+ALTER TABLE "user_preferences" ADD COLUMN "custom_theme_id" text;--> statement-breakpoint
+ALTER TABLE "user_preferences" ADD CONSTRAINT "user_preferences_custom_theme_id_themes_id_fkey" FOREIGN KEY ("custom_theme_id") REFERENCES "themes"("id") ON DELETE SET NULL;--> statement-breakpoint
 ALTER TABLE "user_preferences" ADD COLUMN "dashboard_defaults_applied" boolean DEFAULT false NOT NULL;--> statement-breakpoint
-INSERT INTO "user_preferences" ("user_id", "homepage", "accent", "dock_labels")
+INSERT INTO "user_preferences"
+  ("user_id", "homepage", "accent", "dock_labels", "theme_preset", "custom_theme_id")
 SELECT
   "user"."id",
   -- A first preference row needs a homepage: the default one users get
   -- without a row (`DEFAULT_HOMEPAGE`).
   '{"kind":"page","page":"dashboard"}'::jsonb,
   "theme"."accent",
-  "theme"."dock_labels"
+  "theme"."dock_labels",
+  CASE WHEN "custom"."id" IS NULL THEN "theme"."theme" END,
+  "custom"."id"
 FROM "user"
 CROSS JOIN (
   SELECT
-    CASE WHEN jsonb_typeof("value" -> 'accent') = 'string'
-      THEN "value" ->> 'accent' END AS "accent",
+    CASE jsonb_typeof("value" -> 'accent')
+      WHEN 'string' THEN "value" ->> 'accent'
+      WHEN 'null' THEN NULL
+      ELSE 'indigo' END AS "accent",
     CASE WHEN jsonb_typeof("value" -> 'dockLabels') = 'boolean'
-      THEN ("value" -> 'dockLabels')::boolean END AS "dock_labels"
+      THEN ("value" -> 'dockLabels')::boolean END AS "dock_labels",
+    CASE WHEN jsonb_typeof("value" -> 'theme') = 'string'
+      THEN "value" ->> 'theme' END AS "theme"
   FROM "platform_config"
   WHERE "key" = 'ui.theme' AND jsonb_typeof("value") = 'object'
 ) AS "theme"
+LEFT JOIN "themes" AS "custom" ON "custom"."id" = "theme"."theme"
 ON CONFLICT ("user_id") DO UPDATE SET
   "accent" = excluded."accent",
-  "dock_labels" = excluded."dock_labels";--> statement-breakpoint
+  "dock_labels" = excluded."dock_labels",
+  "theme_preset" = excluded."theme_preset",
+  "custom_theme_id" = excluded."custom_theme_id";--> statement-breakpoint
 DELETE FROM "platform_config" WHERE "key" = 'ui.theme';--> statement-breakpoint
 
 -- 2. App pins: every user gets a copy of every pin, in the same order. Each

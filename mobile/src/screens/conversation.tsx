@@ -84,9 +84,8 @@ import {
 } from '../ui/work-layout';
 import { Busy, Notice, errorText } from '../ui/primitives';
 import { AppTile, GlyphTile } from '../ui/rows';
-import { Text, type } from '../ui/text';
-import { useAccent } from '../ui/accent';
-import { palette as c, radii, shadows } from '../ui/theme';
+import { Text, useType } from '../ui/text';
+import { useAccent, usePalette, useTheme } from '../ui/theme-context';
 
 const suggestions = [
   'Build a tiny tool that tracks my week',
@@ -119,6 +118,9 @@ function ConversationBody({
 }) {
   const { api, origin } = useSession();
   const accent = useAccent();
+  const c = usePalette();
+  const { radii, shadows } = useTheme();
+  const type = useType();
   const insets = useSafeAreaInsets();
   const queryClient = useQueryClient();
   const {

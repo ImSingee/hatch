@@ -113,8 +113,14 @@ const pinsOf = (database: Database) =>
 
 const themesOf = (database: Database) =>
   database.rows(
-    `SELECT user_id, accent, dock_labels FROM user_preferences ORDER BY user_id`,
+    `SELECT user_id, accent, dock_labels, theme_preset, custom_theme_id
+     FROM user_preferences ORDER BY user_id`,
   );
+
+/** A custom theme of the shared library. */
+const HARBOUR = `
+  INSERT INTO themes (id, name, document)
+  VALUES ('th-harbour', 'Harbour', '{"appearance":"dark"}');`;
 
 function scenarios(open: () => Database | Promise<Database>) {
   it('gives every user a copy of the instance pins, order and theme', () =>
@@ -123,8 +129,9 @@ function scenarios(open: () => Database | Promise<Database>) {
       `${USERS}${WORKSPACE}
       INSERT INTO user_preferences (user_id, homepage, agent_message_mode, language)
       VALUES ('u-b', '{"kind":"page","page":"apps"}', 'queue', 'zh-CN');
+      ${HARBOUR}
       INSERT INTO platform_config (key, value)
-      VALUES ('ui.theme', '{"accent":"teal","dockLabels":true}');`,
+      VALUES ('ui.theme', '{"accent":"teal","dockLabels":true,"theme":"th-harbour"}');`,
       async (database) => {
         const pins = await pinsOf(database);
         for (const userId of ['u-a', 'u-b']) {
@@ -204,7 +211,8 @@ function scenarios(open: () => Database | Promise<Database>) {
         expect(
           await database.rows(
             `SELECT user_id, homepage, agent_message_mode, language, accent,
-                    dock_labels, dashboard_defaults_applied
+                    dock_labels, theme_preset, custom_theme_id,
+                    dashboard_defaults_applied
              FROM user_preferences ORDER BY user_id`,
           ),
         ).toEqual([
@@ -215,6 +223,8 @@ function scenarios(open: () => Database | Promise<Database>) {
             language: null,
             accent: 'teal',
             dock_labels: true,
+            theme_preset: null,
+            custom_theme_id: 'th-harbour',
             dashboard_defaults_applied: true,
           },
           // An existing row keeps its other preferences.
@@ -225,8 +235,20 @@ function scenarios(open: () => Database | Promise<Database>) {
             language: 'zh-CN',
             accent: 'teal',
             dock_labels: true,
+            theme_preset: null,
+            custom_theme_id: 'th-harbour',
             dashboard_defaults_applied: true,
           },
+        ]);
+        // Deleting the shared theme falls its users back to the default.
+        await database.exec(`DELETE FROM themes WHERE id = 'th-harbour'`);
+        expect(
+          await database.rows(
+            `SELECT theme_preset, custom_theme_id FROM user_preferences`,
+          ),
+        ).toEqual([
+          { theme_preset: null, custom_theme_id: null },
+          { theme_preset: null, custom_theme_id: null },
         ]);
         expect(
           await database.rows(
@@ -251,12 +273,63 @@ function scenarios(open: () => Database | Promise<Database>) {
       INSERT INTO platform_config (key, value)
       VALUES ('ui.theme', '{"accent":"teal","dockLabels":"yes"}');`,
       async (database) => {
-        expect(await themesOf(database)).toEqual([
-          { user_id: 'u-a', accent: 'teal', dock_labels: null },
-          { user_id: 'u-b', accent: 'teal', dock_labels: null },
-        ]);
+        expect(await themesOf(database)).toEqual(
+          ['u-a', 'u-b'].map((user_id) => ({
+            user_id,
+            accent: 'teal',
+            dock_labels: null,
+            theme_preset: null,
+            custom_theme_id: null,
+          })),
+        );
       },
     ));
+
+  it.each([
+    {
+      shape: 'a preset with no accent',
+      value: '{"accent":null,"dockLabels":false,"theme":"desk-dark"}',
+      expected: { accent: null, dock_labels: false, theme_preset: 'desk-dark' },
+    },
+    {
+      // The instance drew desk for an id that names no theme; so does the
+      // service for a name that is no preset.
+      shape: 'a theme id that no longer exists',
+      value: '{"accent":"teal","theme":"gone-theme"}',
+      expected: {
+        accent: 'teal',
+        dock_labels: null,
+        theme_preset: 'gone-theme',
+      },
+    },
+    {
+      // Written before #336: no theme, and the accent was always set.
+      shape: 'a row from before the theme library',
+      value: '{"accent":"clay","dockLabels":true}',
+      expected: { accent: 'clay', dock_labels: true, theme_preset: null },
+    },
+    {
+      // A missing accent read as the default accent.
+      shape: 'a row without an accent',
+      value: '{"theme":"desk"}',
+      expected: { accent: 'indigo', dock_labels: null, theme_preset: 'desk' },
+    },
+  ])('copies $shape', ({ value, expected }) =>
+    migrate(
+      open,
+      `${USERS}${HARBOUR}
+      INSERT INTO platform_config (key, value) VALUES ('ui.theme', '${value}');`,
+      async (database) => {
+        expect(await themesOf(database)).toEqual(
+          ['u-a', 'u-b'].map((user_id) => ({
+            user_id,
+            ...expected,
+            custom_theme_id: null,
+          })),
+        );
+      },
+    ),
+  );
 
   it('marks users who already see dashboards as past their first visit', () =>
     migrate(

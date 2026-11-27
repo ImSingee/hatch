@@ -9,22 +9,14 @@ import {
 } from 'react';
 import { Pressable, StyleSheet, useWindowDimensions, View } from 'react-native';
 import { useSession } from '../state/session';
-import { useAccent } from './accent';
+import { themedStyles, useAccent, usePalette, useTheme } from './theme-context';
 import { Glyph } from './glyph';
 import type { GlyphName } from './glyph.types';
-import { Text, type } from './text';
-import {
-  palette as c,
-  radii,
-  shadows,
-  sizes,
-  tileFor,
-  tileLight,
-  weights,
-} from './theme';
+import { Text, useType } from './text';
+import { sizes, tileFor, tileLight, weights, type MobileTheme } from './theme';
 
 /** Tile radius by rendered size, on the token scale. */
-function tileRadius(size: number) {
+function tileRadius(size: number, radii: MobileTheme['radii']) {
   return size <= 24
     ? radii.xs
     : size <= 38
@@ -60,6 +52,8 @@ export function AppTile({
   /** Home-screen tiles float on a shadow; tiles in a row stay flat. */
   lifted?: boolean;
 }) {
+  const c = usePalette();
+  const { radii, shadows } = useTheme();
   const { api, origin } = useSession();
   const stored = storedSize(size);
   const source = useQuery({
@@ -72,7 +66,7 @@ export function AppTile({
   // The path can be stale (icon removed elsewhere since the list loaded):
   // remember the address that failed and show the monogram until it changes.
   const [failed, setFailed] = useState<string | null>(null);
-  const shape = { borderRadius: tileRadius(size) };
+  const shape = { borderRadius: tileRadius(size, radii) };
   const frame = {
     width: size,
     height: size,
@@ -114,7 +108,7 @@ export function AppTile({
           fontSize: size * 0.46,
           lineHeight: size * 0.6,
           fontWeight: weights.heading,
-          color: c.onFill,
+          color: c.onTile,
         }}
       >
         {letter}
@@ -136,8 +130,10 @@ export function GlyphTile({
   size?: number;
 }) {
   const accent = useAccent();
+  const c = usePalette();
+  const { radii } = useTheme();
   const colors = fill
-    ? { bg: fill, fg: c.onFill }
+    ? { bg: fill, fg: c.onTile }
     : {
         muted: { bg: c.muted, fg: c.ink },
         accent: { bg: accent.tint, fg: accent.ink },
@@ -150,7 +146,7 @@ export function GlyphTile({
       style={{
         width: size,
         height: size,
-        borderRadius: tileRadius(size),
+        borderRadius: tileRadius(size, radii),
         backgroundColor: colors.bg,
         alignItems: 'center',
         justifyContent: 'center',
@@ -161,8 +157,9 @@ export function GlyphTile({
   );
 }
 
-/** A white sheet of rows separated by hairlines. */
+/** A card sheet of rows separated by hairlines. */
 export function Group({ children }: PropsWithChildren) {
+  const groupStyles = useGroupStyles();
   const items = Children.toArray(children).filter(Boolean);
   return (
     <View style={groupStyles.sheet}>
@@ -200,6 +197,8 @@ export function ListRow({
   accessibilityLabel?: string;
   accessibilityHint?: string;
 }) {
+  const c = usePalette();
+  const type = useType();
   return (
     <Pressable
       accessibilityRole="button"
@@ -275,6 +274,8 @@ export function ShortcutTile({
   /** A quieter label, for a tile that is an action and not a shortcut. */
   muted?: boolean;
 }>) {
+  const c = usePalette();
+  const type = useType();
   return (
     <Pressable
       accessibilityRole="button"
@@ -307,13 +308,15 @@ export function ShortcutTile({
 
 /** The dashed "add" outline in the shape of the tiles beside it. */
 export function AddTile({ size = 44 }: { size?: number }) {
+  const c = usePalette();
+  const { radii } = useTheme();
   return (
     <View
       accessible={false}
       style={{
         width: size,
         height: size,
-        borderRadius: tileRadius(size),
+        borderRadius: tileRadius(size, radii),
         borderWidth: 1.5,
         borderStyle: 'dashed',
         borderColor: c.outline,
@@ -326,19 +329,21 @@ export function AddTile({ size = 44 }: { size?: number }) {
   );
 }
 
-const groupStyles = StyleSheet.create({
-  sheet: {
-    backgroundColor: c.card,
-    borderRadius: radii.lg,
-    boxShadow: shadows.card,
-  },
-  clip: { borderRadius: radii.lg, overflow: 'hidden' },
-  rule: {
-    height: StyleSheet.hairlineWidth,
-    backgroundColor: c.hairline,
-    marginLeft: 16,
-  },
-});
+const useGroupStyles = themedStyles((t) =>
+  StyleSheet.create({
+    sheet: {
+      backgroundColor: t.palette.card,
+      borderRadius: t.radii.lg,
+      boxShadow: t.shadows.card,
+    },
+    clip: { borderRadius: t.radii.lg, overflow: 'hidden' },
+    rule: {
+      height: StyleSheet.hairlineWidth,
+      backgroundColor: t.palette.hairline,
+      marginLeft: 16,
+    },
+  }),
+);
 
 const rowStyles = StyleSheet.create({
   row: {

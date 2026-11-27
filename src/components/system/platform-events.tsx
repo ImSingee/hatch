@@ -64,6 +64,7 @@ function parsePlatformEvent(message: MessageEvent<string>) {
       if (!userId || !accent) return null;
       return { type, userId, accent } satisfies PlatformEvent;
     }
+    if (type === 'themes.updated') return { type } satisfies PlatformEvent;
     if (type === 'pins.updated') {
       const userId = stringField(value, 'userId');
       if (!userId) return null;
@@ -126,8 +127,9 @@ export function PlatformEventsProvider({
       if (!event) return;
       // The theme is applied above every route, outside this provider, so it
       // is refreshed here instead of through a subscriber. The server only
-      // sends the signed-in user their own theme changes.
-      if (event.type === 'theme.updated')
+      // sends the signed-in user their own theme changes; a library change
+      // goes to everyone, since their theme may be the one that changed.
+      if (event.type === 'theme.updated' || event.type === 'themes.updated')
         void queryClient.invalidateQueries(themeQueries);
       for (const listener of listeners.current) listener(event);
     };

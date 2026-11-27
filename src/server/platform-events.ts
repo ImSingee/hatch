@@ -20,6 +20,12 @@ export type PlatformEvent =
   /** A user's theme changed; only that user's clients receive it. */
   | { type: 'theme.updated'; userId: string; accent: string }
   /**
+   * The shared theme library changed (a custom theme was created, edited or
+   * deleted); every client re-reads it and its own theme, which may be one
+   * of them.
+   */
+  | { type: 'themes.updated' }
+  /**
    * A user's App pins, dashboard pins or dashboard order changed; only that
    * user's clients receive it.
    */

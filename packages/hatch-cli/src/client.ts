@@ -38,6 +38,9 @@ import {
 } from '../../hatch-platform-api/gen/hatch/platform/v1/image_pb';
 import {
   ThemeService,
+  type ResolvedTheme,
+  type ThemeEntry,
+  type ThemeProblem,
   type ThemeState,
 } from '../../hatch-platform-api/gen/hatch/platform/v1/theme_pb';
 import {
@@ -255,18 +258,60 @@ const catalogStatus = (value: CatalogStatus | undefined) => {
     lastError: status.lastError ?? null,
   };
 };
+const themeEntry = (value: ThemeEntry | undefined) => {
+  const entry = required(value);
+  return {
+    id: entry.id,
+    name: entry.name,
+    source: entry.source,
+    appearance: entry.appearance,
+    primary: entry.primary || null,
+    valid: entry.valid,
+    problems: entry.problems.map(themeProblem),
+    document: entry.document ?? null,
+  };
+};
 const theme = (value: ThemeState | undefined) => {
   const state = required(value);
   return {
-    accent: state.accent,
+    accent: state.accent || null,
     defaultAccent: state.defaultAccent,
     accents: state.accents.map((accent) => ({
       name: accent.name,
       color: accent.color,
     })),
     dockLabels: state.dockLabels,
+    theme: themeEntry(state.theme),
+    accentOverridesPrimary: state.accentOverridesPrimary,
   };
 };
+const resolvedTheme = (value: ResolvedTheme) => ({
+  appearance: value.appearance,
+  name: value.name,
+  source: value.source,
+  colors: value.colors,
+  ramps: Object.fromEntries(
+    Object.entries(value.ramps).map(([name, ramp]) => [name, ramp.shades]),
+  ),
+  radius: value.radius,
+  fonts: value.fonts,
+  shadows: value.shadows,
+});
+const themeProblem = (value: ThemeProblem) => ({
+  code: value.code,
+  path: value.path,
+  message: value.message,
+  ...(value.code === 'low_contrast'
+    ? {
+        pair: {
+          foreground: value.foreground,
+          background: value.background,
+          ratio: value.ratio,
+          required: value.requiredRatio,
+        },
+      }
+    : {}),
+});
 const serverInfo = (value: ServerInfo | undefined) => {
   const info = required(value);
   return { commit: info.commit ?? null, commitTime: info.commitTime ?? null };
@@ -860,9 +905,45 @@ export function cliClient(transport: Transport) {
       info: async () => serverInfo((await servers.getServerInfo({})).server),
     },
     theme: {
-      get: async () => theme((await themes.getTheme({})).theme),
-      set: async (input: { accent?: string; dockLabels?: boolean }) =>
-        theme((await themes.setTheme(input)).theme),
+      get: async (resolve = false) => {
+        const result = await themes.getTheme({ resolve });
+        return {
+          ...theme(result.theme),
+          ...(resolve && result.resolved
+            ? { resolved: resolvedTheme(result.resolved) }
+            : {}),
+        };
+      },
+      set: async (input: {
+        accent?: string;
+        clearAccent?: boolean;
+        dockLabels?: boolean;
+        theme?: string;
+      }) => theme((await themes.setTheme(input)).theme),
+      reset: async () => theme((await themes.resetTheme({})).theme),
+      list: async (page: { limit: number; cursor?: string }) => {
+        const result = await themes.listThemes(page);
+        return {
+          themes: result.themes.map(themeEntry),
+          ...(result.nextCursor ? { nextCursor: result.nextCursor } : {}),
+        };
+      },
+      create: async (document: JsonObject) =>
+        themeEntry((await themes.createTheme({ document })).theme),
+      update: async (id: string, document: JsonObject) =>
+        themeEntry((await themes.updateTheme({ id, document })).theme),
+      delete: async (id: string) => {
+        await themes.deleteTheme({ id });
+        return { deleted: id };
+      },
+      validate: async (document: JsonObject) => {
+        const result = await themes.validateTheme({ document });
+        return {
+          ok: result.ok,
+          problems: result.problems.map(themeProblem),
+          resolved: result.resolved ? resolvedTheme(result.resolved) : null,
+        };
+      },
     },
     pins: {
       list: async (page: { limit: number; cursor?: string }) => {

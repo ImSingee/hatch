@@ -1,16 +1,20 @@
 /**
- * The NSH theme of a native App: the design tokens plus the instance accent,
- * in the shadcn `cssVars` shape NSH reads from `nsh.json` `"theme"` and from
- * `setTheme`. Built only from `packages/hatch-design-tokens/tokens.json`, the
- * source every shell already ships, so the web player and the native shells
- * resolve the same values.
+ * The NSH theme of a native App: a user's resolved theme (or the built-in
+ * `desk` with an accent) in the shadcn `cssVars` shape NSH reads from
+ * `nsh.json` `"theme"` and from `setTheme`. The web player and the native
+ * shells push the result whole with `hatch.theme`.
  */
 import tokens from '../../../../packages/hatch-design-tokens/tokens.json';
+import {
+  resolvePreset,
+  type ResolvedTheme,
+} from '../../../../packages/hatch-design-tokens/src';
 import {
   NATIVE_APP_SDK_DEFINITIONS,
   type SdkNshTheme,
 } from '../../../../sdk-internal/definitions';
 import {
+  ACCENT_COLORS,
   ACCENT_NAMES,
   DEFAULT_ACCENT,
   type AccentName,
@@ -23,15 +27,27 @@ export type NshTheme = {
   };
 };
 
+function library() {
+  return NATIVE_APP_SDK_DEFINITIONS.find((definition) => definition.nsh);
+}
+
 /**
- * The theme native Apps get: the UI library's own (complete, its custom
- * tokens included) when one is listed, else {@link tokenTheme}.
+ * The theme native Apps get for a user's resolved theme: the UI library's
+ * own (complete, its custom tokens included) when one is listed, else
+ * {@link tokenThemeFor}.
  */
+export function nshThemeFor(theme: ResolvedTheme): SdkNshTheme {
+  // One builder for every theme: the themes a player switches between must
+  // name the same tokens, since `setTheme` replaces the whole theme.
+  return library()?.nsh?.resolvedTheme?.(theme) ?? tokenThemeFor(theme);
+}
+
+/** The built-in `desk` theme with an accent, as native Apps get it. */
 export function nshTheme(accent: AccentName = DEFAULT_ACCENT): SdkNshTheme {
-  const library = NATIVE_APP_SDK_DEFINITIONS.find(
-    (definition) => definition.nsh?.theme,
+  return (
+    library()?.nsh?.theme?.(accent) ??
+    tokenThemeFor(resolvePreset('desk', ACCENT_COLORS[accent]))
   );
-  return library?.nsh?.theme?.(accent) ?? tokenTheme(accent);
 }
 
 /** `nsh.json` "tailwind" from the UI library, if it has one. */
@@ -41,39 +57,60 @@ export function nshTailwind(): Record<string, unknown> | undefined {
   )?.nsh?.tailwind;
 }
 
-/** The shadcn names NSH types as tokens, filled from the Desk tokens. */
-export function tokenTheme(accent: AccentName = DEFAULT_ACCENT): NshTheme {
-  const light = tokens.light;
-  const primary = tokens.accents[accent];
-  const hues = Object.values(tokens.hues);
+const SANS_FALLBACK =
+  'PingFang SC, Microsoft YaHei UI, Noto Sans SC, system-ui, sans-serif';
+const MONO_FALLBACK = 'ui-monospace, Menlo, Consolas, monospace';
+
+/** A bundled face first, or the platform's own for `system`. */
+function fontFamily(face: string, fallback: string): string {
+  return face === 'system' ? fallback : `${face}, ${fallback}`;
+}
+
+/** The shadcn names NSH types as tokens, filled from a resolved theme. */
+export function tokenThemeFor(theme: ResolvedTheme): NshTheme {
+  const c = theme.colors;
+  const hues = Object.keys(tokens.hues).map(
+    (hue) => theme.ramps[hue as keyof typeof tokens.hues][6],
+  );
+  const shadcn = Object.fromEntries(
+    Object.keys(tokens.light).map((key) => [key, c[key as keyof typeof c]]),
+  );
   return {
     cssVars: {
       theme: {
-        radius: `${tokens.radius.md}px`,
+        radius: `${theme.radius.md}px`,
+        'font-sans': fontFamily(theme.fonts.sans, SANS_FALLBACK),
+        'font-mono': fontFamily(theme.fonts.mono, MONO_FALLBACK),
       },
+      // NSH applies `light` as the theme; a dark theme's values go here too.
       light: {
-        ...light,
-        primary,
+        ...shadcn,
+        primary: c.primary,
         // shadcn's `accent` is the hover/selected surface, not the brand.
-        accent: light.secondary,
-        'accent-foreground': light['secondary-foreground'],
+        accent: c.secondary,
+        'accent-foreground': c['secondary-foreground'],
         ...Object.fromEntries(
           [0, 1, 2, 3, 4].map((index) => [
             `chart-${index + 1}`,
             hues[index % hues.length],
           ]),
         ),
-        sidebar: tokens.surfaces.window,
-        'sidebar-foreground': light.foreground,
-        'sidebar-primary': primary,
-        'sidebar-primary-foreground': light['primary-foreground'],
-        'sidebar-accent': light.secondary,
-        'sidebar-accent-foreground': light['secondary-foreground'],
-        'sidebar-border': light.border,
-        'sidebar-ring': light.ring,
+        sidebar: c['surface-window'],
+        'sidebar-foreground': c.foreground,
+        'sidebar-primary': c.primary,
+        'sidebar-primary-foreground': c['primary-foreground'],
+        'sidebar-accent': c.secondary,
+        'sidebar-accent-foreground': c['secondary-foreground'],
+        'sidebar-border': c.border,
+        'sidebar-ring': c.ring,
       },
     },
   };
+}
+
+/** The `desk` theme of an accent; kept for callers that name an accent. */
+export function tokenTheme(accent: AccentName = DEFAULT_ACCENT): NshTheme {
+  return tokenThemeFor(resolvePreset('desk', ACCENT_COLORS[accent]));
 }
 
 /** One theme per accent, so a player can follow accent changes locally. */

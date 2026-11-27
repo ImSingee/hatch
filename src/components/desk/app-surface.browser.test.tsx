@@ -3,9 +3,16 @@ import { createRef } from 'react';
 import { expect, test, vi } from 'vitest';
 import { userEvent } from 'vitest/browser';
 import { render } from 'vitest-browser-react';
-import { applyAccent } from '~/ui/theme';
+import { resolvePreset } from '../../../packages/hatch-design-tokens/src';
+import { applyThemeState, type WebThemeState } from '~/ui/theme';
 import { AppSurface, type AppSurfaceHandle } from './app-surface';
 import { usePlatformShortcut } from './platform-shortcuts';
+
+/** A theme with an accent, as the root applies it. */
+function themeWith(accent: 'indigo' | 'teal'): WebThemeState {
+  const color = accent === 'teal' ? '#0F766E' : '#3F51C7';
+  return { accent, theme: resolvePreset('desk', color) };
+}
 
 // Browser Mode serves a blank same-origin document titled "Embedded app" at
 // `/app/<slug>/embed/` (see vitest.config.ts).
@@ -114,6 +121,7 @@ test('runs a native App over the player channel instead of reading its frame', a
     type: 'init',
     route: '/inbox',
     accent: 'indigo',
+    themeKey: expect.any(String),
     visible: true,
   });
   // The page's own title and fragment are the player's, not the App's.
@@ -125,18 +133,22 @@ test('runs a native App over the player channel instead of reading its frame', a
     expect(onRouteChange).toHaveBeenLastCalledWith('/settings'),
   );
 
-  applyAccent('teal');
+  applyThemeState(themeWith('teal'));
   await screen.rerender(surface(false));
   await vi.waitFor(() =>
     expect(player().received).toEqual(
       expect.arrayContaining([
         { type: 'navigate', route: '/settings' },
-        { type: 'theme', accent: 'teal' },
+        {
+          type: 'theme',
+          accent: 'teal',
+          themeKey: expect.any(String),
+        },
         { type: 'visibility', visible: false },
       ]),
     ),
   );
-  applyAccent('indigo');
+  applyThemeState(themeWith('indigo'));
 
   // The player runs `d1`, as the host knows it: no notice. Once the host's
   // live deployment moves on (an event, or a re-read after a reconnect),

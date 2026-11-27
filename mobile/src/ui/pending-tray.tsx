@@ -3,11 +3,11 @@ import { useRef, useState } from 'react';
 import { View } from 'react-native';
 import type { PendingMessage, PendingMessages } from '../core';
 import { Button, IconButton } from './button';
-import { useAccent } from './accent';
+import { useAccent, usePalette, useTheme } from './theme-context';
 import { Glyph } from './glyph';
 import { NativeField, type NativeFieldRef } from './native-field';
-import { Text, type } from './text';
-import { palette as c, radii, weights } from './theme';
+import { Text, useType } from './text';
+import { weights } from './theme';
 
 const MODE_LABEL = { queue: 'Queued', steer: 'Steer' } as const;
 
@@ -36,6 +36,9 @@ function PendingRow({
   onSendNow: () => void;
 }) {
   const accent = useAccent();
+  const c = usePalette();
+  const { radii } = useTheme();
+  const type = useType();
   const [draft, setDraft] = useState<string | null>(null);
   // Native text can change before its event reaches JavaScript; Save reads
   // the field itself.
@@ -170,6 +173,9 @@ export function PendingTray({
   onSendNow: (id: string) => void;
   onResume: () => void;
 }) {
+  const c = usePalette();
+  const { radii } = useTheme();
+  const type = useType();
   if (!pending.messages.length) return null;
   return (
     <View

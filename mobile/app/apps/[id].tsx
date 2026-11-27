@@ -16,9 +16,10 @@ import { useLinkedId } from '../../src/state/use-linked-id';
 import { useWebHistoryBack } from '../../src/state/use-web-history-back';
 import { glyphs } from '../../src/ui/glyph.types';
 import { Busy, Notice, errorText } from '../../src/ui/primitives';
-import { palette as c } from '../../src/ui/theme';
+import { usePalette } from '../../src/ui/theme-context';
 
 export default function AppScreen() {
+  const c = usePalette();
   // Pins pass their own slug, label and hash; other entries resolve the slug.
   const { id, slug, entryHash, label } = useLocalSearchParams<{
     id: string;

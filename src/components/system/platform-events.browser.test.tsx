@@ -3,6 +3,7 @@ import { useState, useSyncExternalStore, type ReactNode } from 'react';
 import { afterEach, expect, test, vi } from 'vitest';
 import { render as renderBare } from 'vitest-browser-react';
 import { themeQueryOptions } from '~queries/theme';
+import type { WebTheme } from '~server/theme';
 import { useAppDeploymentUpdate } from '~components/apps/use-app-deployment-update';
 import type { PlatformEvent } from '~server/platform-events';
 import {
@@ -443,7 +444,8 @@ test('re-reads the theme when it changes and after every reconnect', async () =>
       defaultAccent: 'indigo',
       accents: [],
       dockLabels: false,
-    });
+      // Only the query's freshness matters here.
+    } as unknown as WebTheme);
 
   markFresh();
   source?.emit('platform', {

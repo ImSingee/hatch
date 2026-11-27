@@ -6,9 +6,9 @@ import { updateAskAnswer } from '../core/ask-answer';
 import { Button } from './button';
 import { Glyph } from './glyph';
 import { Card, Tag } from './primitives';
-import { Text, type } from './text';
-import { useAccent } from './accent';
-import { palette as c, pill, radii } from './theme';
+import { Text, useType } from './text';
+import { useAccent, usePalette, useTheme } from './theme-context';
+import { pill } from './theme';
 
 export function OptionRow({
   label,
@@ -33,6 +33,9 @@ export function OptionRow({
   readOnly?: boolean;
 }) {
   const accent = useAccent();
+  const c = usePalette();
+  const { radii } = useTheme();
+  const type = useType();
   return (
     <Pressable
       accessibilityRole={multiple ? 'checkbox' : 'radio'}
@@ -104,6 +107,7 @@ export function AskCard({
   /** Keeps every change for the conversation's next screen. */
   onDraft: (answers: Record<string, AskAnswer>) => void;
 }) {
+  const type = useType();
   // Local and synchronous, so the native answer field never gets a delayed
   // echo of its own text; read from the conversation once and written back
   // with every change (also a field's last keystrokes as it unmounts).

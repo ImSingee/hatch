@@ -3,6 +3,7 @@
  * type, validated at the edge.
  */
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { THEME_PRESETS } from '../../../packages/hatch-design-tokens/src';
 import type { PublicApiContext } from './auth';
 
 const fixture = vi.hoisted(() => ({
@@ -101,6 +102,7 @@ async function dashboardPins() {
 
 beforeEach(async () => {
   fixture.credential = CREDENTIALS.session;
+  await db.delete(schema.themes);
   await db.delete(schema.sidebarItems);
   await db.delete(schema.dashboards);
   await db.delete(schema.apps);
@@ -210,8 +212,9 @@ describe('theme and pin RPCs', () => {
     ]);
 
     fixture.credential = OTHER_SESSION;
-    expect((await call('ThemeService/GetTheme')).data.theme.accent).toBe(
-      'indigo',
+    // Still the new user's default: no accent.
+    expect((await call('ThemeService/GetTheme')).data.theme.accent ?? '').toBe(
+      '',
     );
     expect((await call('PinService/ListPins')).data).toMatchObject({
       appPins: [{ id: theirs.id, label: 'Notes' }],
@@ -224,7 +227,10 @@ describe('theme and pin RPCs', () => {
   });
 
   it('pin a new dashboard for the user who created it', async () => {
-    await db.insert(schema.dashboards).values({ id: 'd1', name: 'Home' });
+    // Older than any dashboard created here, so it is the default one.
+    await db
+      .insert(schema.dashboards)
+      .values({ id: 'd1', name: 'Home', createdAt: new Date('2026-01-01') });
     fixture.credential = CREDENTIALS.run;
     const created = await call('DashboardService/CreateDashboard', {
       name: 'Mine',
@@ -240,16 +246,59 @@ describe('theme and pin RPCs', () => {
     ).toBe(false);
   });
 
-  it('give a Run no user prompted shared dashboards but no personal settings', async () => {
+  it('activate a theme for the caller only, and fall others back when it is deleted', async () => {
+    const created = await call('ThemeService/CreateTheme', {
+      document: { ...THEME_PRESETS.desk.document, name: 'Shared' },
+    });
+    const id = created.data.theme.id;
+    for (const credential of Object.values(CREDENTIALS)) {
+      fixture.credential = credential;
+      await call('ThemeService/SetTheme', { theme: 'desk-dark' });
+    }
+    fixture.credential = OTHER_SESSION;
+    await call('ThemeService/SetTheme', { theme: id });
+    const active = async (credential: PublicApiContext) => {
+      fixture.credential = credential;
+      return (await call('ThemeService/GetTheme')).data.theme.theme.id;
+    };
+    expect(await active(CREDENTIALS['api-key'])).toBe('desk-dark');
+    expect(await active(OTHER_SESSION)).toBe(id);
+    // The library is shared: another user deletes the theme bob uses.
+    fixture.credential = CREDENTIALS.run;
+    expect((await call('ThemeService/DeleteTheme', { id })).status).toBe(200);
+    expect(await active(OTHER_SESSION)).toBe('desk');
+    expect(await active(CREDENTIALS.session)).toBe('desk-dark');
+  });
+
+  it('give a Run no user prompted shared dashboards and themes but no personal settings', async () => {
     fixture.credential = USERLESS_RUN;
-    for (const method of [
-      'ThemeService/GetTheme',
-      'PinService/ListPins',
+    for (const [method, body] of [
+      ['ThemeService/GetTheme', {}],
+      ['ThemeService/SetTheme', { accent: 'teal' }],
+      ['ThemeService/ResetTheme', {}],
+      ['PinService/ListPins', {}],
     ] as const)
-      expect({ method, status: (await call(method)).status }).toEqual({
+      expect({ method, status: (await call(method, body)).status }).toEqual({
         method,
         status: 409,
       });
+    // The library is not personal.
+    const document = { ...THEME_PRESETS.desk.document, name: 'Run theme' };
+    const made = await call('ThemeService/CreateTheme', { document });
+    expect(made.status).toBe(200);
+    expect((await call('ThemeService/ListThemes')).status).toBe(200);
+    const checked = await call('ThemeService/ValidateTheme', {
+      document,
+      withCurrentAccent: true,
+    });
+    expect({ status: checked.status, ok: checked.data.ok }).toEqual({
+      status: 200,
+      ok: true,
+    });
+    expect(
+      (await call('ThemeService/DeleteTheme', { id: made.data.theme.id }))
+        .status,
+    ).toBe(200);
     const listed = await call('DashboardService/ListDashboards');
     expect(listed.status).toBe(200);
     const created = await call('DashboardService/CreateDashboard', {
@@ -289,10 +338,129 @@ describe('theme and pin RPCs', () => {
         status: (await call(method, body)).status,
       }).toEqual({ method, body, status: 400 });
     expect((await call('PinService/PinApp', { app: 'nope' })).status).toBe(404);
-    expect((await call('ThemeService/GetTheme')).data.theme.accent).toBe(
-      'indigo',
+    // Still the fresh state: no accent.
+    expect((await call('ThemeService/GetTheme')).data.theme.accent ?? '').toBe(
+      '',
     );
     expect((await call('PinService/ListPins')).data.appPins ?? []).toEqual([]);
+  });
+
+  it('give every credential type the same authority over the theme library', async () => {
+    const meadow = {
+      name: 'Meadow',
+      appearance: 'light',
+      colors: {
+        background: '#F3F6EF',
+        foreground: '#1C2A1F',
+        card: '#FFFFFF',
+        primary: '#2F6B3A',
+        secondary: '#E8EFE3',
+        muted: '#E8EFE3',
+        'muted-foreground': '#4B5B4E',
+        border: '#D9E3D3',
+        destructive: '#B91C1C',
+      },
+    };
+    for (const [type, credential] of Object.entries(CREDENTIALS)) {
+      fixture.credential = credential;
+      const ok = (result: { status: number }) =>
+        expect({ type, status: result.status }).toEqual({ type, status: 200 });
+      const created = await call('ThemeService/CreateTheme', {
+        document: meadow,
+      });
+      ok(created);
+      const id = created.data.theme.id;
+      expect(created.data.theme).toMatchObject({
+        name: 'Meadow',
+        source: 'custom',
+        valid: true,
+      });
+      const listed = await call('ThemeService/ListThemes', { limit: 2 });
+      ok(listed);
+      expect(
+        listed.data.themes.map((theme: { id: string }) => theme.id),
+      ).toEqual(['desk', 'desk-dark']);
+      expect(listed.data.nextCursor).toBe('2');
+      const rest = await call('ThemeService/ListThemes', { cursor: '2' });
+      expect(rest.data.themes[0].id).toBe(id);
+      const dark = await call('ThemeService/SetTheme', {
+        theme: 'desk-dark',
+        clearAccent: true,
+      });
+      ok(dark);
+      expect(dark.data.theme.theme).toMatchObject({
+        id: 'desk-dark',
+        appearance: 'dark',
+      });
+      const activated = await call('ThemeService/SetTheme', { theme: id });
+      ok(activated);
+      const resolved = await call('ThemeService/GetTheme', { resolve: true });
+      ok(resolved);
+      expect(resolved.data.resolved.colors.primary).toBe('#2F6B3A');
+      expect(resolved.data.resolved.ramps.primary.shades).toHaveLength(10);
+      const updated = await call('ThemeService/UpdateTheme', {
+        id,
+        document: { ...meadow, name: 'Meadow two' },
+      });
+      ok(updated);
+      expect(updated.data.theme.name).toBe('Meadow two');
+      const busy = await call('ThemeService/DeleteTheme', { id });
+      expect({ type, status: busy.status }).toEqual({ type, status: 409 });
+      const check = await call('ThemeService/ValidateTheme', {
+        document: {
+          ...meadow,
+          colors: { ...meadow.colors, 'muted-foreground': '#B0B8B2' },
+        },
+      });
+      ok(check);
+      expect(check.data.ok ?? false).toBe(false);
+      expect(check.data.problems[0]).toMatchObject({
+        code: 'low_contrast',
+        foreground: 'muted-foreground',
+        background: 'background',
+        requiredRatio: 4.5,
+      });
+      const rejected = await call('ThemeService/CreateTheme', {
+        document: { ...meadow, colors: { ...meadow.colors, card: 'cream' } },
+      });
+      expect(rejected.status).toBe(400);
+      expect(rejected.data.message).toContain(
+        'colors.card is not an opaque colour',
+      );
+      const reset = await call('ThemeService/ResetTheme');
+      ok(reset);
+      expect(reset.data.theme.theme).toMatchObject({
+        id: 'desk',
+        primary: '#3F51C7',
+      });
+      expect(reset.data.theme.accent ?? '').toBe('');
+      const removed = await call('ThemeService/DeleteTheme', { id });
+      ok(removed);
+    }
+  });
+
+  it('reject malformed theme requests at the edge', async () => {
+    for (const [method, body] of [
+      ['ThemeService/SetTheme', { accent: 'teal', clearAccent: true }],
+      ['ThemeService/SetTheme', { theme: 'Not An Id' }],
+      ['ThemeService/ListThemes', { limit: 500 }],
+      ['ThemeService/ListThemes', { cursor: 'next' }],
+      ['ThemeService/CreateTheme', {}],
+      ['ThemeService/UpdateTheme', { id: 'x' }],
+      ['ThemeService/DeleteTheme', {}],
+      ['ThemeService/ValidateTheme', {}],
+    ] as const)
+      expect({
+        method,
+        body,
+        status: (await call(method, body)).status,
+      }).toEqual({ method, body, status: 400 });
+    expect(
+      (await call('ThemeService/SetTheme', { theme: 'missing' })).status,
+    ).toBe(404);
+    expect((await call('ThemeService/GetTheme')).data.theme.theme.id).toBe(
+      'desk',
+    );
   });
 
   it('page one sequence of App pins and dashboards', async () => {

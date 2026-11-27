@@ -34,7 +34,6 @@ import {
 } from '../../../packages/hatch-platform-api/notification-content';
 import type { NotificationAnswer } from '../core';
 import { useOpenNotificationUrl } from '../state/use-open-notification-url';
-import { useAccent } from './accent';
 import { Glyph } from './glyph';
 import type { GlyphName } from './glyph.types';
 import {
@@ -63,34 +62,43 @@ import {
   type ReplyFormState,
   type StackedButton,
 } from './reply-card';
-import { Text, type } from './text';
-import { palette as c, fonts, pill, radii, status, weights } from './theme';
+import { Text, useType } from './text';
+import { pill, weights, type Palette, type Status } from './theme';
+import {
+  themedStyles,
+  useAccent,
+  usePalette,
+  useStatus,
+  useTheme,
+} from './theme-context';
 
 // ------------------------------------------------------------------ tokens
 
-type Ramp = (typeof status)[keyof typeof status];
+type Ramp = Status[keyof Status];
 
-function rampOf(tone: unknown): Ramp | null {
-  switch (tone) {
-    case 'info':
-    case 'success':
-    case 'warning':
-    case 'danger':
-    case 'working':
-      return status[tone];
-    default:
-      return null;
-  }
+const RAMP_TONES = ['info', 'success', 'warning', 'danger', 'working'] as const;
+
+function rampTone(tone: unknown): tone is (typeof RAMP_TONES)[number] {
+  return RAMP_TONES.includes(tone as (typeof RAMP_TONES)[number]);
+}
+
+function rampOf(tone: unknown, status: Status): Ramp | null {
+  return rampTone(tone) ? status[tone] : null;
 }
 
 /** Text ink for a tone; dimmed is the secondary ink. */
-function toneInk(tone: unknown, fallback: string = c.ink): string {
+function toneInk(
+  tone: unknown,
+  c: Palette,
+  status: Status,
+  fallback: string = c.ink,
+): string {
   if (tone === 'dimmed') return c.inkSoft;
-  return rampOf(tone)?.ink ?? fallback;
+  return rampOf(tone, status)?.ink ?? fallback;
 }
 
 function tagTone(tone: unknown): TagTone {
-  return rampOf(tone) ? (tone as TagTone) : 'quiet';
+  return rampTone(tone) ? tone : 'quiet';
 }
 
 const SPACE: Record<string, number> = { xs: 4, sm: 6, md: 10, lg: 14, xl: 20 };
@@ -135,9 +143,6 @@ const JUSTIFY: Record<string, ViewStyle['justifyContent']> = {
   between: 'space-between',
 };
 
-/** Loose text in flow content (list items, quotes, Markdown paragraphs). */
-const paragraph: TextStyle = { fontSize: 15, lineHeight: 21, color: c.ink };
-
 // ------------------------------------------------------------ environment
 
 type ContentEnv = {
@@ -176,6 +181,9 @@ function useBoundField(node: ContentNode): {
 
 function Inline({ nodes }: { nodes: readonly ContentChild[] }): ReactNode {
   const accent = useAccent();
+  const c = usePalette();
+  const status = useStatus();
+  const { fonts } = useTheme();
   const env = useContext(Env);
   const render = (
     children: readonly ContentChild[],
@@ -246,7 +254,7 @@ function Inline({ nodes }: { nodes: readonly ContentChild[] }): ReactNode {
         case 'br':
           return '\n';
         case 'Badge': {
-          const ramp = rampOf(child.props?.tone);
+          const ramp = rampOf(child.props?.tone, status);
           return (
             <NativeText
               key={at}
@@ -267,7 +275,7 @@ function Inline({ nodes }: { nodes: readonly ContentChild[] }): ReactNode {
               key={at}
               name={glyph}
               size={13}
-              color={toneInk(child.props?.tone, c.inkSoft)}
+              color={toneInk(child.props?.tone, c, status, c.inkSoft)}
             />
           ) : null;
         }
@@ -291,12 +299,13 @@ function Paragraph({
   header?: boolean;
 }) {
   const { selectable } = useContext(Env);
+  const styles = useStyles();
   return (
     <Text
       accessibilityRole={header ? 'header' : undefined}
       selectable={selectable}
       numberOfLines={lines}
-      style={style ?? paragraph}
+      style={style ?? styles.paragraph}
     >
       <Inline nodes={nodes} />
     </Text>
@@ -333,6 +342,7 @@ function Group({
   group: FlowGroup;
   textStyle?: TextStyle;
 }) {
+  const styles = useStyles();
   if (group.kind === 'inline') {
     return <Paragraph nodes={group.children} style={textStyle} />;
   }
@@ -433,7 +443,10 @@ function Grid({ node }: { node: ContentNode }) {
 }
 
 function Box({ node }: { node: ContentNode }) {
-  const ramp = rampOf(node.props?.tone);
+  const c = usePalette();
+  const status = useStatus();
+  const { radii } = useTheme();
+  const ramp = rampOf(node.props?.tone, status);
   const outline = propString(node, 'surface') === 'outline';
   return (
     <View
@@ -451,6 +464,7 @@ function Box({ node }: { node: ContentNode }) {
 }
 
 function Divider() {
+  const styles = useStyles();
   return <View style={styles.divider} />;
 }
 
@@ -460,6 +474,9 @@ function Spacer({ node }: { node: ContentNode }) {
 
 function Collapse({ node }: { node: ContentNode }) {
   const accent = useAccent();
+  const c = usePalette();
+  const type = useType();
+  const styles = useStyles();
   const [open, setOpen] = useState(false);
   return (
     <View style={{ gap: 8 }}>
@@ -492,6 +509,7 @@ function Collapse({ node }: { node: ContentNode }) {
 }
 
 function Title({ node }: { node: ContentNode }) {
+  const c = usePalette();
   return (
     <Paragraph
       header
@@ -510,6 +528,9 @@ function Title({ node }: { node: ContentNode }) {
 }
 
 function TextBlock({ node }: { node: ContentNode }) {
+  const c = usePalette();
+  const status = useStatus();
+  const { fonts } = useTheme();
   const mono = propBool(node, 'mono');
   return (
     <Paragraph
@@ -518,7 +539,7 @@ function TextBlock({ node }: { node: ContentNode }) {
       style={[
         TEXT_SIZE[propString(node, 'size') ?? 'md'],
         {
-          color: toneInk(node.props?.tone),
+          color: toneInk(node.props?.tone, c, status),
           fontWeight: TEXT_WEIGHT[propString(node, 'weight') ?? 'regular'],
           textAlign: ALIGN_TEXT[propString(node, 'align') ?? 'start'],
         },
@@ -529,6 +550,9 @@ function TextBlock({ node }: { node: ContentNode }) {
 }
 
 function Caption({ node }: { node: ContentNode }) {
+  const c = usePalette();
+  const status = useStatus();
+  const type = useType();
   return (
     <Paragraph
       nodes={nodeChildren(node)}
@@ -536,7 +560,7 @@ function Caption({ node }: { node: ContentNode }) {
       style={[
         type.caption,
         {
-          color: toneInk(node.props?.tone ?? 'dimmed', c.inkSoft),
+          color: toneInk(node.props?.tone ?? 'dimmed', c, status, c.inkSoft),
           textAlign: ALIGN_TEXT[propString(node, 'align') ?? 'start'],
         },
       ]}
@@ -554,18 +578,24 @@ function Badge({ node }: { node: ContentNode }) {
 }
 
 function IconBlock({ node }: { node: ContentNode }) {
+  const c = usePalette();
+  const status = useStatus();
   const glyph = cardIconGlyph(propString(node, 'name'));
   return glyph ? (
     <Glyph
       name={glyph}
       size={16}
-      color={toneInk(node.props?.tone, c.inkSoft)}
+      color={toneInk(node.props?.tone, c, status, c.inkSoft)}
     />
   ) : null;
 }
 
 function Progress({ node }: { node: ContentNode }) {
   const accent = useAccent();
+  const c = usePalette();
+  const status = useStatus();
+  const type = useType();
+  const styles = useStyles();
   const label = propString(node, 'label');
   const value = propString(node, 'value');
   const percent = Math.min(100, Math.max(0, propNumber(node, 'percent') ?? 0));
@@ -598,7 +628,8 @@ function Progress({ node }: { node: ContentNode }) {
             styles.fill,
             {
               width: `${percent}%`,
-              backgroundColor: rampOf(node.props?.tone)?.fill ?? accent.fill,
+              backgroundColor:
+                rampOf(node.props?.tone, status)?.fill ?? accent.fill,
             },
           ]}
         />
@@ -608,6 +639,10 @@ function Progress({ node }: { node: ContentNode }) {
 }
 
 function Stat({ node }: { node: ContentNode }) {
+  const c = usePalette();
+  const status = useStatus();
+  const type = useType();
+  const styles = useStyles();
   const delta = propString(node, 'delta');
   return (
     <View style={styles.stat}>
@@ -623,7 +658,7 @@ function Stat({ node }: { node: ContentNode }) {
         <Text
           style={[
             type.caption,
-            { color: toneInk(node.props?.tone, c.inkSoft) },
+            { color: toneInk(node.props?.tone, c, status, c.inkSoft) },
           ]}
         >
           {delta}
@@ -634,6 +669,9 @@ function Stat({ node }: { node: ContentNode }) {
 }
 
 function Fields({ node }: { node: ContentNode }) {
+  const type = useType();
+  const styles = useStyles();
+  const { fonts } = useTheme();
   const mono = propBool(node, 'mono');
   return (
     <View style={{ gap: 6 }}>
@@ -646,7 +684,7 @@ function Fields({ node }: { node: ContentNode }) {
             <Paragraph
               nodes={nodeChildren(child)}
               style={[
-                paragraph,
+                styles.paragraph,
                 { flex: 1, fontSize: 14, lineHeight: 20 },
                 (mono || propBool(child, 'mono')) && {
                   fontFamily: fonts.mono,
@@ -671,7 +709,7 @@ const STEP: Record<string, { glyph: GlyphName; word: string }> = {
   skipped: { glyph: 'minus', word: 'Skipped' },
 };
 
-function stepColor(state: string): string {
+function stepColor(state: string, c: Palette, status: Status): string {
   if (state === 'done') return status.success.fill;
   if (state === 'failed') return status.danger.fill;
   if (state === 'running') return status.info.fill;
@@ -679,6 +717,11 @@ function stepColor(state: string): string {
 }
 
 function Steps({ node }: { node: ContentNode }) {
+  const c = usePalette();
+  const status = useStatus();
+  const type = useType();
+  const styles = useStyles();
+  const { fonts } = useTheme();
   const env = useContext(Env);
   const mono = propBool(node, 'mono');
   const steps = resolveChildren(nodeChildren(node)).filter(
@@ -700,11 +743,15 @@ function Steps({ node }: { node: ContentNode }) {
               mono && { paddingHorizontal: 12 },
             ]}
           >
-            <Glyph name={known.glyph} size={13} color={stepColor(state)} />
+            <Glyph
+              name={known.glyph}
+              size={13}
+              color={stepColor(state, c, status)}
+            />
             <Paragraph
               nodes={nodeChildren(step)}
               style={[
-                paragraph,
+                styles.paragraph,
                 { flex: 1, fontSize: 14, lineHeight: 20 },
                 state === 'skipped' && { color: c.inkSoft },
                 mono && { fontFamily: fonts.mono, fontSize: 13 },
@@ -743,6 +790,8 @@ function Steps({ node }: { node: ContentNode }) {
 
 function List({ node }: { node: ContentNode }) {
   const accent = useAccent();
+  const c = usePalette();
+  const styles = useStyles();
   const ordered = propBool(node, 'ordered');
   const items = resolveChildren(nodeChildren(node)).filter(
     (child): child is ContentNode => isNode(child) && child.type === 'Item',
@@ -767,7 +816,9 @@ function List({ node }: { node: ContentNode }) {
                 />
               </View>
             ) : (
-              <Text style={[paragraph, styles.marker, { color: c.inkSoft }]}>
+              <Text
+                style={[styles.paragraph, styles.marker, { color: c.inkSoft }]}
+              >
                 {ordered ? `${index + 1}.` : '•'}
               </Text>
             )}
@@ -782,6 +833,8 @@ function List({ node }: { node: ContentNode }) {
 }
 
 function Table({ node }: { node: ContentNode }) {
+  const c = usePalette();
+  const styles = useStyles();
   const rows = resolveChildren(nodeChildren(node)).filter(
     (child): child is ContentNode => isNode(child) && child.type === 'Tr',
   );
@@ -809,7 +862,7 @@ function Table({ node }: { node: ContentNode }) {
                   header={cell.type === 'Th'}
                   nodes={nodeChildren(cell)}
                   style={[
-                    paragraph,
+                    styles.paragraph,
                     { fontSize: 13, lineHeight: 18 },
                     cell.type === 'Th' && { fontWeight: weights.heading },
                     {
@@ -828,6 +881,9 @@ function Table({ node }: { node: ContentNode }) {
 }
 
 function Quote({ node }: { node: ContentNode }) {
+  const c = usePalette();
+  const type = useType();
+  const styles = useStyles();
   const author = propString(node, 'author');
   const location = propString(node, 'location');
   return (
@@ -848,14 +904,22 @@ function Quote({ node }: { node: ContentNode }) {
   );
 }
 
-const DIFF: Record<string, { color?: string; backgroundColor?: string }> = {
-  added: { color: status.success.ink, backgroundColor: status.success.tint },
-  removed: { color: status.danger.ink, backgroundColor: status.danger.tint },
-  hunk: { color: status.info.ink },
-  plain: {},
-};
+const useDiff = themedStyles(
+  ({
+    status,
+  }): Record<string, { color?: string; backgroundColor?: string }> => ({
+    added: { color: status.success.ink, backgroundColor: status.success.tint },
+    removed: { color: status.danger.ink, backgroundColor: status.danger.tint },
+    hunk: { color: status.info.ink },
+    plain: {},
+  }),
+);
 
 function Code({ node }: { node: ContentNode }) {
+  const c = usePalette();
+  const type = useType();
+  const styles = useStyles();
+  const diff = useDiff();
   const { selectable } = useContext(Env);
   return (
     <View style={styles.code}>
@@ -869,7 +933,7 @@ function Code({ node }: { node: ContentNode }) {
                 type.mono,
                 styles.codeLine,
                 { color: c.ink },
-                DIFF[line.kind],
+                diff[line.kind],
               ]}
             >
               {line.text || ' '}
@@ -883,6 +947,9 @@ function Code({ node }: { node: ContentNode }) {
 
 function Trend({ node }: { node: ContentNode }) {
   const accent = useAccent();
+  const status = useStatus();
+  const type = useType();
+  const styles = useStyles();
   const raw = node.props?.values;
   const values = Array.isArray(raw) ? raw : [];
   const threshold = propNumber(node, 'threshold');
@@ -931,14 +998,17 @@ function Trend({ node }: { node: ContentNode }) {
 }
 
 function Callout({ node }: { node: ContentNode }) {
-  const ramp = rampOf(node.props?.tone);
+  const c = usePalette();
+  const status = useStatus();
+  const styles = useStyles();
+  const ramp = rampOf(node.props?.tone, status);
   const title = propString(node, 'title');
   return (
     <View style={[styles.callout, { backgroundColor: ramp?.tint ?? c.muted }]}>
       {title ? (
         <Text
           style={[
-            paragraph,
+            styles.paragraph,
             { fontWeight: weights.heading, color: ramp?.ink ?? c.ink },
           ]}
         >
@@ -948,7 +1018,7 @@ function Callout({ node }: { node: ContentNode }) {
       <Blocks
         nodes={nodeChildren(node)}
         gap={6}
-        textStyle={{ ...paragraph, fontSize: 14, lineHeight: 20 }}
+        textStyle={{ ...styles.paragraph, fontSize: 14, lineHeight: 20 }}
       />
     </View>
   );
@@ -1128,6 +1198,7 @@ export function NotificationContent({
   } | null;
   selectable?: boolean;
 }) {
+  const styles = useStyles();
   const open = useOpenNotificationUrl();
   const inline = inlineForm(content, reply);
   const live = Boolean(inline && respond && !answer);
@@ -1187,126 +1258,130 @@ export function asksInline(
   return inlineForm(content, reply) !== null;
 }
 
-const styles = StyleSheet.create({
-  head: { flexDirection: 'row', flexWrap: 'wrap', gap: 6 },
-  flag: {
-    minHeight: 24,
-    justifyContent: 'center',
-    paddingHorizontal: 10,
-    paddingVertical: 3,
-    borderRadius: pill,
-    backgroundColor: status.danger.fill,
-  },
-  flagText: {
-    color: c.onFill,
-    fontSize: 12,
-    lineHeight: 16,
-    fontWeight: weights.heading,
-  },
-  markers: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    alignItems: 'center',
-    gap: 6,
-  },
-  divider: {
-    height: StyleSheet.hairlineWidth,
-    backgroundColor: c.hairline,
-  },
-  collapse: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    alignSelf: 'flex-start',
-    gap: 6,
-    minHeight: 44,
-    paddingHorizontal: 8,
-    marginHorizontal: -8,
-    borderRadius: radii.sm,
-  },
-  progressHead: { flexDirection: 'row', alignItems: 'center', gap: 12 },
-  track: {
-    height: 6,
-    borderRadius: pill,
-    backgroundColor: c.hover,
-    overflow: 'hidden',
-  },
-  fill: { height: '100%', borderRadius: pill },
-  stat: {
-    // Fills a grid cell, so stats in one row share a height.
-    flexGrow: 1,
-    gap: 2,
-    paddingHorizontal: 12,
-    paddingVertical: 10,
-    borderRadius: radii.md,
-    backgroundColor: c.muted,
-  },
-  field: { flexDirection: 'row', alignItems: 'baseline', gap: 12 },
-  fieldLabel: { width: '30%', minWidth: 56, maxWidth: 120 },
-  checks: {
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: c.hairline,
-    borderRadius: radii.md,
-    overflow: 'hidden',
-  },
-  checkDivider: {
-    borderTopWidth: StyleSheet.hairlineWidth,
-    borderTopColor: c.hairline,
-  },
-  step: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 10,
-    minHeight: 36,
-    paddingVertical: 6,
-  },
-  item: { flexDirection: 'row', alignItems: 'flex-start', gap: 8 },
-  marker: { minWidth: 18 },
-  table: {
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: c.hairline,
-    borderRadius: radii.md,
-    overflow: 'hidden',
-  },
-  tableRow: { flexDirection: 'row' },
-  cell: { flex: 1, minWidth: 0, paddingHorizontal: 10, paddingVertical: 8 },
-  quote: {
-    gap: 4,
-    paddingHorizontal: 12,
-    paddingVertical: 10,
-    borderRadius: radii.md,
-    backgroundColor: c.muted,
-  },
-  code: {
-    borderRadius: radii.md,
-    backgroundColor: c.muted,
-    overflow: 'hidden',
-  },
-  codeLine: { paddingHorizontal: 12 },
-  trend: {
-    height: 56,
-    flexDirection: 'row',
-    alignItems: 'flex-end',
-    gap: 4,
-  },
-  bar: {
-    flex: 1,
-    borderTopLeftRadius: radii.xs,
-    borderTopRightRadius: radii.xs,
-  },
-  threshold: {
-    position: 'absolute',
-    left: 0,
-    right: 0,
-    height: 0,
-    // iOS dashes only a border drawn on every side.
-    borderWidth: 1,
-    borderStyle: 'dashed',
-    borderColor: status.danger.fill,
-  },
-  callout: {
-    gap: 4,
-    paddingHorizontal: 12,
-    paddingVertical: 10,
-    borderRadius: radii.md,
-  },
-});
+const useStyles = themedStyles(({ palette: c, radii, status }) =>
+  StyleSheet.create({
+    /** Loose text in flow content (list items, quotes, Markdown paragraphs). */
+    paragraph: { fontSize: 15, lineHeight: 21, color: c.ink },
+    head: { flexDirection: 'row', flexWrap: 'wrap', gap: 6 },
+    flag: {
+      minHeight: 24,
+      justifyContent: 'center',
+      paddingHorizontal: 10,
+      paddingVertical: 3,
+      borderRadius: pill,
+      backgroundColor: status.danger.fill,
+    },
+    flagText: {
+      color: status.danger.onFill,
+      fontSize: 12,
+      lineHeight: 16,
+      fontWeight: weights.heading,
+    },
+    markers: {
+      flexDirection: 'row',
+      flexWrap: 'wrap',
+      alignItems: 'center',
+      gap: 6,
+    },
+    divider: {
+      height: StyleSheet.hairlineWidth,
+      backgroundColor: c.hairline,
+    },
+    collapse: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      alignSelf: 'flex-start',
+      gap: 6,
+      minHeight: 44,
+      paddingHorizontal: 8,
+      marginHorizontal: -8,
+      borderRadius: radii.sm,
+    },
+    progressHead: { flexDirection: 'row', alignItems: 'center', gap: 12 },
+    track: {
+      height: 6,
+      borderRadius: pill,
+      backgroundColor: c.hover,
+      overflow: 'hidden',
+    },
+    fill: { height: '100%', borderRadius: pill },
+    stat: {
+      // Fills a grid cell, so stats in one row share a height.
+      flexGrow: 1,
+      gap: 2,
+      paddingHorizontal: 12,
+      paddingVertical: 10,
+      borderRadius: radii.md,
+      backgroundColor: c.muted,
+    },
+    field: { flexDirection: 'row', alignItems: 'baseline', gap: 12 },
+    fieldLabel: { width: '30%', minWidth: 56, maxWidth: 120 },
+    checks: {
+      borderWidth: StyleSheet.hairlineWidth,
+      borderColor: c.hairline,
+      borderRadius: radii.md,
+      overflow: 'hidden',
+    },
+    checkDivider: {
+      borderTopWidth: StyleSheet.hairlineWidth,
+      borderTopColor: c.hairline,
+    },
+    step: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 10,
+      minHeight: 36,
+      paddingVertical: 6,
+    },
+    item: { flexDirection: 'row', alignItems: 'flex-start', gap: 8 },
+    marker: { minWidth: 18 },
+    table: {
+      borderWidth: StyleSheet.hairlineWidth,
+      borderColor: c.hairline,
+      borderRadius: radii.md,
+      overflow: 'hidden',
+    },
+    tableRow: { flexDirection: 'row' },
+    cell: { flex: 1, minWidth: 0, paddingHorizontal: 10, paddingVertical: 8 },
+    quote: {
+      gap: 4,
+      paddingHorizontal: 12,
+      paddingVertical: 10,
+      borderRadius: radii.md,
+      backgroundColor: c.muted,
+    },
+    code: {
+      borderRadius: radii.md,
+      backgroundColor: c.muted,
+      overflow: 'hidden',
+    },
+    codeLine: { paddingHorizontal: 12 },
+    trend: {
+      height: 56,
+      flexDirection: 'row',
+      alignItems: 'flex-end',
+      gap: 4,
+    },
+    bar: {
+      flex: 1,
+      borderTopLeftRadius: radii.xs,
+      borderTopRightRadius: radii.xs,
+    },
+    threshold: {
+      position: 'absolute',
+      left: 0,
+      right: 0,
+      height: 0,
+      // iOS dashes only a border drawn on every side.
+      borderWidth: 1,
+      borderStyle: 'dashed',
+      borderColor: status.danger.fill,
+    },
+    callout: {
+      gap: 4,
+      paddingHorizontal: 12,
+      paddingVertical: 10,
+      borderRadius: radii.md,
+    },
+  }),
+);

@@ -1,33 +1,44 @@
 # Desk theme
 
-The platform's Mantine theme. Design rules and the component specification are
-in [`DESIGN.md`](../../../DESIGN.md).
+The platform's Mantine theme, drawn from the signed-in user's theme at run time.
+Design rules, the theme document and the component specification are in
+[`DESIGN.md`](../../../DESIGN.md).
 
-- `packages/hatch-design-tokens/tokens.json` holds every colour, radius, font,
-  weight, shadow and motion value. It is imported as JSON; nothing is
-  generated.
-- `theme.ts` builds the Mantine theme: `colorRamp()` derives a ten-shade ramp
-  from one token colour, `accentRamp()` does it for a named accent (the
-  `primary` palette), and the neutral ramp backs `gray` and `dark`.
-- `cssVariableResolver.ts` sets Mantine's colour roles (body, text, borders,
-  the light/outline variants of each palette) and the Desk variables
-  (`--surface-*`, `--border-*`, `--shadow-*`, `--focus-ring`, …).
-- `desk.css` styles Mantine parts with those variables: surfaces, fields,
-  focus ring, type weights. It contains no literal colour, radius or shadow.
+- `packages/hatch-design-tokens` holds the theme data and logic shared by the
+  server, the CLI, the web, the mobile app and the native UI library:
+  `tokens.json` (the `desk` values, the `desk-dark` document, weights, sizes,
+  motion), and `src/` (`resolveTheme`, the presets, validation and colour
+  arithmetic). The server resolves each user's theme; clients do not derive
+  tokens themselves.
+- `theme-store.ts` holds the theme this browser draws: the accent and the
+  resolved active theme from `~queries/theme`, cached in `localStorage`
+  (`hatch.theme.v2`) so a reload paints the right theme before the setting is
+  fetched. `useActiveTheme()` returns it; the browser's light or dark
+  preference is not consulted. `THEME_BOOT_SCRIPT` paints the cached ground
+  and colour scheme before React mounts; `applyDocumentTheme()` keeps it
+  and `<meta name="theme-color">` (read by the macOS app) current.
+  `useSurfaceTheme()` is what App surfaces send their native players.
+- `theme.ts` builds the Mantine theme from a resolved theme
+  (`deskThemeFor(resolved)`, one object per theme). A dark theme switches
+  Mantine to its dark colour scheme and fills its `dark` palette from the
+  theme, so Mantine's own components draw dark; `gray` is the theme's neutral
+  ramp, ordered surface to ink, in both.
+- `cssVariableResolver.ts` sets Mantine's colour roles and the Desk variables
+  (`--surface-*`, `--border-*`, `--shadow-*`, `--focus-ring`, …) from the
+  resolved theme the Mantine theme carries (`theme.other.resolved`), the same
+  for both colour schemes.
+- `desk.css` styles Mantine parts with those variables. It contains no literal
+  colour, radius or shadow.
 - `accents.ts` lists the accents from the tokens without importing Mantine,
-  so the server and the CLI validate against the same list.
-- `accent-store.ts` holds the accent this browser applies and caches it in
-  `localStorage`. The signed-in user's setting (`user_preferences.accent`,
-  read through `~queries/theme`) is the source of truth; `AccentSync`
-  (`~components/system/accent-sync`) applies it with `applyAccent()` and
-  `__root.tsx` builds the theme with `deskThemeFor(accent)`. The prerendered
-  shell carries `ACCENT_CSS` and a boot script that sets `<html data-accent>`
-  from the cache, so a reload paints in the chosen accent before the setting
-  is fetched. Signed out (the login page), the cache from the last user of
-  this browser stays, else the default accent.
-- `index.ts` exports `appTheme` (the default accent) and
-  `appCssVariablesResolver` for `MantineProvider`, plus `TILE_COLORS` for
-  monogram tiles.
+  so the server and the CLI validate against the same list. `accent-store.ts`
+  keeps the accent name in `localStorage` (`hatch.accent`) for native App
+  players.
+- `index.ts` exports `appTheme` (the built-in `desk`) and
+  `appCssVariablesResolver` for tests that render outside the root.
 
-To change a value, edit `tokens.json`. To add a colour name components can use
-(`color="…"`), add the hue to `tokens.json` and map it in `HUE_BY_COLOR_NAME`.
+`packages/hatch-design-tokens/test/desk-golden.json` freezes what `desk`
+looked like before themes became data; tests on the web, the mobile app and
+the native UI library check that `desk` still draws exactly that. To change a
+`desk` value, edit `tokens.json` and regenerate that file deliberately. To add
+a colour name components can use (`color="…"`), add the hue to `tokens.json`
+and map it in `HUE_BY_COLOR_NAME`.

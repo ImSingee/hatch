@@ -1,9 +1,7 @@
-import { DefaultTheme, Stack, ThemeProvider } from 'expo-router';
-import { Appearance } from 'react-native';
-import { useEffect, type PropsWithChildren } from 'react';
-import { UserAccent } from '../src/state/accent';
-import { useAccent } from '../src/ui/accent';
-import { palette as c } from '../src/ui/theme';
+import { DarkTheme, DefaultTheme, Stack, ThemeProvider } from 'expo-router';
+import type { PropsWithChildren } from 'react';
+import { UserTheme } from '../src/state/instance-theme';
+import { useTheme } from '../src/ui/theme-context';
 import { SessionProvider, useSession } from '../src/state/session';
 import { useDeepLinkLifecycle } from '../src/state/deep-links';
 import { useUnreadBadge } from '../src/state/notification-read-state';
@@ -17,6 +15,7 @@ import {
 function Navigation() {
   const { ready, origin, epoch } = useSession();
   const navigation = useNavigationPreferences();
+  const { palette: c, appearance } = useTheme();
   usePushLifecycle();
   useDeepLinkLifecycle();
   useUnreadBadge();
@@ -26,7 +25,8 @@ function Navigation() {
       key={epoch}
       screenOptions={{
         contentStyle: { backgroundColor: c.ground },
-        statusBarStyle: 'dark',
+        // Dark glyphs on a light theme, light ones on a dark theme.
+        statusBarStyle: appearance === 'dark' ? 'light' : 'dark',
         headerStyle: { backgroundColor: c.ground },
         headerTintColor: c.ink,
         // Navigation bars keep the system font and title weight.
@@ -72,13 +72,15 @@ function Navigation() {
 }
 
 function Themed({ children }: PropsWithChildren) {
-  const accent = useAccent();
+  const { accent, palette: c, appearance } = useTheme();
+  const base = appearance === 'dark' ? DarkTheme : DefaultTheme;
   return (
     <ThemeProvider
       value={{
-        ...DefaultTheme,
+        ...base,
+        dark: appearance === 'dark',
         colors: {
-          ...DefaultTheme.colors,
+          ...base.colors,
           primary: accent.fill,
           background: c.ground,
           card: c.ground,
@@ -93,20 +95,17 @@ function Themed({ children }: PropsWithChildren) {
 }
 
 export default function RootLayout() {
-  useEffect(() => {
-    Appearance.setColorScheme('light');
-    return () => Appearance.setColorScheme('auto');
-  }, []);
   return (
-    // The accent is the theme's one input: UserAccent provides the signed-in
-    // user's accent, or the token default while signed out.
+    // The theme's one entry: UserTheme provides the signed-in user's resolved
+    // theme, or the built-in desk theme while signed out. It also sets the
+    // app's system appearance.
     <NavigationProvider>
       <SessionProvider>
-        <UserAccent>
+        <UserTheme>
           <Themed>
             <Navigation />
           </Themed>
-        </UserAccent>
+        </UserTheme>
       </SessionProvider>
     </NavigationProvider>
   );

@@ -18,8 +18,9 @@ import type { GlyphName } from './glyph.types';
 import { NativeField, type NativeFieldRef } from './native-field';
 import { notificationTime } from './notification-status';
 import { Card, Tag } from './primitives';
-import { Text, type } from './text';
-import { palette as c, radii, status, weights } from './theme';
+import { Text, useType } from './text';
+import { weights } from './theme';
+import { usePalette, useStatus, useTheme } from './theme-context';
 
 const viaLabels: Record<string, string> = {
   push: 'from the notification',
@@ -36,6 +37,7 @@ export function AnswerCard({
   reply: ReplyForm;
   answer: NotificationAnswer;
 }) {
+  const type = useType();
   const lines = describeAnswers(reply, answer.answers);
   return (
     <Card style={{ gap: 12 }}>
@@ -71,6 +73,8 @@ export function AnswerLine({
   reply: ReplyForm;
   answer: NotificationAnswer;
 }) {
+  const status = useStatus();
+  const type = useType();
   const what = describeAnswers(reply, answer.answers)
     .map((line) => line.value)
     .join(' · ');
@@ -306,6 +310,9 @@ export function ReplyFieldInput({
    */
   markOptional?: boolean;
 }) {
+  const c = usePalette();
+  const type = useType();
+  const { radii } = useTheme();
   const answers = form?.answers ?? chosen ?? {};
   const current = answerOf(answers, field.id);
   const unavailable = !form || form.busy;
@@ -418,6 +425,8 @@ export function ReplyFieldInput({
 
 /** A form error that names no field. */
 export function FormError({ form }: { form: ReplyFormState | null }) {
+  const c = usePalette();
+  const type = useType();
   return form?.error && form.error.field === null ? (
     <Text style={[type.small, { color: c.danger }]}>{form.error.text}</Text>
   ) : null;

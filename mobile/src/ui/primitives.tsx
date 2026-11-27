@@ -11,9 +11,14 @@ import {
 import { Button } from './button';
 import { Glyph } from './glyph';
 import type { GlyphName } from './glyph.types';
-import { Text, type } from './text';
-import { useAccent } from './accent';
-import { palette as c, pill, radii, shadows, status, weights } from './theme';
+import { Text, typeScale } from './text';
+import {
+  themedStyles,
+  useAccent,
+  usePalette,
+  useStatus,
+} from './theme-context';
+import { pill, weights } from './theme';
 
 export { Text } from './text';
 
@@ -106,6 +111,7 @@ export function Egg({
 }
 
 export function Wordmark({ size = 30 }: { size?: number }) {
+  const c = usePalette();
   return (
     <View
       accessible
@@ -153,6 +159,9 @@ export function Tag({
   dot?: boolean;
 }) {
   const accent = useAccent();
+  const c = usePalette();
+  const status = useStatus();
+  const styles = useStyles();
   const tint = (ramp: { tint: string; ink: string; fill: string }) => ({
     bg: ramp.tint,
     fg: ramp.ink,
@@ -217,11 +226,12 @@ export function Tag({
   );
 }
 
-/** A white sheet floating on the ground. Never nest one in another. */
+/** A card sheet floating on the ground. Never nest one in another. */
 export function Card({
   children,
   style,
 }: PropsWithChildren<{ style?: StyleProp<ViewStyle> }>) {
+  const styles = useStyles();
   return <View style={[styles.card, style]}>{children}</View>;
 }
 
@@ -237,6 +247,9 @@ export function Notice({
   tone?: 'neutral' | 'danger' | 'info';
 }) {
   const accent = useAccent();
+  const c = usePalette();
+  const status = useStatus();
+  const styles = useStyles();
   const mark =
     tone === 'danger'
       ? { bg: status.danger.tint, fg: status.danger.ink }
@@ -275,6 +288,7 @@ export function Notice({
 }
 
 export function Busy({ label = 'Loading…' }: { label?: string }) {
+  const styles = useStyles();
   return (
     <View
       style={styles.busy}
@@ -301,6 +315,7 @@ export function EmptyState({
   glyph?: GlyphName;
 }) {
   const accent = useAccent();
+  const styles = useStyles();
   return (
     <View style={styles.empty}>
       <View style={[styles.emptyMark, { backgroundColor: accent.tint }]}>
@@ -332,43 +347,45 @@ export function errorText(error: unknown): string {
     : 'Something went wrong. Try again.';
 }
 
-const styles = StyleSheet.create({
-  grow: { flex: 1 },
-  row: { flexDirection: 'row', alignItems: 'center', gap: 12 },
-  ...type,
-  card: {
-    backgroundColor: c.card,
-    borderRadius: radii.xl,
-    padding: 18,
-    gap: 12,
-    boxShadow: shadows.card,
-  },
-  noticeMark: {
-    width: 34,
-    height: 34,
-    borderRadius: radii.md,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  busy: {
-    flex: 1,
-    minHeight: 160,
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 14,
-  },
-  empty: {
-    alignItems: 'center',
-    alignSelf: 'center',
-    maxWidth: 420,
-    gap: 12,
-    paddingVertical: 36,
-  },
-  emptyMark: {
-    width: 56,
-    height: 56,
-    borderRadius: radii.lg,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-});
+const useStyles = themedStyles((t) =>
+  StyleSheet.create({
+    grow: { flex: 1 },
+    row: { flexDirection: 'row', alignItems: 'center', gap: 12 },
+    ...typeScale(t),
+    card: {
+      backgroundColor: t.palette.card,
+      borderRadius: t.radii.xl,
+      padding: 18,
+      gap: 12,
+      boxShadow: t.shadows.card,
+    },
+    noticeMark: {
+      width: 34,
+      height: 34,
+      borderRadius: t.radii.md,
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    busy: {
+      flex: 1,
+      minHeight: 160,
+      alignItems: 'center',
+      justifyContent: 'center',
+      gap: 14,
+    },
+    empty: {
+      alignItems: 'center',
+      alignSelf: 'center',
+      maxWidth: 420,
+      gap: 12,
+      paddingVertical: 36,
+    },
+    emptyMark: {
+      width: 56,
+      height: 56,
+      borderRadius: t.radii.lg,
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+  }),
+);

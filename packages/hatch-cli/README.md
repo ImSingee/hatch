@@ -713,8 +713,18 @@ that were saved, so no image has to be generated again.
 
 ```sh
 hatch theme get --json
+hatch theme get --resolved --json
+hatch theme list --json
+hatch theme set --theme desk-dark
 hatch theme set --accent teal
+hatch theme set --clear-accent
 hatch theme set --dock-labels
+hatch theme check --file meadow.json --json
+hatch theme create --file meadow.json --json
+hatch theme update <theme-id> --file meadow.json
+hatch theme set --theme <theme-id>
+hatch theme delete <theme-id> --yes
+hatch theme reset
 hatch pin list --json
 hatch pin list --limit 20 --cursor <next-cursor> --json
 hatch pin add --app my-app --label Inbox --entry /inbox
@@ -726,18 +736,64 @@ hatch pin add --dashboard <dashboard-id>
 hatch pin remove --dashboard <dashboard-id>
 ```
 
-The theme and pins are personal: each user has their own, and a command acts
-for the signed-in user, the API key's user or, in a Run, the user who sent the
-prompt. A Run no user prompted gets `CONFLICT` (6). A new user starts from the
-default accent, no dock labels, no App pins and only the default (oldest)
-dashboard pinned.
+The active theme, accent, dock labels and pins are personal: each user has
+their own, and a command acts for the signed-in user, the API key's user or, in
+a Run, the user who sent the prompt. A Run no user prompted gets `CONFLICT` (6)
+for those. The theme library (the presets and custom themes) is shared:
+anyone can list, create, update and delete custom themes, a Run no user
+prompted included. A new user starts from `desk` with no accent, no dock
+labels, no App pins and only the default (oldest) dashboard pinned.
 
-`theme get` prints the chosen `accent`, the `defaultAccent`, every accent
-with its colour and `dockLabels`. `theme set` changes only the settings it is
-given, for that user only: `--accent` replaces the accent and their signed-in
-clients recolour without a reload; `--dock-labels` / `--no-dock-labels` shows
-or hides the names under the web dock tiles (hidden by default). Give at least
-one; `--dock-labels` and `--no-dock-labels` together are rejected.
+`theme get` prints your chosen `accent` (`null` when the active theme shows its
+own primary), the `defaultAccent`, every accent with its colour, `dockLabels`,
+your active `theme` (`id`, `name`, `source` `preset` or `custom`,
+`appearance` `light` or `dark`, its own `primary` and its `document`) and
+`accentOverridesPrimary`, whether the chosen accent hides that primary.
+`--resolved` adds `resolved`, every token of the active theme with the accent
+applied. A dark theme is a theme like any other, and no client follows the
+device's light or dark setting.
+
+`theme list` prints the shared library: the presets (`desk`, `desk-dark`), then the
+custom themes oldest first, each as in `theme get`, plus `valid` and
+`problems` (a custom theme saved under older rules that no longer passes them
+is listed with `valid: false` and cannot be activated until it is updated).
+`--limit` (1–100) pages and prints `nextCursor`. `theme create --file` saves a
+new custom theme (at most 100; one more is `CONFLICT`, exit 6) and prints it with its `id`; it is not
+activated. Theme names are unique, ignoring case, and the preset names (`Desk`,
+`Desk dark`) are taken: `create` or `update` with a name another theme has is
+`CONFLICT` (exit 6) and the message names it; rename by updating the document's
+`name`. `theme update <id> --file` replaces a custom theme's document
+whole, for everyone who uses it; presets cannot be changed (`BAD_REQUEST`, exit 2), copy one with
+`create` instead. When you have the theme active it is also checked with your
+accent; another user whose accent no longer reads on it sees the theme's own
+primary instead. `theme delete <id> --yes` deletes a custom theme permanently (without
+`--yes` it is rejected locally, since it cannot be undone); your own
+active theme cannot be deleted (`CONFLICT`, exit 6), activate another first.
+Other users who have it active fall back to `desk`.
+An unknown id is `NOT_FOUND` (exit 5).
+
+`theme set` changes only the settings it is given, for you only, and your
+signed-in clients and open native Apps restyle without a reload:
+`--theme <id>` activates a preset or a custom theme; `--accent` replaces the
+active theme's primary and `--clear-accent` lets it show its own;
+`--dock-labels` / `--no-dock-labels` shows or hides the names under the web
+dock tiles (hidden by default). Give at least one; `--dock-labels` and
+`--no-dock-labels` together are rejected. When the accent hides the
+activated theme's own primary, `theme set --theme` notes it on stderr with the
+`--clear-accent` fix. `theme check --file` validates a document without saving
+it and prints it resolved. `theme reset` activates `desk` with no accent for
+you (`desk`'s primary is the default accent, so it looks the same) in one
+change, keeping your dock labels and the custom themes.
+
+A theme document is `{"name"?, "appearance", "colors": {background,
+foreground, card, primary, secondary, muted, muted-foreground, border,
+destructive}, "radius"?, "fonts"?: {sans, mono}}` (see `DESIGN.md`
+"Themes"). The platform rejects a document, or an accent over one, with
+`THEME_INVALID` (exit 2) for unknown keys, unparsable colours, fonts that are
+not bundled, and text below 4.5:1 contrast; the message lists every problem
+and names each failing pair with its ratio. `theme check` exits the same way
+and puts the problems in `error.details.problems` (`code`, `path`, `message`,
+and `pair` with `foreground`, `background`, `ratio`, `required`).
 
 `pin list` prints App pins in navigation order (`id` is the pin id, which
 `update`, `remove --pin` and `reorder --pin` take) and pinned dashboards.
@@ -755,7 +811,12 @@ relative order after them, and prints the complete new order; `--dashboard`
 orders all dashboards, pinned or not.
 
 Local rejections exit 2 with `invalid_arguments`: an `--accent` the tokens do
-not define, no target or more than one of `--app`, `--dashboard` and `--pin`, `--label`, `--entry` or `--if-absent` without `--app`,
+not define, `--accent` with `--clear-accent`, `--dock-labels` with
+`--no-dock-labels`, `theme set` with nothing to change, a `--theme` or theme
+id that is not lowercase letters, digits and hyphens, `theme create`,
+`update` or `check` without `--file`, `update` or `delete` without exactly
+one id, `delete` without `--yes`; an unreadable or non-JSON `--file` exits 2 with `input_unreadable`
+or `invalid_input` before any request. For pins: no target or more than one of `--app`, `--dashboard` and `--pin`, `--label`, `--entry` or `--if-absent` without `--app`,
 `--if-absent` with `--label` or `--entry`, a blank `--label` or `--entry`, an
 `--entry` longer than 512 characters (the platform also rejects one, never
 shortening it),
