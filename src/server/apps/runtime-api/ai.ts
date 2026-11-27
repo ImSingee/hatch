@@ -7,7 +7,12 @@ import {
   HATCH_TIMESTAMP_HEADER,
   verifyHatchSignature,
 } from '~server/secrets';
-import { generateImage, streamChat, type ChatStreamEvent } from '../ai/call';
+import {
+  chatContext,
+  generateImage,
+  streamChat,
+  type ChatStreamEvent,
+} from '../ai/call';
 import {
   AiCallError,
   aiChatRequestSchema,
@@ -155,7 +160,9 @@ async function declaredRole(
   if (role.kind !== kind)
     throw new AiCallError(
       'ai_role_kind_mismatch',
-      `AI role "${name}" is a ${role.kind} role; call ${role.kind === 'chat' ? 'chat' : 'generateImage'} with it.`,
+      role.kind === 'chat'
+        ? `AI role "${name}" is a chat role; call chat or complete with it.`
+        : `AI role "${name}" is an image role; call generateImage with it.`,
     );
   return role;
 }
@@ -175,6 +182,7 @@ async function handleChat(
 ): Promise<Response> {
   const role = await declaredRole(app, body.role, 'chat');
   const { config } = await resolveChatRole(app.id, role);
+  const context = chatContext(config, body);
   await assertWithinBudget(app.id, app.aiMonthlyBudgetMicros);
   const release = acquireCallSlot(app.id);
 
@@ -218,7 +226,7 @@ async function handleChat(
     });
   };
 
-  const events = streamChat(config, body, controller.signal);
+  const events = streamChat(config, body, context, controller.signal);
 
   if (body.stream === false) {
     let terminal: ChatStreamEvent | undefined;

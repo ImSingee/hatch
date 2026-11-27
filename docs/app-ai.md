@@ -56,8 +56,12 @@ Checks, in order:
 7. The call. Chat goes through pi-ai with the same model config an Agent Run
    uses (`src/server/model-resolution.ts`, `src/agent/remote-models.ts`).
    `maxTokens` is capped at the model's limit; the model's default thinking
-   level applies; reasoning text is not returned. A client disconnect aborts
-   the provider request. Images use the image drivers and are re-encoded as
+   level applies. Reasoning blocks come back as opaque `reasoning` parts
+   (base64url JSON with the producing api/provider/model, the thinking text
+   and its signature) that the App sends back unchanged; the platform
+   restores them as thinking blocks attributed to that model, so pi-ai
+   replays signatures only to it. A client disconnect, including an SDK
+   caller that stops iterating, aborts the provider request. Images use the image drivers and are re-encoded as
    PNG.
 8. A usage row (`app_ai_usage`): role, kind, provider name, model id, tokens,
    images, estimated cost, status, error code, duration. Prompts and replies

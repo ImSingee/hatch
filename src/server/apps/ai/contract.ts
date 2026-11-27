@@ -85,6 +85,18 @@ const toolCallPart = z
   })
   .strict();
 
+/**
+ * Provider continuation state of a reply's reasoning (for example signed
+ * thinking blocks a tool round-trip must send back). Opaque to the App: it
+ * passes the part back unchanged in the next request's history.
+ */
+const reasoningPart = z
+  .object({
+    type: z.literal('reasoning'),
+    state: z.string().min(1).max(2_000_000),
+  })
+  .strict();
+
 const userMessage = z
   .object({
     role: z.literal('user'),
@@ -94,7 +106,10 @@ const userMessage = z
 const assistantMessage = z
   .object({
     role: z.literal('assistant'),
-    content: z.union([z.string(), z.array(z.union([textPart, toolCallPart]))]),
+    content: z.union([
+      z.string(),
+      z.array(z.union([textPart, toolCallPart, reasoningPart])),
+    ]),
   })
   .strict();
 const toolResultMessage = z
@@ -173,6 +188,7 @@ export type AiUsageView = {
 
 export type AiAssistantPart =
   | { type: 'text'; text: string }
+  | { type: 'reasoning'; state: string }
   | {
       type: 'toolCall';
       id: string;

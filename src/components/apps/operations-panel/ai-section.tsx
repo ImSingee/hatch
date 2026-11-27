@@ -132,8 +132,18 @@ function BudgetRow({ appId, view }: { appId: string; view: AppAiView }) {
       );
     },
   });
-  const parsed = typeof draft === 'number' ? draft : null;
-  const changed = parsed !== view.budgetUsd;
+  // Only an empty input removes the cap. Mantine keeps an unfinished number
+  // such as `10.` as a string; parse it, and refuse anything else.
+  const text = typeof draft === 'string' ? draft.trim() : null;
+  const parsed: number | null | undefined =
+    typeof draft === 'number'
+      ? draft
+      : text === ''
+        ? null
+        : Number.isFinite(Number(text))
+          ? Number(text)
+          : undefined;
+  const changed = parsed !== undefined && parsed !== view.budgetUsd;
   return (
     <Stack gap={4}>
       <Group gap="xs" align="flex-end" wrap="wrap">
@@ -154,7 +164,9 @@ function BudgetRow({ appId, view }: { appId: string; view: AppAiView }) {
           variant="default"
           disabled={!changed || save.isPending}
           loading={save.isPending}
-          onClick={() => save.mutate(parsed)}
+          onClick={() => {
+            if (parsed !== undefined) save.mutate(parsed);
+          }}
         >
           {t('common.save')}
         </Button>

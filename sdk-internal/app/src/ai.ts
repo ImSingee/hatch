@@ -21,9 +21,19 @@ export type AiToolCallPart = {
   arguments: Record<string, unknown>;
 };
 
+/**
+ * Provider continuation state of the reply's reasoning. Opaque: keep it in
+ * the history and send it back unchanged (a tool round-trip may require it).
+ * Never show it to users.
+ */
+export type AiReasoningPart = { type: 'reasoning'; state: string };
+
 export type AiMessage =
   | { role: 'user'; content: string | (AiTextPart | AiImagePart)[] }
-  | { role: 'assistant'; content: string | (AiTextPart | AiToolCallPart)[] }
+  | {
+      role: 'assistant';
+      content: string | (AiTextPart | AiToolCallPart | AiReasoningPart)[];
+    }
   | {
       role: 'tool';
       toolCallId: string;
@@ -59,7 +69,10 @@ export type AiUsage = {
 };
 
 export type ChatResult = {
-  message: { role: 'assistant'; content: (AiTextPart | AiToolCallPart)[] };
+  message: {
+    role: 'assistant';
+    content: (AiTextPart | AiToolCallPart | AiReasoningPart)[];
+  };
   /** `toolUse` means the reply asks for tool calls. */
   stopReason: 'stop' | 'length' | 'toolUse';
   usage: AiUsage;
@@ -159,10 +172,14 @@ async function* readServerEvents(
   const reader = body.getReader();
   const decoder = new TextDecoder();
   let buffer = '';
+  let ended = false;
   try {
     for (;;) {
       const { done, value } = await reader.read();
-      if (done) break;
+      if (done) {
+        ended = true;
+        break;
+      }
       buffer += decoder.decode(value, { stream: true });
       let end: number;
       while ((end = buffer.indexOf('\n\n')) >= 0) {
@@ -178,6 +195,9 @@ async function* readServerEvents(
       }
     }
   } finally {
+    // A caller that stops iterating early disconnects, so the platform aborts
+    // the provider call instead of generating (and billing) the rest.
+    if (!ended) await reader.cancel().catch(() => undefined);
     reader.releaseLock();
   }
 }

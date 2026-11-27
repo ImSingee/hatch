@@ -11,18 +11,21 @@ import type {
   JsonObject,
   Message,
   TextContent,
+  ThinkingContent,
   ToolCall,
   Usage,
 } from '@earendil-works/pi-ai';
 import sharp from 'sharp';
+import { z } from 'zod';
 import type { RunModelConfig } from '~agent/protocol';
 import { buildRunModels } from '~agent/remote-models';
-import type {
-  AiAssistantPart,
-  AiChatRequest,
-  AiChatResult,
-  AiMessage,
-  AiUsageView,
+import {
+  AiCallError,
+  type AiAssistantPart,
+  type AiChatRequest,
+  type AiChatResult,
+  type AiMessage,
+  type AiUsageView,
 } from './contract';
 import type { ResolvedImageRole } from './models';
 
@@ -52,6 +55,54 @@ function inputParts(
   );
 }
 
+/**
+ * A reasoning block as the App carries it back: the thinking content with its
+ * signature, and the model that produced it. pi-ai replays it only to that
+ * model and converts it for any other, so a role switched mid-conversation
+ * still gets a valid history.
+ */
+const reasoningStateSchema = z
+  .object({
+    v: z.literal(1),
+    api: z.string().min(1),
+    provider: z.string().min(1),
+    model: z.string().min(1),
+    thinking: z.string(),
+    signature: z.string().optional(),
+    redacted: z.boolean().optional(),
+  })
+  .strict();
+type ReasoningState = z.infer<typeof reasoningStateSchema>;
+
+export function encodeReasoning(
+  block: ThinkingContent,
+  source: Pick<AssistantMessage, 'api' | 'provider' | 'model'>,
+): string {
+  const state: ReasoningState = {
+    v: 1,
+    api: source.api,
+    provider: source.provider,
+    model: source.model,
+    thinking: block.thinking,
+    ...(block.thinkingSignature ? { signature: block.thinkingSignature } : {}),
+    ...(block.redacted ? { redacted: true } : {}),
+  };
+  return Buffer.from(JSON.stringify(state)).toString('base64url');
+}
+
+function decodeReasoning(state: string): ReasoningState {
+  try {
+    return reasoningStateSchema.parse(
+      JSON.parse(Buffer.from(state, 'base64url').toString('utf8')),
+    );
+  } catch {
+    throw new AiCallError(
+      'ai_invalid_request',
+      'A reasoning part was changed; pass reasoning parts back exactly as received.',
+    );
+  }
+}
+
 /** Wire history into pi-ai messages, attributed to the model being called. */
 export function toModelMessages(
   messages: AiMessage[],
@@ -67,25 +118,40 @@ export function toModelMessages(
           timestamp,
         };
       case 'assistant': {
-        const content: (TextContent | ToolCall)[] =
+        // A reply that carries reasoning is attributed to the model that
+        // wrote it, so pi-ai keeps its signatures only for that model.
+        let source: ReasoningState | undefined;
+        const content: (TextContent | ThinkingContent | ToolCall)[] =
           typeof message.content === 'string'
             ? [{ type: 'text', text: message.content }]
-            : message.content.map((part) =>
-                part.type === 'text'
-                  ? { type: 'text', text: part.text }
-                  : {
-                      type: 'toolCall',
-                      id: part.id,
-                      name: part.name,
-                      arguments: part.arguments as JsonObject,
-                    },
-              );
+            : message.content.map((part) => {
+                if (part.type === 'text')
+                  return { type: 'text', text: part.text };
+                if (part.type === 'reasoning') {
+                  const state = decodeReasoning(part.state);
+                  source ??= state;
+                  return {
+                    type: 'thinking',
+                    thinking: state.thinking,
+                    ...(state.signature
+                      ? { thinkingSignature: state.signature }
+                      : {}),
+                    ...(state.redacted ? { redacted: true } : {}),
+                  };
+                }
+                return {
+                  type: 'toolCall',
+                  id: part.id,
+                  name: part.name,
+                  arguments: part.arguments as JsonObject,
+                };
+              });
         const assistant: AssistantMessage = {
           role: 'assistant',
           content,
-          api: config.apiType,
-          provider: config.providerId,
-          model: config.model.id,
+          api: (source?.api ?? config.apiType) as AssistantMessage['api'],
+          provider: source?.provider ?? config.providerId,
+          model: source?.model ?? config.model.id,
           usage: zeroUsage(),
           stopReason: content.some((part) => part.type === 'toolCall')
             ? 'toolUse'
@@ -107,9 +173,17 @@ export function toModelMessages(
   });
 }
 
-/** The reply's text and tool calls; reasoning content is not returned. */
+/**
+ * The reply's text, tool calls and opaque reasoning state, which the App
+ * sends back with tool results (some providers require the signed reasoning
+ * blocks there).
+ */
 export function assistantParts(message: AssistantMessage): AiAssistantPart[] {
   return message.content.flatMap((part): AiAssistantPart[] => {
+    if (part.type === 'thinking')
+      return part.thinking || part.thinkingSignature
+        ? [{ type: 'reasoning', state: encodeReasoning(part, message) }]
+        : [];
     if (part.type === 'text')
       return part.text ? [{ type: 'text', text: part.text }] : [];
     if (part.type === 'toolCall')
@@ -152,17 +226,14 @@ export type ChatStreamEvent =
     };
 
 /**
- * Stream one chat completion. Always ends with exactly one `done` or
- * `error` event; provider failures become `error`, never a throw.
+ * The model context for one request. Throws `AiCallError` for history the
+ * platform cannot replay, before any provider call or call slot.
  */
-export async function* streamChat(
+export function chatContext(
   config: RunModelConfig,
   request: AiChatRequest,
-  signal: AbortSignal,
-): AsyncGenerator<ChatStreamEvent> {
-  const { models, picked } = buildRunModels(config);
-  const priced = Boolean(config.model.cost);
-  const context: Context = {
+): Context {
+  return {
     ...(request.system ? { systemPrompt: request.system } : {}),
     messages: toModelMessages(request.messages, config),
     ...(request.tools?.length
@@ -175,6 +246,20 @@ export async function* streamChat(
         }
       : {}),
   };
+}
+
+/**
+ * Stream one chat completion. Always ends with exactly one `done` or
+ * `error` event; provider failures become `error`, never a throw.
+ */
+export async function* streamChat(
+  config: RunModelConfig,
+  request: AiChatRequest,
+  context: Context,
+  signal: AbortSignal,
+): AsyncGenerator<ChatStreamEvent> {
+  const { models, picked } = buildRunModels(config);
+  const priced = Boolean(config.model.cost);
   const maxTokens = Math.min(
     request.maxTokens ?? config.model.maxTokens,
     config.model.maxTokens,

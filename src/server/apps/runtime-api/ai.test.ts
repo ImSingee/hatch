@@ -40,8 +40,9 @@ vi.mock('~agent/remote-models', () => ({
         ? { tokensPerSecond: provider.tokensPerSecond }
         : {}),
     });
+    // One scripted reply per platform request, consumed in order.
     faux.setResponses(
-      (provider.responses as FauxResponseStep[]).map(
+      (provider.responses.splice(0, 1) as FauxResponseStep[]).map(
         (step): FauxResponseStep =>
           (context, options, state, model) => {
             provider.seen.push({ context, options });
@@ -66,6 +67,7 @@ vi.mock('~agent/remote-models', () => ({
   },
 }));
 
+const sdk = await import('../../../../sdk-internal/app/src/ai');
 const { db, schema } = await import('~/db');
 const { hatchSignature } = await import('~server/secrets');
 const { handleAiRequest } = await import('./ai');
@@ -377,6 +379,88 @@ describe('App AI endpoint boundary', () => {
     await reader.read();
     controller.abort();
     await reader.cancel();
+    await vi.waitFor(async () => {
+      const rows = await usageRows();
+      expect(rows).toHaveLength(1);
+      expect(rows[0].status).toBe('aborted');
+    });
+  });
+});
+
+describe('App AI SDK against the endpoint', () => {
+  const options = {
+    url: `https://hatch.example.test/api/app/${APP}/ai`,
+    signingSecret: SECRET,
+  };
+  beforeEach(() => {
+    vi.stubGlobal('fetch', (input: string, init: RequestInit) =>
+      handleAiRequest({ request: new Request(input, init) }),
+    );
+    return () => vi.unstubAllGlobals();
+  });
+
+  it('carries signed reasoning back through a tool round-trip', async () => {
+    await seed();
+    provider.responses = [
+      fauxAssistantMessage(
+        [
+          { type: 'thinking', thinking: 'plan', thinkingSignature: 'sig-1' },
+          fauxToolCall('lookup', { q: 'x' }, { id: 't1' }),
+        ],
+        { stopReason: 'toolUse' },
+      ),
+      fauxAssistantMessage('done'),
+    ];
+    const { result, steps } = await sdk.runTools(
+      {
+        role: 'summarize',
+        messages: [{ role: 'user', content: 'go' }],
+        tools: [
+          {
+            name: 'lookup',
+            description: 'Look up.',
+            parameters: { type: 'object', properties: {} },
+            run: () => 'found',
+          },
+        ],
+      },
+      options,
+    );
+    expect(steps).toBe(2);
+    expect(sdk.replyText(result)).toBe('done');
+    // The second request replays the thinking block with its signature.
+    const replayed = provider.seen[1].context.messages.find(
+      (message) => message.role === 'assistant',
+    );
+    expect(replayed?.content).toContainEqual(
+      expect.objectContaining({
+        type: 'thinking',
+        thinking: 'plan',
+        thinkingSignature: 'sig-1',
+      }),
+    );
+
+    const tampered = await call('chat', {
+      role: 'summarize',
+      messages: [
+        { role: 'user', content: 'go' },
+        { role: 'assistant', content: [{ type: 'reasoning', state: 'x' }] },
+      ],
+    });
+    expect(tampered.status).toBe(400);
+    expect(await errorCode(tampered)).toBe('ai_invalid_request');
+  });
+
+  it('stops the provider call when the App stops reading the stream', async () => {
+    await seed();
+    provider.tokensPerSecond = 5;
+    provider.responses = [fauxAssistantMessage('word '.repeat(200))];
+    for await (const event of sdk.chat(
+      { role: 'summarize', messages: [{ role: 'user', content: 'hi' }] },
+      options,
+    )) {
+      if (event.type === 'text') break;
+    }
     await vi.waitFor(async () => {
       const rows = await usageRows();
       expect(rows).toHaveLength(1);

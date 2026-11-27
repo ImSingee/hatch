@@ -86,10 +86,18 @@ Messages are provider-neutral:
 - `{ role: 'tool', toolCallId, toolName, content, isError? }` for a tool
   result.
 
-The result has `message` (the reply's text and tool calls), `stopReason`
-(`stop`, `length` or `toolUse`), `usage` (tokens and `costUsd`, null when the
-model has no price) and `model` (`provider`, `id`). Reasoning text is never
-returned. One request body is at most 8 MB, including inline images.
+The result has `message` (the reply's text, tool calls and opaque
+`{ type: 'reasoning', state }` parts), `stopReason` (`stop`, `length` or
+`toolUse`), `usage` (tokens and `costUsd`, null when the model has no price)
+and `model` (`provider`, `id`). Keep the whole `message`, reasoning parts
+included, in the history you send next: some providers reject a tool result
+without the reasoning that asked for it. Never change, show or store a
+reasoning part on its own; `replyText` skips it. A changed one fails with
+`ai_invalid_request`. One request body is at most 8 MB, including inline
+images.
+
+Stop iterating `chat()` (for example `break`) to cancel a reply: the platform
+aborts the provider request and records the call as aborted.
 
 ## Tools: run the loop in the App
 
