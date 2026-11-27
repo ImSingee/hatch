@@ -141,6 +141,7 @@ vi.mock('./deploy', () => ({
 const { db, schema } = await import('~/db');
 const { AppError } = await import('~server/errors');
 const builds = await import('./builds');
+const { BUILDER_ONLINE_MS, recordBuilderSeen } = await import('./builders');
 const { packBuildDirectory } = await import('../../app-build/archive');
 
 const APP = 'builds-app';
@@ -178,6 +179,11 @@ beforeEach(async () => {
   await db.delete(schema.deployments);
   await db.delete(schema.appBuilds);
   await db.delete(schema.apps);
+  // A Builder asked for work just now (see the Builder status cases).
+  await db.delete(schema.appBuilders);
+  await db
+    .insert(schema.appBuilders)
+    .values({ id: 'builder-1', concurrency: 1, lastSeenAt: new Date() });
   await db.insert(schema.apps).values([
     { id: APP, slug: APP, name: 'Builds' },
     { id: 'other-app', slug: 'other-app', name: 'Other' },
@@ -195,10 +201,25 @@ describe('creating deployments', () => {
     await expect(create({ build: 'builder' })).rejects.toMatchObject({
       code: 'BUILDER_UNAVAILABLE',
     });
-    // `auto` picks the Builder only where there is one.
-    expect((await create({ build: 'auto' })).mode).toBe('local');
     mocks.builderToken = 'token';
-    expect((await create({ build: 'auto' })).mode).toBe('builder');
+    expect((await create({ build: 'builder' })).mode).toBe('builder');
+  });
+
+  it('refuses a Builder build while no Builder is online, instead of queuing it', async () => {
+    mocks.builderToken = 'token';
+    // Last heard from just past the online window.
+    await db
+      .update(schema.appBuilders)
+      .set({ lastSeenAt: new Date(Date.now() - BUILDER_ONLINE_MS - 5_000) });
+    await expect(create({ build: 'builder' })).rejects.toMatchObject({
+      code: 'BUILDER_OFFLINE',
+    });
+    expect(await db.query.appBuilds.findMany()).toEqual([]);
+    // A local build does not need one.
+    expect((await create()).mode).toBe('local');
+    // A lease request or heartbeat brings it back.
+    await recordBuilderSeen('builder-1');
+    expect((await create({ build: 'builder' })).mode).toBe('builder');
   });
 
   it('supersedes deployments that have not started building', async () => {
@@ -800,5 +821,105 @@ describe('builder leases', () => {
     expect(
       await db.query.appBuilds.findFirst({ where: { id: deployment.id } }),
     ).toMatchObject({ status: 'failed', errorCode: 'artifact_timeout' });
+  });
+});
+
+describe('the deployment queue across Apps', () => {
+  it('lists unfinished deployments oldest first, with queue positions, a page at a time', async () => {
+    mocks.builderToken = 'token';
+    await db
+      .insert(schema.apps)
+      .values({ id: 'third-app', slug: 'third-app', name: 'Third' });
+    // Finished deployments are not in the queue.
+    const done = await create({ appId: 'third-app', build: 'builder' });
+    await builds.cancelDeployment('third-app', done.id, 'user-1');
+    const running = await create({ build: 'builder' });
+    expect((await builds.leaseBuild('builder-1'))?.id).toBe(running.id);
+    // A newer commit waits behind its App's running build.
+    const next = await create({ build: 'builder', commit: 'b'.repeat(40) });
+    const other = await create({ appId: 'other-app', build: 'builder' });
+    const local = await create({ appId: 'third-app' });
+
+    const first = await builds.listDeploymentQueue({ limit: 2 });
+    const second = await builds.listDeploymentQueue({
+      limit: 2,
+      cursor: first.nextCursor ?? undefined,
+    });
+
+    const view = (page: typeof first) =>
+      page.items.map((item) => ({
+        id: item.build.id,
+        app: item.app.slug,
+        status: item.build.status,
+        position: item.queuePosition,
+      }));
+    expect(view(first)).toEqual([
+      { id: running.id, app: APP, status: 'building', position: null },
+      { id: next.id, app: APP, status: 'queued', position: 1 },
+    ]);
+    // Positions continue across pages.
+    expect(view(second)).toEqual([
+      { id: other.id, app: 'other-app', status: 'queued', position: 2 },
+      {
+        id: local.id,
+        app: 'third-app',
+        status: 'awaiting_artifact',
+        position: null,
+      },
+    ]);
+    expect(second.nextCursor).toBeNull();
+    // A queued deployment in the middle can be canceled.
+    await builds.cancelDeployment(APP, next.id, 'user-1');
+    expect(
+      (await builds.listDeploymentQueue({ limit: 10 })).items.map((item) => [
+        item.build.id,
+        item.queuePosition,
+      ]),
+    ).toEqual([
+      [running.id, null],
+      [other.id, 1],
+      [local.id, null],
+    ]);
+  });
+});
+
+describe('Builder status', () => {
+  it('reports each Builder heard from in the last day, its running builds and whether it is online', async () => {
+    const { builderStatus } = await import('./builders');
+    expect(await builderStatus()).toEqual({ configured: false, builders: [] });
+    mocks.builderToken = 'token';
+    await recordBuilderSeen('builder-1', 2);
+    await db.insert(schema.appBuilders).values([
+      {
+        id: 'builder-stale',
+        concurrency: 4,
+        lastSeenAt: new Date(Date.now() - 2 * 60 * 60_000),
+      },
+      {
+        id: 'builder-gone',
+        concurrency: 1,
+        lastSeenAt: new Date(Date.now() - 2 * 24 * 60 * 60_000),
+      },
+    ]);
+    await create({ build: 'builder' });
+    await builds.leaseBuild('builder-1');
+
+    expect(await builderStatus()).toEqual({
+      configured: true,
+      builders: [
+        expect.objectContaining({
+          id: 'builder-1',
+          concurrency: 2,
+          running: 1,
+          online: true,
+        }),
+        expect.objectContaining({
+          id: 'builder-stale',
+          concurrency: 4,
+          running: 0,
+          online: false,
+        }),
+      ],
+    });
   });
 });

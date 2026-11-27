@@ -430,7 +430,7 @@ export async function buildLocally(input: LocalBuildInput): Promise<Buffer> {
   const timedOut = () =>
     new CliError(
       'local_build_timeout',
-      `The local build did not finish within ${Math.round(timeoutMs / 1000)}s; raise --timeout or build with --build builder.`,
+      `The local build did not finish within ${Math.round(timeoutMs / 1000)}s; raise --timeout, or leave out --local to build on the platform Builder.`,
       7,
     );
   const remaining = () => {

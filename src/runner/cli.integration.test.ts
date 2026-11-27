@@ -789,7 +789,7 @@ describe.runIf(Boolean(databaseUrl))(
             'cd app',
             'git -c user.name=Runner -c user.email=runner@example.test commit -q --allow-empty -m deploy',
             'start=$(date +%s)',
-            'hatch app deploy --directory . --build local --message "Runner local build" --json > ../deployed.json 2> ../deployed.err || true',
+            'hatch app deploy --directory . --local --message "Runner local build" --json > ../deployed.json 2> ../deployed.err || true',
             'end=$(date +%s)',
             `node -e 'const fs=require("fs"); fetch(process.argv[1], {method:"POST", body: JSON.stringify({seconds: Number(process.argv[2]), stdout: fs.readFileSync("../deployed.json","utf8"), stderr: fs.readFileSync("../deployed.err","utf8").slice(-4000)})})' "${report}" "$((end-start))"`,
           ].join('\n'),

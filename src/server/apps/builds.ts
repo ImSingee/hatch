@@ -23,7 +23,6 @@ import { ulid } from 'ulid';
 import { BUILD_WORK_DIR } from '~agent/paths';
 import { db, schema } from '~/db';
 import type { AppBuildMode, AppBuildStatus, JsonObject } from '~/db/schema';
-import { getPlatformEnv } from '~env';
 import { AppError } from '~server/errors';
 import { DeploymentRequestError } from './deployment-errors';
 import {
@@ -35,6 +34,7 @@ import { platformSdkDigest } from '../platform-api/sdk';
 import { asBuildError } from './build';
 import { platformBuildHost } from './build-host';
 import { DataMigrationApprovalRequired } from './data-table/migrate';
+import { builderConfigured, builderOnline } from './builders';
 import { tryWithAppDataCutoverLock } from './data-table/provision';
 import {
   reconcilePendingActivation,
@@ -105,11 +105,6 @@ const MAX_LOG_LINE = LOG_LINE_MAX_CHARS;
  * most 65,535 in one statement (a local build's package log can be long).
  */
 const LOG_INSERT_ROWS = 4_000;
-
-/** Whether this platform has a dedicated Builder. */
-export function builderEnabled(): boolean {
-  return getPlatformEnv().builderToken !== null;
-}
 
 async function notifyBuild(buildId: string): Promise<void> {
   await db
@@ -313,8 +308,8 @@ export type CreateDeploymentInput = {
   /** Full commit id on master; the master tip when omitted. */
   commit?: string;
   message: string;
-  /** `auto` uses the Builder when this platform has one. */
-  build: AppBuildMode | 'auto';
+  /** Where the commit is built: the platform's Builder, or the caller. */
+  build: AppBuildMode;
   trigger: 'cli' | 'ui';
   actor: string | null;
   expectedGeneration?: string;
@@ -362,18 +357,25 @@ export async function createDeployment(
     const repeated = await deploymentOfRequest(db, input.appId, requestId);
     if (repeated) return repeated;
   }
-  const mode: AppBuildMode =
-    input.build === 'auto'
-      ? builderEnabled()
-        ? 'builder'
-        : 'local'
-      : input.build;
-  if (mode === 'builder' && !builderEnabled()) {
-    throw new DeploymentRequestError(
-      'BUILDER_UNAVAILABLE',
-      'This platform has no dedicated Builder; build locally with ' +
-        '`hatch app deploy --build local`.',
-    );
+  const mode = input.build;
+  // A Builder build is refused up front where nothing would take it, rather
+  // than queued to wait without end: build locally instead.
+  if (mode === 'builder') {
+    if (!builderConfigured()) {
+      throw new DeploymentRequestError(
+        'BUILDER_UNAVAILABLE',
+        'This platform has no dedicated Builder. Build the commit on this ' +
+          'machine and upload it with `hatch app deploy --local`.',
+      );
+    }
+    if (!(await builderOnline())) {
+      throw new DeploymentRequestError(
+        'BUILDER_OFFLINE',
+        'No Builder has connected to this platform recently, so nothing ' +
+          'would build the deployment. Build it on this machine and upload ' +
+          'it with `hatch app deploy --local`, or start a Builder and retry.',
+      );
+    }
   }
   // Source first: only a commit already on master can be deployed.
   const commit = await resolveDeployCommit(input.appId, input.commit);
@@ -571,6 +573,80 @@ export async function listDeployments(
   return {
     items: page,
     nextCursor: items.length > options.limit ? page.at(-1)!.seq : null,
+  };
+}
+
+/** Deployment states that are not finished, in the order they pass. */
+const ACTIVE_STATUSES = [
+  'queued',
+  'awaiting_artifact',
+  'building',
+  'verifying',
+  'releasing',
+] as const satisfies readonly AppBuildStatus[];
+
+export type QueuedDeployment = {
+  build: AppBuild;
+  app: { id: string; slug: string; name: string };
+  /** 1-based place among queued Builder builds; only for `queued`. */
+  queuePosition: number | null;
+};
+
+/**
+ * Every unfinished deployment of every App, oldest first (ids are ULIDs, so
+ * id order is creation order). Builders take queued builds oldest first,
+ * one per App at a time, so a queued build's position is its place among
+ * the queued ones.
+ */
+export async function listDeploymentQueue(options: {
+  limit: number;
+  cursor?: string;
+}): Promise<{ items: QueuedDeployment[]; nextCursor: string | null }> {
+  await sweepBuilds().catch(() => {});
+  const rows = await db.query.appBuilds.findMany({
+    where: {
+      status: { in: [...ACTIVE_STATUSES] },
+      ...(options.cursor ? { id: { gt: options.cursor } } : {}),
+    },
+    orderBy: { id: 'asc' },
+    limit: options.limit + 1,
+  });
+  const page = rows.slice(0, options.limit);
+  const apps = page.length
+    ? await db.query.apps.findMany({
+        where: { id: { in: [...new Set(page.map((row) => row.appId))] } },
+        columns: { id: true, slug: true, name: true },
+      })
+    : [];
+  const appsById = new Map(apps.map((app) => [app.id, app]));
+  // Queued builds ahead of this page, for the positions of those on it.
+  const firstQueued = page.find((row) => row.status === 'queued');
+  const [ahead] = firstQueued
+    ? await db
+        .select({ count: sql<number>`count(*)::integer` })
+        .from(schema.appBuilds)
+        .where(
+          and(
+            eq(schema.appBuilds.status, 'queued'),
+            lt(schema.appBuilds.id, firstQueued.id),
+          ),
+        )
+    : [{ count: 0 }];
+  let position = ahead?.count ?? 0;
+  const items: QueuedDeployment[] = [];
+  for (const build of page) {
+    const app = appsById.get(build.appId);
+    // Deleted meanwhile: its builds go with it.
+    if (!app) continue;
+    items.push({
+      build,
+      app,
+      queuePosition: build.status === 'queued' ? ++position : null,
+    });
+  }
+  return {
+    items,
+    nextCursor: rows.length > options.limit ? page.at(-1)!.id : null,
   };
 }
 

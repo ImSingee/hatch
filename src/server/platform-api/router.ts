@@ -36,7 +36,7 @@ import { SdkService } from '../../../packages/hatch-platform-api/gen/hatch/platf
 import { publicApiError, publicError } from './errors';
 import { AppError } from '~server/errors';
 import { db } from '~/db';
-import { builderEnabled } from '~server/apps/builds';
+import { builderConfigured, builderStatus } from '~server/apps/builders';
 import { NSH_VERSION } from '~server/apps/native/nsh-toolchain';
 import { registerAppDeploymentApi } from './app-deployments';
 import { rollbackAppToVersion } from '~server/apps/manage';
@@ -875,11 +875,12 @@ export function registerPlatformApi(
     },
   });
   router.service(ServerService, {
-    getServerInfo: () => ({
+    getServerInfo: async () => ({
       server: {
         commit: buildInfo.commit ?? undefined,
         commitTime: buildInfo.commitTime ?? undefined,
       },
+      builder: await builderStatus(),
     }),
   });
   router.service(PinService, {
@@ -1042,7 +1043,7 @@ export function registerPlatformApi(
         tooling: {
           ...result.tooling,
           nshVersion: NSH_VERSION,
-          builderEnabled: builderEnabled(),
+          builderEnabled: builderConfigured(),
         },
       };
     },

@@ -11,6 +11,7 @@ import {
   getDeployment,
   isFinishedBuild,
   listDeployments,
+  listDeploymentQueue,
   followBuildChanges,
   readBuildLog,
   type AppBuild,
@@ -122,7 +123,7 @@ export function registerAppDeploymentApi(
         appId: app.id,
         commit: input.commit,
         message: input.message,
-        build: input.build as 'auto' | 'builder' | 'local',
+        build: input.build as 'builder' | 'local',
         trigger: 'cli',
         actor: actorOf(context),
         expectedGeneration: input.generation,
@@ -183,6 +184,31 @@ export function registerAppDeploymentApi(
       return {
         deployments: await Promise.all(
           page.items.map((row) => deploymentMessage(row, app.slug)),
+        ),
+        nextCursor: page.nextCursor ?? undefined,
+      };
+    } catch (error) {
+      throw publicError(error);
+    }
+  });
+  router.rpc(AppService.method.listDeploymentQueue, async (input) => {
+    try {
+      const page = await listDeploymentQueue({
+        limit: input.limit ?? 50,
+        cursor: input.cursor,
+      });
+      return {
+        entries: await Promise.all(
+          page.items.map(async (item) => ({
+            appSlug: item.app.slug,
+            appName: item.app.name,
+            deployment: await deploymentMessage(item.build, item.app.slug),
+            queuePosition: item.queuePosition ?? undefined,
+            builderId:
+              item.build.status === 'building' && item.build.builderId
+                ? item.build.builderId
+                : undefined,
+          })),
         ),
         nextCursor: page.nextCursor ?? undefined,
       };

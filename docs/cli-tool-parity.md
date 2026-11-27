@@ -82,11 +82,15 @@ Source transfer and release are separate. `push` and the fetch behind `clone` /
 pushes, then creates a deployment of the pushed commit
 (`AppService/CreateAppDeployment`; `--commit` deploys a commit already on
 `master` without pushing). The platform's optional dedicated Builder builds
-it, or the CLI builds it where it runs and uploads the build package to that
-deployment (`UploadAppDeploymentArtifact`). The platform executes nothing
+it by default, or with `--local` the CLI builds it where it runs and uploads
+the build package to that deployment (`UploadAppDeploymentArtifact`); a
+Builder deployment without a configured, online Builder is refused
+(`BUILDER_UNAVAILABLE`, `BUILDER_OFFLINE`). The platform executes nothing
 from the package; it evaluates the commit's own `manifest.ts` in the sandbox
 to bind the release's privileges to the commit. `hatch app deployments list|get|logs|cancel` cover every read and
-mutation of deployments that the manage page offers (its Redeploy button is
+mutation of deployments that the manage page offers, and
+`hatch app deployments queue` (`ListDeploymentQueue`) and `hatch server info`
+(its `builder` status, `GetServerInfo`) cover Web Settings → Builder (its Redeploy button is
 `app deploy --commit <sha>`); logs stream over
 `WatchAppDeploymentLogs`. Two deliberate deviations from the CLI rules:
 

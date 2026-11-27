@@ -136,8 +136,9 @@ hatch app update --directory ./notes-copy --json
 hatch app push --directory ./notes-copy --json
 hatch app deploy --directory ./notes-copy --message 'Release notes' --json
 hatch app deploy --directory ./notes-copy --commit <full-commit-id> --json
-hatch app deploy --directory ./notes-copy --build local --json
+hatch app deploy --directory ./notes-copy --local --json
 hatch app deployments list <id-or-slug> --json
+hatch app deployments queue --json
 hatch app deployments logs <id-or-slug> <deployment-id> --follow
 hatch app deployments cancel <id-or-slug> <deployment-id> --json
 hatch app rollback <id-or-slug> --version 1 --json
@@ -192,12 +193,16 @@ is rejected with `workspace_instance_mismatch`.
   `master` back, the commits of newer versions are such commits until pushed
   again. Source always comes first: a deployment only ever names a pushed
   commit, and its build package is uploaded to that deployment.
-  - `--build builder` builds on the platform's dedicated Builder and follows
-    its log (`WatchAppDeploymentLogs`) until the deployment finishes;
-    `--no-wait` prints the queued deployment instead and asks the platform
-    for a notification when it finishes. A platform without a Builder
-    rejects it with `BUILDER_UNAVAILABLE`.
-  - `--build local` builds here: the CLI checks the commit out into a
+  - By default the platform's dedicated Builder builds the commit, and the
+    CLI follows its log (`WatchAppDeploymentLogs`) until the deployment
+    finishes; `--no-wait` prints the queued deployment instead and asks the
+    platform for a notification when it finishes. A platform without a
+    Builder refuses it with `BUILDER_UNAVAILABLE`, and one whose Builders
+    have not connected recently with `BUILDER_OFFLINE` (both exit 6, before
+    any deployment is created). `hatch server info` shows whether the
+    platform has a Builder and which are online. Then build here with
+    `--local`.
+  - `--local` builds here: the CLI checks the commit out into a
     scratch directory (every tracked file; archive attributes such as
     `export-ignore` do not apply), runs the platform's build with its pinned
     esbuild, TypeScript, buf, protoc-gen-es and pnpm (installed once into
@@ -226,8 +231,6 @@ is rejected with `workspace_instance_mismatch`.
     `hatch app deploy --reconcile` or
     `hatch app deployments get <id> <deployment-id>`, or cancel it with
     `hatch app deployments cancel <id> <deployment-id>`.
-  - `--build auto` (default) is `builder` where the platform has one, else
-    `local`.
 
   The platform checks every package (its own App, deployment, commit and
   toolchain, the manifest, API, tasks, data schema and docs) and writes the
@@ -242,7 +245,14 @@ is rejected with `workspace_instance_mismatch`.
   requests (status `queued`, `awaiting_artifact`, `building`, `verifying`,
   `releasing`, `ready`, `failed`, `canceled` or `superseded`), print or
   follow their build and release log, and cancel one that has not started
-  verifying. A newer deployment supersedes older ones still waiting for their
+  verifying. `app deployments queue` lists the unfinished deployments of
+  every App, oldest first, 50 per page (`--limit` 1–100; pass the printed
+  `nextCursor` as `--cursor`): each entry has `appSlug`, `appName`,
+  `queuePosition` (place among queued Builder builds in the order Builders
+  take them, oldest first and one per App at a time; `null` unless
+  `queued`), `builderId` (while `building`) and the `deployment`. Cancel any
+  of them, including one in the middle of the queue, with
+  `app deployments cancel`. A newer deployment supersedes older ones still waiting for their
   build, and an older build that finishes after a newer release is never
   released.
 - **Rollback:** synchronous API call with a real release version; display the
@@ -386,7 +396,9 @@ source and deploy again. Other ends of a deployment exit 6 with its code:
 `toolchain_mismatch` (upgrade the CLI), `app_build_invalid` (the platform
 refused the package), `COMMIT_NOT_ON_MASTER` (a rollback took the commit off
 `master` before it was released), `superseded`, `canceled`, `builder_lost`,
-`artifact_timeout`, `resource_generation_conflict` or `release_failed`. A
+`artifact_timeout`, `resource_generation_conflict` or `release_failed`.
+`BUILDER_UNAVAILABLE` and `BUILDER_OFFLINE` (exit 6) refuse a Builder
+deployment before it is created; deploy with `--local`. A
 source tree over 512 MiB or 100,000 files is refused (the platform checks it
 out to evaluate its manifest), and so is a repository that uses SHA-256 commit
 ids.
@@ -998,6 +1010,15 @@ server was built from and prints `commit` (the full SHA) and `commitTime`
 (RFC 3339), each `null` when the build recorded none. It is the same value as
 the Web Settings → About page. `hatch version` is different: it prints the
 revision the CLI itself was built from and works offline.
+
+It also prints `builder`, the platform's dedicated Builders (the same as Web
+Settings → Builder): `configured` says whether the platform accepts Builder
+builds (`HATCH_BUILDER_TOKEN`), and `builders` lists each Builder heard from
+in the last day, most recent first, with `id`, `concurrency`, `running`
+builds, `lastSeenAt` and `online`. A Builder is online while it keeps asking
+for work or renewing a lease. Without a configured Builder that is online,
+`hatch app deploy` is refused (`BUILDER_UNAVAILABLE` or `BUILDER_OFFLINE`);
+deploy with `--local`.
 
 Local rejections exit 2: `invalid_arguments` (a missing or unknown operation,
 an unknown flag or a positional argument).

@@ -45,6 +45,8 @@ let master: string | null;
 let released: string | null;
 let deployedCommits: (string | undefined)[];
 let deploys: number;
+/** The build mode each create request asked for. */
+let requestedBuilds: string[];
 let loseResponse: boolean;
 /** The watch sends no line past this one, as a stalled log stream. */
 let logLimit: number;
@@ -176,6 +178,7 @@ const rpc = connectNodeAdapter({
           (item) => data.requestId && item.requestId === data.requestId,
         );
         if (repeated) return { deployment: deploymentMessage(repeated) };
+        requestedBuilds.push(data.build);
         deploys++;
         const id = `deployment-${deploys}`;
         const record = {
@@ -437,6 +440,7 @@ describe('CLI workspace safety', { timeout: 30_000 }, () => {
     released = null;
     deployedCommits = [];
     deploys = 0;
+    requestedBuilds = [];
     deployments = [];
     loseResponse = false;
     logLimit = Number.POSITIVE_INFINITY;
@@ -1166,20 +1170,38 @@ describe('CLI workspace safety', { timeout: 30_000 }, () => {
     const deploy = (...extra: string[]) =>
       run(['app', 'deploy', '--directory', root, '--commit', absent, ...extra])
         .result;
-    // --build local, and auto on a platform without a Builder.
-    for (const extra of [['--build', 'local'], []]) {
-      const refused = await deploy(...extra);
-      expect(refused.code).toBe(6);
-      expect(refused.data.error.code).toBe('source_unavailable');
-    }
+    const refused = await deploy('--local');
+    expect(refused.code).toBe(6);
+    expect(refused.data.error.code).toBe('source_unavailable');
     expect(deploys).toBe(0);
     expect(
       JSON.parse(await readFile(workspace, 'utf8')).pending,
     ).toBeUndefined();
-    // A Builder fetches the commit itself.
-    sdkTooling = { ...NODE_TOOLING, builderEnabled: true };
+    // The Builder (the default) fetches the commit itself.
     expect((await deploy()).code).toBe(0);
     expect(deployedCommits).toEqual([absent]);
+    expect(requestedBuilds).toEqual(['builder']);
+  });
+  it('builds on the platform Builder unless --local, and rejects the removed --build before any request', async () => {
+    const root = await create();
+    await publish(root);
+    for (const removed of [['--build', 'local'], ['--build=builder']]) {
+      const result = await run([
+        'app',
+        'deploy',
+        '--directory',
+        root,
+        ...removed,
+      ]).result;
+      expect(result.code).toBe(2);
+      expect(result.data.error.code).toBe('invalid_arguments');
+      expect(result.data.error.message).toContain('--local');
+    }
+    expect(deploys).toBe(0);
+    expect(
+      (await run(['app', 'deploy', '--directory', root]).result).code,
+    ).toBe(0);
+    expect(requestedBuilds).toEqual(['builder']);
   });
   it('uses a cross-process lock and releases it after completion or POSIX cancellation', async () => {
     const root = await create();

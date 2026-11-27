@@ -61,6 +61,9 @@ export function DeploymentHistory({ appId }: { appId: string }) {
   const query = useQuery(deploymentsQueryOptions(appId));
   const requests = useQuery(deploymentRequestsQueryOptions(appId));
   const builderEnabled = requests.data?.builderEnabled ?? false;
+  // Configured but none online: the platform would refuse the build.
+  const builderOffline =
+    builderEnabled && requests.data?.builderOnline === false;
 
   // Rebuilding a recorded commit needs the Builder: the browser cannot build.
   const redeploy = useMutation({
@@ -150,21 +153,34 @@ export function DeploymentHistory({ appId }: { appId: string }) {
           // null: the lookup failed; the platform still enforces the rule.
           deployment.sourceOnMaster !== false &&
           deployment.status === 'deployed' ? (
-            <Tooltip label={t('deployments.redeployTooltip')} withArrow>
+            <Tooltip
+              label={t(
+                builderOffline
+                  ? 'deployments.redeployBuilderOffline'
+                  : 'deployments.redeployTooltip',
+              )}
+              withArrow
+            >
               <Button
                 size="compact-sm"
                 variant="default"
+                // data-disabled keeps the tooltip that says why.
+                data-disabled={builderOffline || undefined}
                 leftSection={<IconRefresh size={14} />}
                 loading={
                   redeploy.isPending &&
                   redeploy.variables?.version === deployment.version
                 }
-                onClick={() =>
+                onClick={(event) => {
+                  if (builderOffline) {
+                    event.preventDefault();
+                    return;
+                  }
                   redeploy.mutate({
                     sourceCommit,
                     version: deployment.version,
-                  })
-                }
+                  });
+                }}
               >
                 {t('deployments.redeploy')}
               </Button>

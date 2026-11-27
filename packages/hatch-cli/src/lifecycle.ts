@@ -90,12 +90,20 @@ export async function runLifecycle(
               'data-migration-approval-token': { type: 'string' },
               reconcile: { type: 'boolean' },
               'retry-after-confirming': { type: 'string' },
-              build: { type: 'string' },
+              local: { type: 'boolean' },
               'no-wait': { type: 'boolean' },
             }
           : operation === 'rollback'
             ? { version: { type: 'string' } }
             : {};
+  if (
+    operation === 'deploy' &&
+    args.some((arg) => arg === '--build' || arg.startsWith('--build='))
+  )
+    throw new CliError(
+      'invalid_arguments',
+      '--build was removed: deploy builds on the platform Builder by default; add --local to build on this machine and upload the build package.',
+    );
   let parsed;
   try {
     parsed = parseArgs({
@@ -167,14 +175,6 @@ export async function runLifecycle(
     throw new CliError(
       'invalid_retry_confirmation',
       '--reconcile only reports the pending deployment; run --retry-after-confirming <commit> on its own.',
-    );
-  if (
-    values.build !== undefined &&
-    !['auto', 'builder', 'local'].includes(String(values.build))
-  )
-    throw new CliError(
-      'invalid_arguments',
-      '--build must be auto, builder or local.',
     );
   const credential = await resolveCredential(
     process.env,
@@ -682,7 +682,7 @@ export async function runLifecycle(
     const commit = requested ?? head!;
     // A local build reads the commit from this checkout without fetching:
     // one that is not here fails before any deployment is created.
-    if (requested && values.build !== 'builder') {
+    if (requested && values.local) {
       const present =
         (
           await git(
@@ -692,14 +692,10 @@ export async function runLifecycle(
             true,
           )
         ).code === 0;
-      // auto builds here only on a platform without a Builder.
-      const local =
-        values.build === 'local' ||
-        (!present && (await client.sdk.get()).tooling?.builderEnabled !== true);
-      if (!present && local)
+      if (!present)
         throw new CliError(
           'source_unavailable',
-          `Commit ${requested} is not in this checkout, so it cannot be built here. Run hatch app update first, or build on the platform with --build builder. No deployment was created.`,
+          `Commit ${requested} is not in this checkout, so it cannot be built here. Run hatch app update first, or leave out --local to build it on the platform Builder. No deployment was created.`,
           6,
         );
     }
@@ -735,7 +731,8 @@ export async function runLifecycle(
         message: String(values.message ?? 'Deploy from Hatch CLI'),
         generation: metadata.generation,
         commit,
-        build: (values.build as 'auto' | 'builder' | 'local') ?? 'auto',
+        // The platform Builder unless asked to build here.
+        build: values.local ? 'local' : 'builder',
         requestId: metadata.pending.requestId,
         // Nobody follows a --no-wait deployment: the platform says how it ends.
         ...(values['no-wait'] ? { notify: true } : {}),

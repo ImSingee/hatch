@@ -1,19 +1,24 @@
-/** App deployments: list, inspect, follow the log of, and cancel. */
+/**
+ * App deployments: list, inspect, follow the log of, and cancel; and the
+ * queue of unfinished deployments across every App.
+ */
 import { parseArgs } from 'node:util';
 import { configPath, resolveCredential } from './config';
 import { type DeploymentView, platformClient } from './client';
 import { CliError, argumentsError } from './error';
 import { followDeployment } from './lifecycle';
 
-const ACTIONS = ['list', 'get', 'logs', 'cancel'] as const;
+const ACTIONS = ['list', 'queue', 'get', 'logs', 'cancel'] as const;
 type Action = (typeof ACTIONS)[number];
 
 export type DeploymentsCommand = {
   action: Action;
-  id: string;
+  /** Not for `queue`, which spans every App. */
+  id?: string;
   deploymentId?: string;
   limit?: number;
-  cursor?: number;
+  /** A seq for `list`, a deployment id for `queue`. */
+  cursor?: number | string;
   after: number;
   follow: boolean;
   json: boolean;
@@ -34,7 +39,7 @@ export function parseDeploymentsCommand(
   const action = args[offset + 2] as Action | undefined;
   if (!action || !ACTIONS.includes(action))
     throw invalid(
-      'Use hatch app deployments list, get, logs or cancel. See hatch help app deployments.',
+      'Use hatch app deployments list, queue, get, logs or cancel. See hatch help app deployments.',
     );
   let parsed;
   try {
@@ -58,20 +63,24 @@ export function parseDeploymentsCommand(
   }
   const v = parsed.values;
   const positionals = parsed.positionals;
-  const arity = action === 'list' ? 1 : 2;
+  const arity = action === 'queue' ? 0 : action === 'list' ? 1 : 2;
   if (positionals.length !== arity || positionals.some((p) => !p))
     throw invalid(
-      action === 'list'
-        ? 'Supply exactly one App ID or slug to deployments list.'
-        : `Supply an App ID or slug and a deployment ID to deployments ${action}.`,
+      action === 'queue'
+        ? 'deployments queue spans every App; it takes no positional arguments.'
+        : action === 'list'
+          ? 'Supply exactly one App ID or slug to deployments list.'
+          : `Supply an App ID or slug and a deployment ID to deployments ${action}.`,
     );
-  const only = (flags: string[], allowed: Action) => {
+  const only = (flags: string[], allowed: Action[]) => {
     for (const flag of flags)
-      if (v[flag as keyof typeof v] !== undefined && action !== allowed)
-        throw invalid(`--${flag} applies only to deployments ${allowed}.`);
+      if (v[flag as keyof typeof v] !== undefined && !allowed.includes(action))
+        throw invalid(
+          `--${flag} applies only to deployments ${allowed.join(' and ')}.`,
+        );
   };
-  only(['limit', 'cursor'], 'list');
-  only(['after', 'follow'], 'logs');
+  only(['limit', 'cursor'], ['list', 'queue']);
+  only(['after', 'follow'], ['logs']);
   const integer = (
     value: string | undefined,
     flag: string,
@@ -85,7 +94,17 @@ export function parseDeploymentsCommand(
     return number;
   };
   const limit = integer(v.limit, 'limit', 1, 100);
-  const cursor = integer(v.cursor, 'cursor', 1, 2 ** 31);
+  let cursor: number | string | undefined;
+  if (action === 'queue') {
+    // The `nextCursor` a previous page printed: a deployment id.
+    if (v.cursor !== undefined && !/^[0-9a-z]{26}$/.test(v.cursor))
+      throw invalid(
+        '--cursor must be the nextCursor a previous deployments queue page printed.',
+      );
+    cursor = v.cursor;
+  } else {
+    cursor = integer(v.cursor, 'cursor', 1, 2 ** 31);
+  }
   const after = integer(v.after, 'after', 0, 2 ** 31) ?? 0;
   const defaultSeconds = v.follow ? 1800 : 30;
   const seconds = v.timeout === undefined ? defaultSeconds : Number(v.timeout);
@@ -151,11 +170,32 @@ export async function runDeployments(
     process.stdout.write(
       command.json ? `${JSON.stringify(json)}\n` : `${text}\n`,
     );
+  if (command.action === 'queue') {
+    const page = await deployments.queue({
+      limit: command.limit,
+      cursor: command.cursor as string | undefined,
+    });
+    write(
+      page,
+      [
+        ...page.entries.map((entry) =>
+          [
+            entry.queuePosition === null ? '-' : `#${entry.queuePosition}`,
+            `app=${entry.appSlug}`,
+            ...(entry.builderId ? [`builder=${entry.builderId}`] : []),
+            deploymentText(entry.deployment),
+          ].join('  '),
+        ),
+        ...(page.nextCursor === null ? [] : [`nextCursor: ${page.nextCursor}`]),
+      ].join('\n') || 'No unfinished deployments.',
+    );
+    return;
+  }
   if (command.action === 'list') {
     const page = await deployments.list({
-      id: command.id,
+      id: command.id!,
       limit: command.limit,
-      cursor: command.cursor,
+      cursor: command.cursor as number | undefined,
     });
     write(
       page,
@@ -166,7 +206,7 @@ export async function runDeployments(
     );
     return;
   }
-  const target = { id: command.id, deploymentId: command.deploymentId! };
+  const target = { id: command.id!, deploymentId: command.deploymentId! };
   if (command.action === 'get') {
     const deployment = await deployments.get(target);
     write(deployment, deploymentText(deployment));

@@ -20,6 +20,15 @@ describe('app deployments arguments', () => {
       // Following waits for the build, so its default budget is long.
       timeoutMs: 1_800_000,
     });
+    // The queue spans every App: no App argument, a deployment id cursor.
+    expect(
+      parse('queue', '--limit', '10', '--cursor', '01m8d5gqrf6qyexjz215hy4gbz'),
+    ).toMatchObject({
+      action: 'queue',
+      id: undefined,
+      limit: 10,
+      cursor: '01m8d5gqrf6qyexjz215hy4gbz',
+    });
     expect(parse('cancel', 'notes', 'dep-1')).toMatchObject({
       action: 'cancel',
       deploymentId: 'dep-1',
@@ -28,7 +37,10 @@ describe('app deployments arguments', () => {
   });
 
   it.each([
-    [['remove', 'notes', 'dep-1'], /list, get, logs or cancel/],
+    [['remove', 'notes', 'dep-1'], /list, queue, get, logs or cancel/],
+    [['queue', 'notes'], /no positional arguments/],
+    [['queue', '--cursor', '12'], /--cursor must be the nextCursor/],
+    [['queue', '--after', '3'], /--after applies only/],
     [['get', 'notes'], /deployment ID/],
     [['list', 'notes', 'dep-1'], /exactly one App/],
     [['list', 'notes', '--limit', '0'], /--limit/],

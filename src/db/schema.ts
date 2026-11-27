@@ -425,6 +425,21 @@ export const appBuildRequests = snakeCase.table(
   (table) => [primaryKey({ columns: [table.appId, table.requestId] })],
 );
 
+/**
+ * Dedicated Builders that asked this platform for work, for their status.
+ * A Builder is online while it keeps asking for work or renewing a lease
+ * (see src/server/apps/builders.ts); its running builds are the
+ * `app_builds` rows it holds.
+ */
+export const appBuilders = snakeCase.table('app_builders', {
+  /** `HATCH_BUILDER_ID` of the Builder. */
+  id: text().primaryKey(),
+  /** Builds it runs at once (`BUILDER_CONCURRENCY`). */
+  concurrency: integer().notNull(),
+  lastSeenAt: msTimestamp('last_seen_at').notNull(),
+  createdAt,
+});
+
 /** ================== app task runs ================== */
 
 /**

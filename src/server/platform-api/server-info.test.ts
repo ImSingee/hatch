@@ -1,4 +1,7 @@
-/** Server info RPC: the running build, for every credential, never anonymous. */
+/**
+ * Server info RPC: the running build and the Builder status, for every
+ * credential, never anonymous.
+ */
 import { beforeEach, expect, it, vi } from 'vitest';
 import type { PublicApiContext } from './auth';
 import type { BuildInfo } from '~/build-info';
@@ -6,6 +9,21 @@ import type { BuildInfo } from '~/build-info';
 const fixture = vi.hoisted(() => ({
   credential: undefined as PublicApiContext | undefined,
   build: { commit: null, commitTime: null } as BuildInfo,
+  builder: {
+    configured: false,
+    builders: [] as Array<{
+      id: string;
+      concurrency: number;
+      running: number;
+      lastSeenAt: string;
+      online: boolean;
+    }>,
+  },
+}));
+
+vi.mock('~server/apps/builders', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('~server/apps/builders')>()),
+  builderStatus: async () => fixture.builder,
 }));
 
 vi.mock('~/build-info', () => ({
@@ -82,6 +100,7 @@ const commitTime = '2026-11-24T23:12:00+08:00';
 
 beforeEach(() => {
   fixture.build = { commit, commitTime };
+  fixture.builder = { configured: false, builders: [] };
 });
 
 it.each(Object.keys(CREDENTIALS))(
@@ -90,7 +109,7 @@ it.each(Object.keys(CREDENTIALS))(
     fixture.credential = CREDENTIALS[type];
     expect(await getServerInfo()).toEqual({
       status: 200,
-      data: { server: { commit, commitTime } },
+      data: { server: { commit, commitTime }, builder: {} },
     });
   },
 );
@@ -98,7 +117,50 @@ it.each(Object.keys(CREDENTIALS))(
 it('omits the revision when the build recorded none', async () => {
   fixture.credential = CREDENTIALS.session;
   fixture.build = { commit: null, commitTime: null };
-  expect(await getServerInfo()).toEqual({ status: 200, data: { server: {} } });
+  expect(await getServerInfo()).toEqual({
+    status: 200,
+    data: { server: {}, builder: {} },
+  });
+});
+
+it('says whether the platform has a Builder and which Builders are online', async () => {
+  fixture.credential = CREDENTIALS.run;
+  fixture.builder = {
+    configured: true,
+    builders: [
+      {
+        id: 'builder-1',
+        concurrency: 2,
+        running: 1,
+        lastSeenAt: '2026-11-27T12:00:00.000Z',
+        online: true,
+      },
+      {
+        id: 'builder-2',
+        concurrency: 1,
+        running: 0,
+        lastSeenAt: '2026-11-27T09:00:00.000Z',
+        online: false,
+      },
+    ],
+  };
+  expect((await getServerInfo()).data.builder).toEqual({
+    configured: true,
+    builders: [
+      {
+        id: 'builder-1',
+        concurrency: 2,
+        running: 1,
+        lastSeenAt: '2026-11-27T12:00:00.000Z',
+        online: true,
+      },
+      {
+        id: 'builder-2',
+        concurrency: 1,
+        lastSeenAt: '2026-11-27T09:00:00.000Z',
+      },
+    ],
+  });
 });
 
 it('rejects a caller without a credential', async () => {

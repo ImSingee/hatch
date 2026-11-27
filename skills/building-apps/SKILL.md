@@ -87,10 +87,13 @@ Do not import generated files or execution modules from the manifest.
    ```
 
    Deploy requires a clean tree, pushes `HEAD` to platform `master`, creates
-   a deployment of that commit and builds it: on the platform's dedicated
-   Builder when it has one, otherwise right here, in this checkout's
-   environment (`--build builder|local` forces one). The build repeats source
-   validation; the platform then checks the build package and releases it.
+   a deployment of that commit and builds it on the platform's dedicated
+   Builder. If deploy is refused with `BUILDER_UNAVAILABLE` (the platform has
+   no Builder) or `BUILDER_OFFLINE` (none is running now), run it again with
+   `--local`: the build then runs right here, in this checkout's environment,
+   and the package is uploaded. `hatch server info --json` shows the
+   Builders. The build repeats source validation; the platform then checks
+   the build package and releases it.
    Build and release output streams to stderr, and the command prints the
    finished deployment. A failed deploy leaves that commit on `master`
    unreleased: read the error and the log, fix the failure, validate again,

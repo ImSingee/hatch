@@ -46,6 +46,7 @@ import {
 } from '../../hatch-platform-api/gen/hatch/platform/v1/theme_pb';
 import {
   ServerService,
+  type BuilderStatus,
   type ServerInfo,
 } from '../../hatch-platform-api/gen/hatch/platform/v1/server_pb';
 import {
@@ -341,9 +342,25 @@ const themeProblem = (value: ThemeProblem) => ({
       }
     : {}),
 });
-const serverInfo = (value: ServerInfo | undefined) => {
+const serverInfo = (
+  value: ServerInfo | undefined,
+  builder: BuilderStatus | undefined,
+) => {
   const info = required(value);
-  return { commit: info.commit ?? null, commitTime: info.commitTime ?? null };
+  return {
+    commit: info.commit ?? null,
+    commitTime: info.commitTime ?? null,
+    builder: {
+      configured: builder?.configured ?? false,
+      builders: (builder?.builders ?? []).map((entry) => ({
+        id: entry.id,
+        concurrency: entry.concurrency,
+        running: entry.running,
+        lastSeenAt: entry.lastSeenAt,
+        online: entry.online,
+      })),
+    },
+  };
 };
 const appPin = (value: PinnedApp | undefined) => {
   const pin = required(value);
@@ -896,7 +913,10 @@ export function cliClient(transport: Transport) {
       }) => catalogStatus((await catalog.updateCatalogSettings(input)).status),
     },
     server: {
-      info: async () => serverInfo((await servers.getServerInfo({})).server),
+      info: async () => {
+        const result = await servers.getServerInfo({});
+        return serverInfo(result.server, result.builder);
+      },
     },
     theme: {
       get: async (resolve = false) => {
@@ -1192,7 +1212,7 @@ export function cliClient(transport: Transport) {
           message: string;
           generation: string;
           commit?: string;
-          build: 'auto' | 'builder' | 'local';
+          build: 'builder' | 'local';
           allowDestructiveDataMigration?: boolean;
           dataMigrationApprovalToken?: string;
           notify?: boolean;
@@ -1238,6 +1258,20 @@ export function cliClient(transport: Transport) {
             deployments: result.deployments.map((value) =>
               deploymentView(value),
             ),
+            nextCursor: result.nextCursor ?? null,
+          };
+        },
+        /** Unfinished deployments of every App, oldest first. */
+        queue: async (input: { limit?: number; cursor?: string }) => {
+          const result = await apps.listDeploymentQueue(input);
+          return {
+            entries: result.entries.map((entry) => ({
+              appSlug: entry.appSlug,
+              appName: entry.appName,
+              queuePosition: entry.queuePosition ?? null,
+              builderId: entry.builderId ?? null,
+              deployment: deploymentView(required(entry.deployment)),
+            })),
             nextCursor: result.nextCursor ?? null,
           };
         },

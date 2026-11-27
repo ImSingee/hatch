@@ -94,8 +94,8 @@ export async function rpcCall<T = any>(
       else if (!operation) data = await api.get({ id });
       else if (operation === 'deploy') {
         // Creates the deployment of a pushed commit; the caller builds and
-        // uploads (local) or follows it (builder).
-        data = await api.deployments.create({ id, build: 'auto', ...body });
+        // uploads (local, the default here) or follows it (builder).
+        data = await api.deployments.create({ id, build: 'local', ...body });
       } else if (operation === 'upload') {
         const { deploymentId, artifactBase64 } = body;
         data = await api.deployments.upload({

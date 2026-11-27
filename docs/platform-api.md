@@ -128,9 +128,12 @@ tip; its build package (built by the platform's dedicated Builder, or by the
 caller and uploaded) must be built for that deployment and commit. The removed
 `DeployApp` RPC and its bundle upload have no drop-in replacement. The
 workflow that replaces them is: push the commit over Git, call
-`CreateAppDeployment`, then either follow the Builder's build
-(`WatchAppDeploymentLogs`) or build locally and upload the package with
-`UploadAppDeploymentArtifact`. CLIs older than deployments cannot deploy and
+`CreateAppDeployment` with `build: builder` and follow the Builder's build
+(`WatchAppDeploymentLogs`), or with `build: local` build it yourself and
+upload the package with `UploadAppDeploymentArtifact`. A Builder deployment
+is refused with `BUILDER_UNAVAILABLE` on a platform without a Builder and
+with `BUILDER_OFFLINE` while none is online; `GetServerInfo` reports both.
+`ListDeploymentQueue` lists the unfinished deployments of every App. CLIs older than deployments cannot deploy and
 must be upgraded. There is no RPC that downloads
 source; read it with Git fetch, whose
 master commit always matches the history it delivers. Rollback moves `master`

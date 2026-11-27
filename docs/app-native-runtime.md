@@ -70,7 +70,7 @@ Linux CLI and the web runtime component from the GitHub release, each checked
 against a SHA-256 (`Dockerfile`, `nsh` stage; CI installs from the same pin).
 `nsh check` uses the platform's own TypeScript 7 (`NSH_TSC`), so deploys never
 download a compiler; NSH's cache lives in `<HATCH_DATA_DIR>/cache/nsh`. A local
-build (`hatch app deploy --build local`) needs the same pinned `nsh` on that
+build (`hatch app deploy --local`) needs the same pinned `nsh` on that
 machine, found the same way; the CLI passes its pinned TypeScript as
 `NSH_TSC` and caches in `~/.cache/hatch/nsh`. The platform accepts a native
 package only from that NSH version.

@@ -20,6 +20,7 @@ import { BUILD_PACKAGE_MAX_COMPRESSED_BYTES } from '../../app-build/format';
 import { AppError } from '../errors';
 import { platformSdkDigest } from '../platform-api/sdk';
 import { buildLeaseToken, readBuildLeaseToken } from './build-tokens';
+import { recordBuilderSeen } from './builders';
 import {
   acceptArtifact,
   appendLeasedBuildLog,
@@ -128,6 +129,8 @@ export async function handleBuilderApiRequest(
       z.object({
         builderId: z.string().min(1).max(191),
         protocolVersion: z.number().int(),
+        /** Builds it runs at once; for its status. */
+        concurrency: z.number().int().min(1).max(64).optional(),
       }),
     );
     if (body.protocolVersion !== BUILDER_PROTOCOL_VERSION) {
@@ -137,6 +140,7 @@ export async function handleBuilderApiRequest(
       });
       return;
     }
+    await recordBuilderSeen(body.builderId, body.concurrency);
     // The Builder left when the response closes before it was sent (the
     // request's own `close` fires as soon as its body has been read).
     const abort = new AbortController();
@@ -223,6 +227,8 @@ export async function handleBuilderApiRequest(
     return;
   }
   if (action === 'heartbeat' && method === 'POST') {
+    // A Builder whose slots are all busy is heard from only here.
+    await recordBuilderSeen(lease.builderId);
     json(res, 200, { continue: await renewBuildLease(build.id, lease) });
     return;
   }

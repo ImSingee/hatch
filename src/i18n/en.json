@@ -836,6 +836,7 @@
   "deployments.request.released": "Released v{{version}}",
   "deployments.redeploy": "Redeploy",
   "deployments.redeployTooltip": "Build this commit again on the Builder and release it as a new version",
+  "deployments.redeployBuilderOffline": "No Builder is online, so this commit cannot be built now. Start a Builder, or deploy from the CLI with hatch app deploy --local",
   "deployments.redeployMessage": "Redeploy v{{version}}",
   "deployments.redeployQueued": "Redeploy of v{{version}} queued",
   "appDetail.reloadFailed": "Could not reload the app.",

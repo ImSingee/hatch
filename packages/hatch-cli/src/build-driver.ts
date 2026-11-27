@@ -2,7 +2,7 @@
  * The local build: produce a build package from a source export on this
  * machine, with the platform's pinned toolchain.
  *
- * `hatch app deploy --build local` installs the toolchain into a cache
+ * `hatch app deploy --local` installs the toolchain into a cache
  * directory and runs this file from there (`node build-driver.mjs <request>`),
  * so esbuild and TypeScript resolve from the cache's node_modules; the
  * request names that directory for the tools it runs as commands. It writes
@@ -161,7 +161,7 @@ async function pinnedPnpm(
     `The local build needs pnpm ${version}, the platform's version, but ` +
       (found ? `found ${found}.` : 'found none on PATH.') +
       ' Install it (for example `npm install --global pnpm@' +
-      `${version}\`) or build on the platform with --build builder.`,
+      `${version}\`) or leave out --local to build on the platform Builder.`,
   );
 }
 
@@ -224,8 +224,8 @@ async function main(): Promise<void> {
             if (!deno)
               throw toolUnavailable(
                 process.platform === 'win32'
-                  ? 'Deno Apps build with deno.exe, which is not on PATH (a deno.cmd shim cannot run without a shell). Install Deno from https://deno.com, or build on the platform with --build builder.'
-                  : 'Deno Apps build with deno, which is not on PATH. Install it from https://deno.com, or build on the platform with --build builder.',
+                  ? 'Deno Apps build with deno.exe, which is not on PATH (a deno.cmd shim cannot run without a shell). Install Deno from https://deno.com, or leave out --local to build on the platform Builder.'
+                  : 'Deno Apps build with deno, which is not on PATH. Install it from https://deno.com, or leave out --local to build on the platform Builder.',
               );
             [command, commandArgs] = [deno, args];
           }

@@ -16,8 +16,31 @@ message ServerInfo {
   optional string commit_time = 2;
 }
 
+// A dedicated Builder this platform has heard from in the last day.
+message Builder {
+  // Its `HATCH_BUILDER_ID`.
+  string id = 1;
+  // Builds it runs at once.
+  uint32 concurrency = 2;
+  // Builds it holds now.
+  uint32 running = 3;
+  // RFC 3339.
+  string last_seen_at = 4;
+  // Heard from recently: it can take a build now (or once a slot frees).
+  bool online = 5;
+}
+
+message BuilderStatus {
+  // The platform accepts Builder builds (HATCH_BUILDER_TOKEN is set).
+  // Without it, deploy with a local build.
+  bool configured = 1;
+  // Most recently seen first.
+  repeated Builder builders = 2;
+}
+
 message GetServerInfoRequest {}
 
 message GetServerInfoResponse {
   ServerInfo server = 1;
+  BuilderStatus builder = 2;
 }

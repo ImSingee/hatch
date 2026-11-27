@@ -38,6 +38,11 @@ const definitions = {
     409,
     'This platform has no dedicated Builder.',
   ],
+  BUILDER_OFFLINE: [
+    Code.Aborted,
+    409,
+    'No Builder has connected to this platform recently.',
+  ],
   DEPLOYMENT_NOT_CANCELABLE: [
     Code.Aborted,
     409,

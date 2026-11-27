@@ -312,8 +312,7 @@ describe.runIf(Boolean(adminUrl))('the dedicated Builder', () => {
       directory,
       '--message',
       'Newest',
-      '--build',
-      'local',
+      '--local',
       '--retry-after-confirming',
       first.data.commit,
     ]);

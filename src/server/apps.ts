@@ -34,8 +34,8 @@ import {
   runCronJobNow,
 } from './apps/scheduler';
 import { authMiddleware, requireSession } from './auth';
+import { builderConfigured, builderOnline } from './apps/builders';
 import {
-  builderEnabled,
   cancelDeployment as cancelBuildRequest,
   createDeployment,
   getDeployment as getBuildRequest,
@@ -256,14 +256,19 @@ function deploymentRequestView(row: AppBuild) {
 }
 export type AppDeploymentRequestView = ReturnType<typeof deploymentRequestView>;
 
-/** Recent deployment requests and whether the platform has a Builder. */
+/**
+ * Recent deployment requests, whether the platform has a Builder, and
+ * whether one is online to take a build now.
+ */
 export const listAppDeploymentRequestsFn = createServerFn({ method: 'GET' })
   .middleware([authMiddleware])
   .validator((id: string) => idSchema.parse(id))
   .handler(async ({ data: id }) => {
     const page = await listBuildRequests(id, { limit: 10 });
+    const builderEnabled = builderConfigured();
     return {
-      builderEnabled: builderEnabled(),
+      builderEnabled,
+      builderOnline: builderEnabled && (await builderOnline()),
       deployments: page.items.map(deploymentRequestView),
     };
   });

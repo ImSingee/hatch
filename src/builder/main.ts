@@ -282,6 +282,7 @@ async function startBuilder(): Promise<void> {
       body: JSON.stringify({
         builderId: config.builderId,
         protocolVersion: BUILDER_PROTOCOL_VERSION,
+        concurrency: config.concurrency,
       }),
     });
     if (response.status === 409) {

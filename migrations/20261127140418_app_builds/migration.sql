@@ -15,6 +15,13 @@ CREATE TABLE "app_build_requests" (
 	CONSTRAINT "app_build_requests_pkey" PRIMARY KEY("app_id","request_id")
 );
 --> statement-breakpoint
+CREATE TABLE "app_builders" (
+	"id" text PRIMARY KEY,
+	"concurrency" integer NOT NULL,
+	"last_seen_at" timestamp(3) with time zone NOT NULL,
+	"created_at" timestamp with time zone DEFAULT now() NOT NULL
+);
+--> statement-breakpoint
 CREATE TABLE "app_builds" (
 	"id" text PRIMARY KEY,
 	"app_id" text NOT NULL,

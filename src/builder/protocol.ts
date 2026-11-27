@@ -4,9 +4,12 @@
  * Builder pulls work, so the platform keeps no connection to it and may run
  * as several instances.
  *
- *   POST /internal/api/builds/lease          {builderId, protocolVersion}
+ *   POST /internal/api/builds/lease          {builderId, protocolVersion,
+ *                                             concurrency?}
  *        -> {build: {id, appId, commit, token, sdkDigest} | null}
- *        Waits up to LEASE_WAIT_MS for a queued build.
+ *        Waits up to LEASE_WAIT_MS for a queued build. Lease requests and
+ *        heartbeats are how the platform knows a Builder is online
+ *        (src/server/apps/builders.ts); `concurrency` is shown there.
  *   GET  /internal/api/builds/:id/source     -> the commit as .tar.gz
  *        Streamed without a length; a failure while streaming resets the
  *        connection. A source over the platform's budget is refused first

@@ -144,12 +144,23 @@ the sandbox identity.
 
 ## Operating it
 
-- Without `HATCH_BUILDER_TOKEN`, every deployment builds locally: `--build
-  builder` fails with `BUILDER_UNAVAILABLE`, and the manage page offers no
-  Redeploy.
+- `hatch app deploy` builds on the Builder unless it is given `--local`.
+  Without `HATCH_BUILDER_TOKEN` that is refused with `BUILDER_UNAVAILABLE`
+  before any deployment is created, and the manage page offers no Redeploy:
+  deploy with `--local`, which builds where the CLI runs and uploads the
+  package.
 - With it, start one or more Builders (`docker compose --profile builder up
-  -d`, or `pnpm dev:builder` in development, which builds the SDK first). Deployments stay `queued` while
-  no Builder runs.
+  -d`, or `pnpm dev:builder` in development, which builds the SDK first).
+  The platform records each Builder whenever it asks for work or renews a
+  lease (`app_builders`); one not heard from for 75 seconds is offline. While
+  no Builder is online, a Builder deployment is refused with
+  `BUILDER_OFFLINE` instead of waiting in the queue, and the manage page's
+  Redeploy is disabled. A deployment already queued waits for a Builder.
+- `hatch server info` and Web Settings → Builder show whether the platform
+  has a Builder and each Builder's concurrency, running builds and last
+  contact. The same page, and `hatch app deployments queue`, list the
+  unfinished deployments of every App, oldest first, with the place of each
+  queued one; any of them can be canceled there.
 - The platform settles deployments nobody moves any more every 30 seconds and
   at startup: lost leases, missing uploads, and a verify or release that a
   restart interrupted (`release_interrupted`, unless the deployment was

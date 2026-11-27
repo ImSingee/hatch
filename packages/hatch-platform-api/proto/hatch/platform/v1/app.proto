@@ -22,6 +22,10 @@ service AppService {
   rpc UploadAppDeploymentArtifact(UploadAppDeploymentArtifactRequest) returns (UploadAppDeploymentArtifactResponse);
   rpc GetAppDeployment(GetAppDeploymentRequest) returns (GetAppDeploymentResponse);
   rpc ListAppDeployments(ListAppDeploymentsRequest) returns (ListAppDeploymentsResponse);
+  // Every unfinished deployment of every App, oldest first: the Builder
+  // queue, builds in progress, local builds awaiting their package and
+  // releases. Cancel one with CancelAppDeployment.
+  rpc ListDeploymentQueue(ListDeploymentQueueRequest) returns (ListDeploymentQueueResponse);
   // Cancel a deployment that has not started verifying its build package.
   rpc CancelAppDeployment(CancelAppDeploymentRequest) returns (CancelAppDeploymentResponse);
   // Log lines after `after_seq` and every state change until the deployment
@@ -136,10 +140,12 @@ message CreateAppDeploymentRequest {
   string generation = 3 [(buf.validate.field).string.min_len = 1];
   // Commit on master to deploy. Defaults to the master tip.
   optional string commit = 4 [(buf.validate.field).string.pattern = "^[0-9a-f]{40}$"];
-  // "auto" (the Builder when the platform has one), "builder" or "local".
+  // "builder" (the platform's dedicated Builder) or "local" (the caller
+  // builds and uploads the package). A Builder build is refused with
+  // BUILDER_UNAVAILABLE when the platform has no Builder and with
+  // BUILDER_OFFLINE when none has connected recently.
   string build = 5 [(buf.validate.field).string = {
     in: [
-      "auto",
       "builder",
       "local"
     ]
@@ -220,6 +226,36 @@ message ListAppDeploymentsRequest {
 message ListAppDeploymentsResponse {
   repeated AppDeployment deployments = 1;
   optional uint32 next_cursor = 2;
+}
+
+message ListDeploymentQueueRequest {
+  optional uint32 limit = 1 [(buf.validate.field).uint32 = {
+    gte: 1
+    lte: 100
+  }];
+  // The `next_cursor` of the previous page.
+  optional string cursor = 2 [(buf.validate.field).string = {
+    min_len: 1
+    max_len: 64
+  }];
+}
+
+message DeploymentQueueEntry {
+  string app_slug = 1;
+  string app_name = 2;
+  // `app_id` names the App.
+  AppDeployment deployment = 3;
+  // 1-based place among queued Builder deployments, in the order Builders
+  // take them (oldest first; one build per App at a time). Only for
+  // `queued`.
+  optional uint32 queue_position = 4;
+  // The Builder holding it, while `building`.
+  optional string builder_id = 5;
+}
+
+message ListDeploymentQueueResponse {
+  repeated DeploymentQueueEntry entries = 1;
+  optional string next_cursor = 2;
 }
 
 message CancelAppDeploymentRequest {

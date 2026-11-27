@@ -3,6 +3,7 @@ import { AppError } from '../errors';
 
 export type DeploymentRequestErrorCode =
   | 'BUILDER_UNAVAILABLE'
+  | 'BUILDER_OFFLINE'
   | 'DEPLOYMENT_NOT_CANCELABLE'
   | 'DEPLOYMENT_NOT_AWAITING_ARTIFACT';
 

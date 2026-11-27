@@ -2,7 +2,7 @@
   "type": "diff",
   "version": "10",
   "dialect": "postgres",
-  "id": "66d7b3ca-ead1-468b-a64f-3bad3f87c7cb",
+  "id": "e719c09d-0383-4a80-a3ad-c670caa88488",
   "prevIds": ["dc150875-020c-44bc-8f6c-9def61003b5c"],
   "footprints": [
     {
@@ -28,6 +28,19 @@
         "n|rel|public.app_build_requests",
         "n|type|public.app_build_requests",
         "n|rel|public.app_build_requests_pkey"
+      ],
+      "reads": ["n|sch|public"]
+    },
+    {
+      "statementType": "create_table",
+      "statementTarget": ["table", "public", "app_builders"],
+      "writes": [
+        "s|tbl|public.app_builders",
+        "n|tbl|public.app_builders",
+        "e|tbl|public.app_builders",
+        "n|rel|public.app_builders",
+        "n|type|public.app_builders",
+        "n|rel|public.app_builders_pkey"
       ],
       "reads": ["n|sch|public"]
     },
@@ -247,6 +260,15 @@
       "op": "create",
       "row": {
         "schema": "public",
+        "name": "app_builders",
+        "isRlsEnabled": false,
+        "entityType": "tables"
+      }
+    },
+    {
+      "op": "create",
+      "row": {
+        "schema": "public",
         "name": "app_builds",
         "isRlsEnabled": false,
         "entityType": "tables"
@@ -385,6 +407,70 @@
       "row": {
         "schema": "public",
         "table": "app_build_requests",
+        "name": "created_at",
+        "type": "timestamp with time zone",
+        "typeSchema": null,
+        "notNull": true,
+        "dimensions": 0,
+        "default": "now()",
+        "generated": null,
+        "identity": null,
+        "entityType": "columns"
+      }
+    },
+    {
+      "op": "create",
+      "row": {
+        "schema": "public",
+        "table": "app_builders",
+        "name": "id",
+        "type": "text",
+        "typeSchema": null,
+        "notNull": true,
+        "dimensions": 0,
+        "default": null,
+        "generated": null,
+        "identity": null,
+        "entityType": "columns"
+      }
+    },
+    {
+      "op": "create",
+      "row": {
+        "schema": "public",
+        "table": "app_builders",
+        "name": "concurrency",
+        "type": "integer",
+        "typeSchema": null,
+        "notNull": true,
+        "dimensions": 0,
+        "default": null,
+        "generated": null,
+        "identity": null,
+        "entityType": "columns"
+      }
+    },
+    {
+      "op": "create",
+      "row": {
+        "schema": "public",
+        "table": "app_builders",
+        "name": "last_seen_at",
+        "type": "timestamp(3) with time zone",
+        "typeSchema": null,
+        "notNull": true,
+        "dimensions": 0,
+        "default": null,
+        "generated": null,
+        "identity": null,
+        "entityType": "columns"
+      }
+    },
+    {
+      "op": "create",
+      "row": {
+        "schema": "public",
+        "table": "app_builders",
         "name": "created_at",
         "type": "timestamp with time zone",
         "typeSchema": null,
@@ -1039,6 +1125,17 @@
         "table": "app_build_requests",
         "name": "app_build_requests_pkey",
         "columns": ["app_id", "request_id"],
+        "nameExplicit": false,
+        "entityType": "pks"
+      }
+    },
+    {
+      "op": "create",
+      "row": {
+        "schema": "public",
+        "table": "app_builders",
+        "name": "app_builders_pkey",
+        "columns": ["id"],
         "nameExplicit": false,
         "entityType": "pks"
       }
