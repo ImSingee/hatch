@@ -143,7 +143,7 @@ async function post(
   } catch (error) {
     throw transportError(error, options.signal);
   }
-  if (!response.ok) throw await responseError(response);
+  if (!response.ok) throw await responseError(response, options.signal);
   return response;
 }
 
@@ -160,8 +160,45 @@ function transportError(error: unknown, signal?: AbortSignal): unknown {
   );
 }
 
-async function responseError(response: Response): Promise<AiError> {
-  const text = await response.text();
+/** A response body as text; a connection lost while reading it is `AiError`. */
+async function bodyText(
+  response: Response,
+  signal?: AbortSignal,
+): Promise<string> {
+  try {
+    return await response.text();
+  } catch (error) {
+    throw transportError(error, signal);
+  }
+}
+
+/** A JSON response body; a lost connection or a cut-off body is `AiError`. */
+async function bodyJson<T>(
+  response: Response,
+  signal?: AbortSignal,
+): Promise<T> {
+  const text = await bodyText(response, signal);
+  try {
+    return JSON.parse(text) as T;
+  } catch {
+    throw new AiError(
+      'ai_request_failed',
+      'The platform AI endpoint returned an unreadable response.',
+      response.status,
+    );
+  }
+}
+
+async function responseError(
+  response: Response,
+  signal?: AbortSignal,
+): Promise<unknown> {
+  let text: string;
+  try {
+    text = await bodyText(response, signal);
+  } catch (error) {
+    return error;
+  }
   try {
     const parsed = JSON.parse(text) as {
       error?: { code?: AiErrorCode; message?: string };
@@ -253,7 +290,16 @@ export function chat(
       response.body,
       options.signal,
     )) {
-      const payload = JSON.parse(data) as Record<string, unknown>;
+      let payload: Record<string, unknown>;
+      try {
+        payload = JSON.parse(data) as Record<string, unknown>;
+      } catch {
+        throw new AiError(
+          'ai_request_failed',
+          'The platform AI stream sent an unreadable event.',
+          200,
+        );
+      }
       if (event === 'text') {
         yield { type: 'text', delta: String(payload.delta ?? '') };
       } else if (event === 'tool_call') {
@@ -309,7 +355,7 @@ export async function complete(
   options: AiRequestOptions = {},
 ): Promise<ChatResult> {
   const response = await post('/chat', { ...request, stream: false }, options);
-  return (await response.json()) as ChatResult;
+  return bodyJson<ChatResult>(response, options.signal);
 }
 
 /** The text parts of a reply, joined. */
@@ -338,10 +384,10 @@ export async function generateImage(
   options: AiRequestOptions = {},
 ): Promise<GeneratedImage> {
   const response = await post('/image', request, options);
-  const result = (await response.json()) as {
+  const result = await bodyJson<{
     image: { data: string; mimeType: 'image/png' };
     model: { provider: string; id: string };
-  };
+  }>(response, options.signal);
   const binary = atob(result.image.data);
   const bytes = new Uint8Array(binary.length);
   for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);

@@ -539,6 +539,27 @@ describe('App AI SDK against the endpoint', () => {
     await expect(
       sdk.runTools({ ...request, tools: [], maxSteps: Number.NaN }, options),
     ).rejects.toMatchObject({ code: 'ai_invalid_request' });
+
+    // The connection drops after the headers, while the body is read.
+    const broken = (status: number) =>
+      new Response(
+        new ReadableStream({
+          start(controller) {
+            controller.error(new TypeError('connection reset'));
+          },
+        }),
+        { status, headers: { 'content-type': 'application/json' } },
+      );
+    for (const status of [200, 500]) {
+      vi.stubGlobal('fetch', async () => broken(status));
+      await expect(sdk.complete(request, options)).rejects.toMatchObject({
+        name: 'AiError',
+        code: 'ai_request_failed',
+      });
+      await expect(
+        sdk.generateImage({ role: 'cover', prompt: 'x' }, options),
+      ).rejects.toMatchObject({ name: 'AiError', code: 'ai_request_failed' });
+    }
   });
 
   it('stops the provider call when the App stops reading the stream', async () => {
