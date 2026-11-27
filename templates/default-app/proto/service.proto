@@ -2,20 +2,30 @@ syntax = "proto3";
 
 package app.v1;
 
-// Request/response messages for the default counter service.
+// Comments on the service, methods, messages, fields and enum values become
+// the App's RPC reference (`hatch app docs rpc`). Describe what a caller needs:
+// what a method does, what each field means and its limits.
+
 message GetCountRequest {}
 
 message IncrementRequest {
+  // How much to add; negative values subtract.
   int32 amount = 1;
 }
 
 message CountReply {
+  // The counter value after the call.
   int32 count = 1;
 }
 
 // A tiny persistent counter. Replace these methods with whatever your app
 // needs — the platform regenerates the Connect client + server stubs on deploy.
 service CounterService {
-  rpc GetCount(GetCountRequest) returns (CountReply);
+  // Returns the current count.
+  rpc GetCount(GetCountRequest) returns (CountReply) {
+    // Read-only: callers may retry it after a timeout.
+    option idempotency_level = NO_SIDE_EFFECTS;
+  }
+  // Adds `amount` to the count and returns the new value.
   rpc Increment(IncrementRequest) returns (CountReply);
 }

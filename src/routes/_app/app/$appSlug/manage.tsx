@@ -418,7 +418,9 @@ function AppDetailPage() {
                 runtimeSupported={runtimeSupported}
               />
 
-              {capabilities?.backend ? <ApiPanel appId={app.id} /> : null}
+              {capabilities?.backend ? (
+                <ApiPanel appId={app.id} slug={app.slug} />
+              ) : null}
 
               {/* An archived App publishes no docs, matching the CLI. */}
               {isArchived ? null : <DocsPanel appId={app.id} slug={app.slug} />}

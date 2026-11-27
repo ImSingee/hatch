@@ -1,20 +1,13 @@
 import {
-  ActionIcon,
   Center,
-  Code,
-  Group,
   Loader,
   ScrollArea,
   SegmentedControl,
   Stack,
   Text,
-  Tooltip,
 } from '@mantine/core';
 import { useQuery } from '@tanstack/react-query';
-import { IconCopy } from '@tabler/icons-react';
-import copy from 'copy-to-clipboard';
 import { useState } from 'react';
-import { toast } from 'sonner';
 import type { PublishedAppDoc } from '~server/apps/manifest';
 import {
   StaleAppDocError,
@@ -24,6 +17,7 @@ import {
 import { useI18n } from '~i18n';
 import { Markdownish } from '~components/agent/markdownish';
 import { GroupCard, Section } from '~components/page/page';
+import { CliCommand } from './cli-command';
 
 function DocBody({ appId, doc }: { appId: string; doc: PublishedAppDoc }) {
   const { t } = useI18n();
@@ -45,29 +39,6 @@ function DocBody({ appId, doc }: { appId: string; doc: PublishedAppDoc }) {
     );
   }
   return <Markdownish text={query.data.content} math={false} />;
-}
-
-function CliCommand({ command }: { command: string }) {
-  const { t } = useI18n();
-  return (
-    <Group gap={6} wrap="nowrap" align="center">
-      <Code style={{ fontSize: 'var(--mantine-font-size-xs)' }}>{command}</Code>
-      <Tooltip label={t('appDocs.copyCommand')} withArrow position="top">
-        <ActionIcon
-          variant="subtle"
-          color="gray"
-          size="sm"
-          aria-label={t('appDocs.copyCommand')}
-          onClick={() => {
-            copy(command);
-            toast.success(t('appDocs.commandCopied'));
-          }}
-        >
-          <IconCopy size={14} />
-        </ActionIcon>
-      </Tooltip>
-    </Group>
-  );
 }
 
 /**
