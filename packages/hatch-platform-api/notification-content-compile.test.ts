@@ -153,6 +153,37 @@ describe('the dependency-free card compiler', () => {
       { error: '<Collapse> summary must be at most 100 characters' },
     ],
     ['Collapse', { summary: 5 }, { error: '<Collapse> summary must be text' }],
+    // Decimal text too long for a finite number, and whole numbers past
+    // what JavaScript holds exactly.
+    [
+      'Trend',
+      { values: `1,${'9'.repeat(400)}` },
+      {
+        error:
+          '<Trend> values Invalid input: expected number, received Infinity',
+      },
+    ],
+    [
+      'Trend',
+      { values: '1,2', threshold: `-${'9'.repeat(400)}` },
+      {
+        error:
+          '<Trend> threshold Invalid input: expected number, received -Infinity',
+      },
+    ],
+    [
+      'Progress',
+      { percent: '9'.repeat(400) },
+      {
+        error:
+          '<Progress> percent Invalid input: expected number, received Infinity',
+      },
+    ],
+    [
+      'Text',
+      { lines: '9007199254740993' },
+      { error: '<Text> lines must be a whole number' },
+    ],
   ] as const)('%s %j', (type, props, expected) => {
     expect(compileProp(type, props)).toEqual(expected);
   });

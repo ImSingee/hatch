@@ -190,14 +190,22 @@ const length = (text: string) => Array.from(text).length;
 
 type Coerced = { value: ContentPropValue } | { error: string };
 
+/** Decimal text as a number; text too long to be finite is rejected. */
+function decimal(text: string): { number: number } | { error: string } {
+  const number = Number(text);
+  return Number.isFinite(number)
+    ? { number }
+    : { error: `Invalid input: expected number, received ${number}` };
+}
+
 /** A number: a finite number, or its decimal text. */
-function toNumber(value: unknown): number | undefined {
+function toNumber(value: unknown): { number: number } | { error: string } {
   if (typeof value === 'number') {
-    return Number.isFinite(value) ? value : undefined;
+    return Number.isFinite(value) ? { number: value } : { error: INVALID };
   }
-  if (typeof value !== 'string') return undefined;
+  if (typeof value !== 'string') return { error: INVALID };
   const text = value.trim();
-  return NUMBER_RE.test(text) ? Number(text) : undefined;
+  return NUMBER_RE.test(text) ? decimal(text) : { error: INVALID };
 }
 
 /** The type of a value as the messages name it. */
@@ -229,16 +237,20 @@ function coerceProp(spec: PropSpec, value: unknown): Coerced {
       }
       return { error: INVALID };
     case 'int': {
-      const number = toNumber(value);
-      if (number === undefined) return { error: INVALID };
-      if (!Number.isInteger(number)) return { error: 'must be a whole number' };
+      const parsed = toNumber(value);
+      if ('error' in parsed) return parsed;
+      const { number } = parsed;
+      // Whole numbers JavaScript holds exactly.
+      if (!Number.isSafeInteger(number))
+        return { error: 'must be a whole number' };
       return number < spec.min || number > spec.max
         ? { error: `must be ${spec.min}-${spec.max}` }
         : { value: number };
     }
     case 'number': {
-      const number = toNumber(value);
-      if (number === undefined) return { error: INVALID };
+      const parsed = toNumber(value);
+      if ('error' in parsed) return parsed;
+      const { number } = parsed;
       if (spec.min !== undefined && number < spec.min) {
         return { error: `must be at least ${spec.min}` };
       }
@@ -267,9 +279,17 @@ function coerceProp(spec: PropSpec, value: unknown): Coerced {
       } else {
         return { error: INVALID };
       }
-      return numbers.length < spec.min || numbers.length > spec.max
-        ? { error: `must list ${spec.min}-${spec.max} numbers` }
-        : { value: numbers };
+      // Too many is reported first, then decimal text too long for a
+      // finite number, then too few.
+      const count = { error: `must list ${spec.min}-${spec.max} numbers` };
+      if (numbers.length > spec.max) return count;
+      const infinite = numbers.find((number) => !Number.isFinite(number));
+      if (infinite !== undefined) {
+        return {
+          error: `Invalid input: expected number, received ${infinite}`,
+        };
+      }
+      return numbers.length < spec.min ? count : { value: numbers };
     }
     case 'url': {
       if (typeof value !== 'string') return { error: 'must be a link' };
