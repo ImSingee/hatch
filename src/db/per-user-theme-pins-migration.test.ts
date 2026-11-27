@@ -28,7 +28,12 @@ function pglite(): Database {
 async function server(): Promise<Database> {
   const name = `hatch_pins_migration_${process.pid}_${Date.now()}`;
   const admin = postgres(adminUrl!, { max: 1, onnotice: () => {} });
-  await admin.unsafe(`create database "${name}"`);
+  try {
+    await admin.unsafe(`create database "${name}"`);
+  } catch (error) {
+    await admin.end();
+    throw error;
+  }
   const url = new URL(adminUrl!);
   url.pathname = `/${name}`;
   const client = postgres(url.toString(), { max: 1, onnotice: () => {} });
@@ -38,10 +43,14 @@ async function server(): Promise<Database> {
       await client.unsafe(sql).simple();
     },
     rows: async <T>(sql: string) => [...(await client.unsafe(sql))] as T[],
+    // The admin connection closes even when dropping the database fails.
     close: async () => {
-      await client.end({ timeout: 1 });
-      await admin.unsafe(`drop database if exists "${name}" with (force)`);
-      await admin.end();
+      try {
+        await client.end({ timeout: 1 });
+        await admin.unsafe(`drop database if exists "${name}" with (force)`);
+      } finally {
+        await admin.end();
+      }
     },
   };
 }
