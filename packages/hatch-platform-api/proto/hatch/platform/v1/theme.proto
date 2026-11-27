@@ -5,35 +5,43 @@ package hatch.platform.v1;
 import "buf/validate/validate.proto";
 import "google/protobuf/struct.proto";
 
-// The instance-wide look that the web, mobile and desktop clients apply.
+// Themes: the caller's own look, which their web, mobile and desktop
+// clients apply, and the shared library it is picked from.
 //
-// The instance has one active theme, picked from a library: the presets
-// (`desk`, `desk-dark`) and custom themes. A theme is a theme document: a
-// small set of semantic values (name, appearance, nine colours, a base
-// radius and two bundled fonts) from which the platform derives every other
-// token. A dark theme is a theme like any other; clients draw the active
-// theme whatever their device prefers. An optional accent replaces the
-// active theme's primary. See DESIGN.md "Themes".
+// The library is shared: the presets (`desk`, `desk-dark`) and custom themes
+// anyone can create, edit and delete. A theme is a theme document: a small
+// set of semantic values (name, appearance, nine colours, a base radius and
+// two bundled fonts) from which the platform derives every other token. Each
+// user has their own active theme, accent and dock labels; a new user draws
+// `desk` with no accent. A dark theme is a theme like any other; clients
+// draw the user's theme whatever their device prefers. An optional accent
+// replaces the active theme's primary. See DESIGN.md "Themes".
+//
+// GetTheme, SetTheme and ResetTheme act for the caller: the user behind a
+// session or API key, or for a Run the user who sent the prompt it answers;
+// a Run no user prompted is rejected as a conflict (aborted). The library
+// calls work for every credential.
 service ThemeService {
   rpc GetTheme(GetThemeRequest) returns (GetThemeResponse);
-  // Changes the accent, the dock labels or the active theme.
+  // Changes the caller's accent, dock labels or active theme.
   rpc SetTheme(SetThemeRequest) returns (SetThemeResponse);
-  // Back to `desk` with no accent, in one change; dock labels and the
-  // library are kept.
+  // The caller back on `desk` with no accent, in one change; their dock
+  // labels and the library are kept.
   rpc ResetTheme(ResetThemeRequest) returns (ResetThemeResponse);
   // The library: presets first, then custom themes, oldest first.
   rpc ListThemes(ListThemesRequest) returns (ListThemesResponse);
-  // Saves a new custom theme; it is not activated.
+  // Saves a new custom theme to the shared library; it is not activated.
   rpc CreateTheme(CreateThemeRequest) returns (CreateThemeResponse);
-  // Replaces a custom theme's document whole.
+  // Replaces a custom theme's document whole, for everyone who uses it.
   rpc UpdateTheme(UpdateThemeRequest) returns (UpdateThemeResponse);
-  // Deletes a custom theme. The active theme cannot be deleted.
+  // Deletes a custom theme. The caller's own active theme cannot be deleted;
+  // other users who have it active fall back to `desk`.
   rpc DeleteTheme(DeleteThemeRequest) returns (DeleteThemeResponse);
   // Checks a theme document without saving anything.
   rpc ValidateTheme(ValidateThemeRequest) returns (ValidateThemeResponse);
 }
 
-// One accent the instance can choose.
+// One accent that can be chosen.
 message Accent {
   string name = 1;
   // Base colour as #RRGGBB.
@@ -70,7 +78,7 @@ message ThemeState {
   // Whether the web dock shows each tile's name under it. Off by default;
   // the full name always shows on hover.
   bool dock_labels = 4;
-  // The theme every client draws.
+  // The theme the caller's clients draw.
   ThemeEntry theme = 5;
   // Whether the chosen accent hides the active theme's own primary. Clear
   // the accent to show it.
@@ -222,8 +230,9 @@ message ThemeProblem {
 
 message ValidateThemeRequest {
   google.protobuf.Struct document = 1 [(buf.validate.field).required = true];
-  // Also check the document with the instance's current accent, the way it
-  // would be drawn if activated now.
+  // Also check the document with the caller's current accent, the way it
+  // would be drawn if they activated it now; a Run no user prompted has no
+  // accent.
   bool with_current_accent = 2;
 }
 

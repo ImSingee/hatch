@@ -273,9 +273,12 @@ sentences meant for display, so the UI can translate them.
   `useI18n()`, so they re-render on a language switch. dayjs stays on its
   English default: keep it for date arithmetic and fixed technical formats
   such as `YYYY-MM-DD HH:mm:ss`, not for translated display text.
-- The language is a per-browser preference (Settings → Appearance → Language,
-  stored in local storage). Use `changeLocale()`; never reload the page or key
-  providers, routers or forms by locale.
+- The language is a preference of the signed-in user (Settings → Appearance →
+  Language), stored in `user_preferences.language`. Local storage only caches
+  the last language this browser showed, for the first paint and the sign-in
+  page; `LocaleSync` in the root applies the user's saved value. Use
+  `changeLocale()`; never reload the page or key providers, routers or forms
+  by locale.
 - Browser tests run in English (`vitest.browser.setup.ts`) and assert English
   copy. Update text assertions and accessible-name selectors when copy changes.
 

@@ -1,4 +1,4 @@
-/** How the native App player learns and reads the instance theme. */
+/** How the native App player learns and reads the viewing user's theme. */
 import { describe, expect, it, vi } from 'vitest';
 import {
   createThemeRefresher,

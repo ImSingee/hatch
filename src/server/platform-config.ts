@@ -17,40 +17,9 @@
 import { sql } from 'drizzle-orm';
 import { z } from 'zod';
 import { tailscaleConfigSchema, type TailscaleConfig } from '../tailscale';
-import { DEFAULT_THEME } from '../../packages/hatch-design-tokens/src';
-import { ACCENT_NAMES, DEFAULT_ACCENT } from '../ui/theme/accents';
 import { db, schema } from '../db';
 import type { TX } from '../db/db';
 import type { JsonValue } from '../db/schema';
-
-/**
- * The accents come from the design tokens; nothing else lists them. Each
- * field falls back on its own, so a retired accent does not also reset the
- * dock labels, and rows written before a field existed stay valid: `{ accent }`
- * rows read as `desk`.
- */
-const uiThemeConfigSchema = z.object({
-  /** null: no accent, the active theme shows its own primary. */
-  accent: z.enum(ACCENT_NAMES).nullable().catch(DEFAULT_ACCENT),
-  /** Whether the web dock shows each tile's name under it. */
-  dockLabels: z.boolean().catch(false),
-  /**
-   * The active theme: a preset name or a custom theme's id (`themes`). An
-   * id that no longer names a usable theme draws `desk`.
-   */
-  theme: z.string().min(1).max(64).catch(DEFAULT_THEME),
-});
-export type UiThemeConfig = z.infer<typeof uiThemeConfigSchema>;
-
-/**
- * A fresh instance, and `theme reset`: `desk` with no accent (desk's own
- * primary is the default accent, so it looks the same).
- */
-export const DEFAULT_UI_THEME: UiThemeConfig = {
-  accent: null,
-  dockLabels: false,
-  theme: DEFAULT_THEME,
-};
 
 /** Model catalog refresh settings (`~server/model-catalog/refresh`). */
 const modelCatalogConfigSchema = z.object({
@@ -112,14 +81,6 @@ const REGISTRY = {
     fallback: true,
     invalidFallback: false,
   } satisfies ConfigEntry<boolean>,
-  /**
-   * The instance-wide look every client applies. A stored accent that the
-   * tokens no longer define falls back to the default accent.
-   */
-  'ui.theme': {
-    schema: uiThemeConfigSchema,
-    fallback: DEFAULT_UI_THEME,
-  } satisfies ConfigEntry<UiThemeConfig>,
   'models.catalog': {
     schema: modelCatalogConfigSchema,
     fallback: { autoUpdate: true, sourceUrl: null },

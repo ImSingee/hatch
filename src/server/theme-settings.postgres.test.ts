@@ -25,6 +25,13 @@ describe.skipIf(!adminUrl)('Theme library on PostgreSQL', () => {
     await runMigrations();
     platform = await import('~/db');
     themes = await import('./theme-settings');
+    await platform.db.insert(platform.schema.user).values(
+      ['u1', 'u2'].map((id) => ({
+        id,
+        name: id,
+        email: `${id}@themes.test`,
+      })),
+    );
   }, 60_000);
 
   afterAll(async () => {
@@ -55,22 +62,47 @@ describe.skipIf(!adminUrl)('Theme library on PostgreSQL', () => {
     );
   });
 
-  it('never deletes a theme that is being activated at the same moment', async () => {
-    const config = await import('./platform-config');
+  it('never deletes the caller\u2019s theme while they activate it', async () => {
     for (let round = 0; round < 12; round++) {
       const saved = await themes.createTheme({
         ...THEME_PRESETS.desk.document,
         name: `Race ${round}`,
       });
       // Delete and activate race over separate pooled connections.
-      await Promise.allSettled([
-        themes.deleteTheme(saved.id),
-        themes.updateTheme({ theme: saved.id }),
+      const [deleted, activated] = await Promise.allSettled([
+        themes.deleteTheme('u1', saved.id),
+        themes.updateTheme('u1', { theme: saved.id }),
       ]);
-      const active = (await config.getPlatformConfig('ui.theme')).theme;
+      // Exactly one wins: deleted first (the activation finds nothing), or
+      // activated first (the delete refuses the caller's active theme).
+      expect(
+        [deleted.status, activated.status].filter((s) => s === 'fulfilled'),
+      ).toHaveLength(1);
+      const active = (await themes.getThemeState('u1')).theme.id;
       const ids = (await themes.listThemes()).map((theme) => theme.id);
       expect(ids).toContain(active);
-      await themes.updateTheme({ theme: 'desk' });
+      await themes.updateTheme('u1', { theme: 'desk' });
+    }
+  });
+
+  it('falls another user back to desk when their theme is deleted as they activate it', async () => {
+    for (let round = 0; round < 12; round++) {
+      const saved = await themes.createTheme({
+        ...THEME_PRESETS.desk.document,
+        name: `Swap ${round}`,
+      });
+      await Promise.allSettled([
+        themes.deleteTheme('u1', saved.id),
+        themes.updateTheme('u2', { theme: saved.id }),
+      ]);
+      // Never left pointing at a deleted theme.
+      const active = (await themes.getThemeState('u2')).theme.id;
+      expect([saved.id, 'desk']).toContain(active);
+      const ids = (await themes.listThemes()).map((theme) => theme.id);
+      expect(ids).toContain(active);
+      // Deleting it afterwards still falls the user back.
+      await themes.deleteTheme('u1', saved.id).catch(() => undefined);
+      expect((await themes.getThemeState('u2')).theme.id).toBe('desk');
     }
   });
 });

@@ -736,16 +736,24 @@ hatch pin add --dashboard <dashboard-id>
 hatch pin remove --dashboard <dashboard-id>
 ```
 
-`theme get` prints the chosen `accent` (`null` when the active theme shows its
+The active theme, accent, dock labels and pins are personal: each user has
+their own, and a command acts for the signed-in user, the API key's user or, in
+a Run, the user who sent the prompt. A Run no user prompted gets `CONFLICT` (6)
+for those. The theme library (the presets and custom themes) is shared:
+anyone can list, create, update and delete custom themes, a Run no user
+prompted included. A new user starts from `desk` with no accent, no dock
+labels, no App pins and only the default (oldest) dashboard pinned.
+
+`theme get` prints your chosen `accent` (`null` when the active theme shows its
 own primary), the `defaultAccent`, every accent with its colour, `dockLabels`,
-the active `theme` (`id`, `name`, `source` `preset` or `custom`,
+your active `theme` (`id`, `name`, `source` `preset` or `custom`,
 `appearance` `light` or `dark`, its own `primary` and its `document`) and
 `accentOverridesPrimary`, whether the chosen accent hides that primary.
 `--resolved` adds `resolved`, every token of the active theme with the accent
-applied. There is one active theme for the instance; a dark theme is a theme
-like any other, and no client follows the device's light or dark setting.
+applied. A dark theme is a theme like any other, and no client follows the
+device's light or dark setting.
 
-`theme list` prints the library: the presets (`desk`, `desk-dark`), then the
+`theme list` prints the shared library: the presets (`desk`, `desk-dark`), then the
 custom themes oldest first, each as in `theme get`, plus `valid` and
 `problems` (a custom theme saved under older rules that no longer passes them
 is listed with `valid: false` and cannot be activated until it is updated).
@@ -755,23 +763,27 @@ activated. Theme names are unique, ignoring case, and the preset names (`Desk`,
 `Desk dark`) are taken: `create` or `update` with a name another theme has is
 `CONFLICT` (exit 6) and the message names it; rename by updating the document's
 `name`. `theme update <id> --file` replaces a custom theme's document
-whole; presets cannot be changed (`BAD_REQUEST`, exit 2), copy one with
-`create` instead. `theme delete <id> --yes` deletes a custom theme permanently (without
-`--yes` it is rejected locally, since it cannot be undone); the
+whole, for everyone who uses it; presets cannot be changed (`BAD_REQUEST`, exit 2), copy one with
+`create` instead. When you have the theme active it is also checked with your
+accent; another user whose accent no longer reads on it sees the theme's own
+primary instead. `theme delete <id> --yes` deletes a custom theme permanently (without
+`--yes` it is rejected locally, since it cannot be undone); your own
 active theme cannot be deleted (`CONFLICT`, exit 6), activate another first.
+Other users who have it active fall back to `desk`.
 An unknown id is `NOT_FOUND` (exit 5).
 
-`theme set` changes only the settings it is given, for the whole instance,
-and signed-in clients and open native Apps restyle without a reload:
+`theme set` changes only the settings it is given, for you only, and your
+signed-in clients and open native Apps restyle without a reload:
 `--theme <id>` activates a preset or a custom theme; `--accent` replaces the
 active theme's primary and `--clear-accent` lets it show its own;
 `--dock-labels` / `--no-dock-labels` shows or hides the names under the web
-dock tiles (hidden by default). Give at least one. When the accent hides the
+dock tiles (hidden by default). Give at least one; `--dock-labels` and
+`--no-dock-labels` together are rejected. When the accent hides the
 activated theme's own primary, `theme set --theme` notes it on stderr with the
 `--clear-accent` fix. `theme check --file` validates a document without saving
-it and prints it resolved. `theme reset` activates `desk` with no accent
-(`desk`'s primary is the default accent, so it looks the same) in one change,
-keeping dock labels and the custom themes.
+it and prints it resolved. `theme reset` activates `desk` with no accent for
+you (`desk`'s primary is the default accent, so it looks the same) in one
+change, keeping your dock labels and the custom themes.
 
 A theme document is `{"name"?, "appearance", "colors": {background,
 foreground, card, primary, secondary, muted, muted-foreground, border,
@@ -812,7 +824,8 @@ shortening it),
 repeated id in `pin reorder`, a `--limit` outside 1–100, a `--cursor` that
 is not a printed `nextCursor`, a flag the command does not take and a flag
 given without its value (the message names the flag). Platform errors: `NOT_FOUND` (5) for an unknown
-App, dashboard or pin id, and `BAD_REQUEST` (2).
+App, dashboard or pin id (another user's pin id included), `CONFLICT` (6) in a
+Run no user prompted, and `BAD_REQUEST` (2).
 
 ## Dashboards
 
@@ -846,7 +859,12 @@ other breakpoints follow. `widget layout` changes one breakpoint (desktop
 unless `--breakpoint` is given) and keeps omitted numbers; widgets under the
 new position move down and empty rows close up, so read the printed layouts.
 `update` leaves omitted fields unchanged; `--auto-refresh` takes seconds
-(1 to 3600). Pin, unpin and reorder dashboards with `hatch pin`.
+(1 to 3600). Dashboards are shared, but each user has their own pinned flags
+and order: `dashboard list` prints them for the caller (dashboards they never
+pinned or ordered last, oldest first; a new user's first visit pins the
+oldest one, whoever created it), and `dashboard create` pins the new
+dashboard last for the caller and for nobody else. Pin, unpin and reorder dashboards with
+`hatch pin`.
 
 Local rejections exit 2 with `invalid_arguments`: no field to change, a blank
 `--name` or `--description`, `--description` with `--clear-description`,
@@ -864,6 +882,7 @@ deleting the last dashboard.
 hatch preferences get --json
 hatch preferences set --agent-message-mode queue
 hatch preferences set --background-app-minutes 15
+hatch preferences set --language zh-CN
 ```
 
 `preferences` reads and writes the caller's personal preferences. With a Run
@@ -875,19 +894,22 @@ after its current tool calls finish, and several waiting messages go together;
 send order. A change applies to messages sent afterwards.
 `backgroundAppMinutes` (1–1440, default 5) is how long a minimised App keeps
 running on the Desk, listeners and all; after that the Desk stops it and
-reopens it on the page it was left on when it is opened again. `set` changes
-only the flags it is given and prints every preference.
+reopens it on the page it was left on when it is opened again. `language` is
+the Web UI language (`en` or `zh-CN`) of every browser the user signs in to; it
+is `null` until the user picks one, and each browser then follows its own
+language. `set` changes only the flags it is given and prints every preference.
 
 Local rejections exit 2: `invalid_arguments` (a missing or unknown operation,
-`set` without either flag, a flag given twice, a value other than `queue` or
-`steer`, minutes that are not a whole number from 1 to 1440, or a positional
-argument). `set` with both flags saves `agentMessageMode` first; if the
-background time then fails, the error keeps that failure's code and exit
-status, says the agent preference was saved, and with `--json` carries
-`details.applied` (the saved `agentMessageMode`). It says the background time
-was not set only when the platform refused it or the request never left;
-after a timeout or a dropped connection (`outcome_unknown`) it says the
-outcome is unknown, so read it back with `hatch preferences get`. Platform errors: `CONFLICT` (6) for a Run credential
+`set` without any flag, a flag given twice, a mode other than `queue` or
+`steer`, minutes that are not a whole number from 1 to 1440, a language other
+than `en` or `zh-CN`, or a positional argument). `set` saves the given flags in
+the order agent message mode, background time, language; if a later one fails
+after an earlier one was saved, the error keeps that failure's code and exit
+status, names what was already saved, and with `--json` carries
+`details.applied` (the saved fields). It says the failed field was not set only
+when the platform refused it or the request never left; after a timeout or a
+dropped connection (`outcome_unknown`) it says the outcome is unknown, so read
+it back with `hatch preferences get`. Platform errors: `CONFLICT` (6) for a Run credential
 whose run has no recorded user (created before preferences, or the user was
 deleted).
 

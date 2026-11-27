@@ -1,7 +1,10 @@
-/** Server Functions for the instance theme (Web UI). */
+/**
+ * Server Functions for themes (Web UI): the signed-in user's own active
+ * theme, accent and dock labels, and the shared library of custom themes.
+ */
 import { createServerFn } from '@tanstack/react-start';
 import { z } from 'zod';
-import { authMiddleware } from './auth';
+import { authMiddleware, requireSession } from './auth';
 import {
   createTheme,
   deleteTheme,
@@ -19,21 +22,21 @@ import type {
   ThemeProblem,
 } from '../../packages/hatch-design-tokens/src';
 
-/** The theme state with the active theme resolved, as the Web UI draws it. */
-export type WebTheme = ThemeState & { resolved: ResolvedTheme };
+/**
+ * The user's theme state with their theme resolved, as the Web UI draws it,
+ * and the user it belongs to so a cached copy can be checked.
+ */
+export type WebTheme = ThemeState & { resolved: ResolvedTheme; userId: string };
 
-async function webTheme(): Promise<WebTheme> {
-  const { theme, resolved } = await getTheme({ resolve: true });
-  return { ...theme, resolved: resolved! };
+async function webTheme(userId: string): Promise<WebTheme> {
+  const { theme, resolved } = await getTheme(userId, { resolve: true });
+  return { ...theme, resolved: resolved!, userId };
 }
 
-/**
- * Public on purpose: the login page is drawn in the instance theme, and
- * themes are not private.
- */
-export const getThemeFn = createServerFn({ method: 'GET' }).handler(() =>
-  webTheme(),
-);
+/** The signed-in user's theme. The sign-in page draws this browser's cache. */
+export const getThemeFn = createServerFn({ method: 'GET' })
+  .middleware([authMiddleware])
+  .handler(async () => webTheme((await requireSession()).user.id));
 
 export const setThemeAccentFn = createServerFn({ method: 'POST' })
   .middleware([authMiddleware])
@@ -41,18 +44,20 @@ export const setThemeAccentFn = createServerFn({ method: 'POST' })
     z.string().min(1).max(32).nullable().parse(accent),
   )
   .handler(async ({ data }) => {
+    const { user } = await requireSession();
     await (data === null
-      ? updateTheme({ accent: null })
-      : setThemeAccent(data));
-    return webTheme();
+      ? updateTheme(user.id, { accent: null })
+      : setThemeAccent(user.id, data));
+    return webTheme(user.id);
   });
 
 export const setDockLabelsFn = createServerFn({ method: 'POST' })
   .middleware([authMiddleware])
   .validator((shown: boolean) => z.boolean().parse(shown))
   .handler(async ({ data }) => {
-    await updateTheme({ dockLabels: data });
-    return webTheme();
+    const { user } = await requireSession();
+    await updateTheme(user.id, { dockLabels: data });
+    return webTheme(user.id);
   });
 
 const themeId = z
@@ -61,18 +66,19 @@ const themeId = z
   .max(64)
   .regex(/^[a-z0-9][a-z0-9-]*$/);
 
-/** The theme library: presets, then custom themes. */
+/** The shared theme library: presets, then custom themes. */
 export const listThemesFn = createServerFn({ method: 'GET' })
   .middleware([authMiddleware])
   .handler(() => listThemes());
 
-/** Make a theme of the library the one every client draws. */
+/** Make a theme of the library the one the user's clients draw. */
 export const activateThemeFn = createServerFn({ method: 'POST' })
   .middleware([authMiddleware])
   .validator((id: string) => themeId.parse(id))
   .handler(async ({ data }) => {
-    await updateTheme({ theme: data });
-    return webTheme();
+    const { user } = await requireSession();
+    await updateTheme(user.id, { theme: data });
+    return webTheme(user.id);
   });
 
 /**
@@ -92,7 +98,11 @@ export const saveThemeFn = createServerFn({ method: 'POST' })
   .handler(async ({ data }): Promise<SaveThemeResult> => {
     try {
       const theme = data.id
-        ? await updateCustomTheme(data.id, data.document)
+        ? await updateCustomTheme(
+            (await requireSession()).user.id,
+            data.id,
+            data.document,
+          )
         : await createTheme(data.document);
       return { ok: true, theme };
     } catch (error) {
@@ -106,6 +116,6 @@ export const deleteThemeFn = createServerFn({ method: 'POST' })
   .middleware([authMiddleware])
   .validator((id: string) => themeId.parse(id))
   .handler(async ({ data }) => {
-    await deleteTheme(data);
+    await deleteTheme((await requireSession()).user.id, data);
     return { deleted: data };
   });

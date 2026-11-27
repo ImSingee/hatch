@@ -11,7 +11,7 @@ phones, tablets, desktops and the web by themselves.
    `import { Page, Button, signal, mount } from '@hatch/ui'`. Do not import
    `nsh` or `nsh/base` outside `app/custom/`.
 2. Start the App with `mount(App)` from `@hatch/ui` in `app/main.tsx`. It
-   follows the instance's theme and accent and hosts toasts and confirmations.
+   follows the viewer's theme and accent and hosts toasts and confirmations.
 3. No component takes `class` or `style`. Vary a component only through its
    typed props (`kind`, `tone`, `size`, `gap`, `width`). The type checker
    rejects anything else, and the deploy check rejects colours and sizes
@@ -82,7 +82,7 @@ a pattern page or a `NavStack`.
 - Colour carries meaning, not decoration: `tone` says success, warning,
   danger or info and is always paired with a word or an icon. Keep ordinary
   metadata neutral; do not give each category its own colour.
-- The accent (the instance's choice) marks the main action, the current
+- The accent (each viewer's own choice) marks the main action, the current
   navigation item and selection. Never choose colours: the theme does.
 - Prefer text to icons. An icon without text (`IconButton`) needs a `label`.
 

@@ -95,6 +95,8 @@ beforeEach(async () => {
   fixture.credential = CREDENTIALS.session;
   await db.delete(schema.dashboards);
   await db.delete(schema.apps);
+  await db.delete(schema.user);
+  await db.insert(schema.user).values(user);
   await db.insert(schema.apps).values({
     id: 'app-notes',
     slug: 'notes',
@@ -123,9 +125,7 @@ beforeEach(async () => {
     .update(schema.apps)
     .set({ currentDeploymentId: 'deployment-notes' })
     .where(eq(schema.apps.id, 'app-notes'));
-  await db
-    .insert(schema.dashboards)
-    .values({ id: 'home', name: 'Home', pinned: true, sortOrder: 0 });
+  await db.insert(schema.dashboards).values({ id: 'home', name: 'Home' });
 });
 
 type Layout = { id: string; x?: number; y?: number; w: number; h: number };

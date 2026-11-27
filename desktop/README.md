@@ -45,9 +45,9 @@ it is gone and shows its own sign-in screen. **Hatch → Sign Out** ends the
 session on the instance and removes it from the Keychain.
 
 `settings.json` in `~/Library/Application Support/app.hatch.desktop/` holds
-only the instance origin and its accent colour.
+only the instance origin and the signed-in user's accent colour.
 
-The window takes the active instance theme's appearance, not the macOS
+The window takes the signed-in user's theme's appearance, not the macOS
 setting: the web UI names its ground in `<meta name="theme-color">`, which
 WebKit reports as the web view's `themeColor`; a dark ground makes the window
 dark and a light one light (`src-tauri/src/appearance.rs`). A page that names

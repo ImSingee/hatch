@@ -24,7 +24,7 @@ The response contains:
 ## Native app structure
 
 The native app (`mobile/`) follows Desk, the visual system in `DESIGN.md`. It
-draws every colour, radius, font and shadow from the instance theme (see
+draws every colour, radius, font and shadow from the signed-in user's theme (see
 below) and reads weights, sizes, tile fills and motion from
 `packages/hatch-design-tokens/tokens.json`. It uses the workspace like this:
 
@@ -96,14 +96,14 @@ Icons are kept in memory only.
 The pinned grid reads `PinService.ListPins` and changes pins with `PinApp`
 (`ifAbsent`) and `UnpinApp` (by pin id). An "Add" tile
 after each grid opens a picker of what is not pinned yet; a tile's
-touch-and-hold menu unpins it at once, since pinning again undoes it. Pins are shared by every client, so a change
-re-reads the pins and the workspace, which marks a pinned App on its App page. Reordering pins is not
+touch-and-hold menu unpins it at once, since pinning again undoes it. Pins belong to the signed-in user and are
+the same on every client they use, so a change re-reads the pins and the workspace, which marks a pinned App on its App page. Reordering pins is not
 offered on the phone yet (`ReorderAppPins` exists).
 
 ### Theme and ground
 
-The app reads the active instance theme (`ui.theme`) through
-`ThemeService.GetTheme` resolved, after sign-in and again each time it returns
+The app reads the signed-in user's theme (their active theme and accent)
+through `ThemeService.GetTheme` resolved, after sign-in and again each time it returns
 to the foreground (`src/state/instance-theme.tsx`). It keeps the last answer
 per instance in a file in the app's documents (resolved themes are too large
 for the Keychain), so a cold start draws it from the first frame; signed out

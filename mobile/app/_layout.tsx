@@ -1,6 +1,6 @@
 import { DarkTheme, DefaultTheme, Stack, ThemeProvider } from 'expo-router';
 import type { PropsWithChildren } from 'react';
-import { InstanceTheme } from '../src/state/instance-theme';
+import { UserTheme } from '../src/state/instance-theme';
 import { useTheme } from '../src/ui/theme-context';
 import { SessionProvider, useSession } from '../src/state/session';
 import { useDeepLinkLifecycle } from '../src/state/deep-links';
@@ -96,16 +96,16 @@ function Themed({ children }: PropsWithChildren) {
 
 export default function RootLayout() {
   return (
-    // The theme's one entry: InstanceTheme provides the instance's resolved
-    // `ui.theme` (light, dark or the device's), or the built-in desk themes
-    // while signed out. It also sets the app's system appearance.
+    // The theme's one entry: UserTheme provides the signed-in user's resolved
+    // theme, or the built-in desk theme while signed out. It also sets the
+    // app's system appearance.
     <NavigationProvider>
       <SessionProvider>
-        <InstanceTheme>
+        <UserTheme>
           <Themed>
             <Navigation />
           </Themed>
-        </InstanceTheme>
+        </UserTheme>
       </SessionProvider>
     </NavigationProvider>
   );

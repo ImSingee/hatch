@@ -70,13 +70,14 @@ vi.mock('~queries/sidebar', () => ({
   },
 }));
 vi.mock('~queries/theme', () => ({
-  themeQueryOptions: {
-    queryKey: ['test-theme'],
+  themeQueryOptions: (userId: string) => ({
+    queryKey: ['test-theme', userId],
     queryFn: async () => ({
+      userId,
       accent: 'indigo',
       dockLabels: fixtures.dockLabels,
     }),
-  },
+  }),
 }));
 vi.mock('~server/sidebar', () => ({
   addSidebarItem: async () => undefined,
@@ -89,7 +90,9 @@ vi.mock('~auth/client', () => ({
   authClient: {
     signOut: async () => ({}),
     useSession: () => ({
-      data: { user: { name: 'Test owner', email: 'owner@example.test' } },
+      data: {
+        user: { id: 'owner', name: 'Test owner', email: 'owner@example.test' },
+      },
     }),
   },
 }));

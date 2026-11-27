@@ -56,6 +56,7 @@ function themeWith(accent: 'teal' | null, overrides: boolean): WebTheme {
     accentOverridesPrimary: overrides,
     // The panel does not read the resolved tokens.
     resolved: {} as WebTheme['resolved'],
+    userId: 'owner',
   } as WebTheme;
 }
 
@@ -65,7 +66,7 @@ async function renderPanel(theme: WebTheme) {
   return render(
     <QueryClientProvider client={queryClient}>
       <MantineProvider>
-        <AccentPanel />
+        <AccentPanel userId="owner" />
       </MantineProvider>
     </QueryClientProvider>,
   );

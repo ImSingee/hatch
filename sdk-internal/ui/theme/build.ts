@@ -75,7 +75,7 @@ function px(value: number): string {
 }
 
 /**
- * The complete theme of an App: for a resolved instance theme (`theme`),
+ * The complete theme of an App: for the viewer's resolved theme (`theme`),
  * else for the built-in `desk` theme with `accent`.
  */
 export function buildAppTheme(

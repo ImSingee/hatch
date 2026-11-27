@@ -32,9 +32,9 @@ export type TranslationResource = {
   'settings.agentRunner.keywords': 'runners runs';
   'settings.about.label': 'About';
   'settings.about.keywords': 'version revision build';
-  'appearance.description': 'How Hatch looks for everyone on this instance, on the web and in the apps.';
+  'appearance.description': 'How Hatch looks for you, on the web and in the apps. Other people keep their own choices.';
   'appearance.accent.title': 'Accent colour';
-  'appearance.accent.description': 'Used for buttons, links and selection.';
+  'appearance.accent.description': 'Used for buttons, links and selection, wherever you sign in.';
   'appearance.accent.indigo': 'Indigo';
   'appearance.accent.teal': 'Teal';
   'appearance.accent.clay': 'Clay';
@@ -42,7 +42,7 @@ export type TranslationResource = {
   'appearance.accent.theme': 'Theme colour';
   'appearance.accent.overrides': 'The accent replaces the primary colour of the custom theme “{{name}}”. Choose Theme colour to show it.';
   'appearance.themes.title': 'Theme';
-  'appearance.themes.description': 'The colours, corners and type of Hatch and every App, on the web, in the apps and on every device. A dark theme is a theme like any other.';
+  'appearance.themes.description': 'The colours, corners and type of Hatch and every App you open, on the web, in the apps and on every device. Choosing a theme changes it only for you; the themes themselves are shared, so everyone can use, edit and delete the custom ones. A dark theme is a theme like any other.';
   'appearance.themes.new': 'New theme';
   'appearance.themes.copyName': '{{name}} copy';
   'appearance.themes.copyNameNumbered': '{{name}} copy {{number}}';
@@ -50,9 +50,9 @@ export type TranslationResource = {
   'appearance.themes.edit': 'Edit';
   'appearance.themes.duplicate': 'Duplicate';
   'appearance.themes.delete': 'Delete';
-  'appearance.themes.deleteActive': 'Delete (choose another theme first)';
+  'appearance.themes.deleteActive': 'Delete (choose another theme for yourself first)';
   'appearance.themes.deleteTitle': 'Delete {{name}}?';
-  'appearance.themes.deleteBody': 'The theme is removed for everyone on this instance. This cannot be undone.';
+  'appearance.themes.deleteBody': 'The theme is removed from the library for everyone. People who use it switch to Desk. This cannot be undone.';
   'appearance.themes.light': 'Light';
   'appearance.themes.dark': 'Dark';
   'appearance.themes.custom': 'Custom';
@@ -108,9 +108,11 @@ export type TranslationResource = {
   'appearance.themeEditor.problem.unknownFont': '{{field}} must be a bundled font.';
   'appearance.themeEditor.problem.lowContrast': '{{foreground}} on {{background}} is too faint to read ({{ratio}}:1; at least 4.5:1 is needed).';
   'appearance.dockLabels.title': 'Show names in the dock';
-  'appearance.dockLabels.description': 'Print each App name under its tile. Pointing at a tile shows its full name either way.';
+  'appearance.dockLabels.description': 'Print each App name under its tile in your dock. Pointing at a tile shows its full name either way.';
   'appearance.language.title': 'Language';
-  'appearance.language.description': 'The language of the Hatch interface in this browser. Other people and devices keep their own choice.';
+  'appearance.language.description': 'The language of the Hatch interface for your account, in every browser you sign in to. Other people keep their own choice.';
+  'appearance.language.notSaved': "Not saved to your account yet. Hatch follows this browser's language until you pick one.";
+  'appearance.language.saveFailed': "Couldn't save your language. It switched back.";
   'mention.label': 'Apps';
   'mention.loading': 'Loading Apps…';
   'mention.loadFailed': 'Could not load Apps';

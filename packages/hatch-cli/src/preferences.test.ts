@@ -1,5 +1,5 @@
 import { Code, ConnectError, createRouterTransport } from '@connectrpc/connect';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { PublicErrorSchema } from '../../hatch-platform-api/gen/hatch/platform/v1/error_pb';
 import { PreferenceService } from '../../hatch-platform-api/gen/hatch/platform/v1/preference_pb';
 import { cliClient } from './client';
@@ -41,12 +41,37 @@ describe('preferences command arguments', () => {
       agentMessageMode: 'queue',
       backgroundAppMinutes: 1440,
     });
+    expect(command('preferences', 'set', '--language', 'zh-CN')).toStrictEqual({
+      kind: 'set',
+      language: 'zh-CN',
+    });
+    expect(
+      command(
+        'preferences',
+        'set',
+        '--language=en',
+        '--agent-message-mode',
+        'queue',
+      ),
+    ).toStrictEqual({ kind: 'set', agentMessageMode: 'queue', language: 'en' });
   });
 
   it('rejects incomplete, unknown or misplaced input before any request', () => {
     expect(rejected('preferences')).toMatch(/preferences get or/);
     expect(rejected('preferences', 'list')).toMatch(/preferences get or/);
-    expect(rejected('preferences', 'set')).toMatch(/--background-app-minutes/);
+    expect(rejected('preferences', 'set')).toMatch(
+      /--agent-message-mode .*--background-app-minutes .*--language/,
+    );
+    for (const language of ['fr', 'zh', 'ZH-cn', ''])
+      expect(rejected('preferences', 'set', '--language', language)).toMatch(
+        /--language must be en or zh-CN/,
+      );
+    expect(
+      rejected('preferences', 'set', '--language', 'en', '--language=zh-CN'),
+    ).toMatch(/--language only once/);
+    expect(rejected('preferences', 'get', '--language', 'en')).toMatch(
+      /Invalid arguments/,
+    );
     for (const minutes of ['0', '1441', '1.5', '-3', '', 'ten'])
       expect(
         rejected('preferences', 'set', `--background-app-minutes=${minutes}`),
@@ -142,5 +167,52 @@ describe('preferences command arguments', () => {
     expect(timedOut.details).toEqual({
       applied: { agentMessageMode: 'queue' },
     });
+  });
+
+  it('stops at the first failed preference and names what was saved and skipped', async () => {
+    const updateLanguage = vi.fn<() => { preferences: { language: string } }>(
+      () => ({
+        preferences: { language: 'zh-CN' },
+      }),
+    );
+    const failed = await cliClient(
+      createRouterTransport(({ service }) => {
+        service(PreferenceService, {
+          updateAgentPreferences: () => ({
+            preferences: { messageMode: 'queue' },
+          }),
+          updateDeskPreferences: () => {
+            throw new ConnectError(
+              'Out of range.',
+              Code.InvalidArgument,
+              undefined,
+              [
+                {
+                  desc: PublicErrorSchema,
+                  value: { code: 'BAD_REQUEST', httpStatus: 400 },
+                },
+              ],
+            );
+          },
+          updateInterfacePreferences: updateLanguage,
+        });
+      }),
+    )
+      .preferences.update({
+        agentMessageMode: 'queue',
+        backgroundAppMinutes: 9,
+        language: 'zh-CN',
+      })
+      .then(
+        () => {
+          throw new Error('Expected the update to fail.');
+        },
+        (caught: unknown) => caught as CliError,
+      );
+    expect(failed.message).toMatch(
+      /agentMessageMode was already set; backgroundAppMinutes was not set\. language was not attempted\./,
+    );
+    expect(failed.details).toEqual({ applied: { agentMessageMode: 'queue' } });
+    expect(updateLanguage).not.toHaveBeenCalled();
   });
 });

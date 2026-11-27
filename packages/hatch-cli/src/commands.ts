@@ -446,38 +446,38 @@ const definitions: readonly CliCommandDefinition[] = [
     path: ['theme', 'get'],
     usage: 'theme get [--resolved]',
     description:
-      'Show the instance theme: the accent (null when the active theme shows its own primary), the default accent, every accent with its #RRGGBB colour, dockLabels, the active theme (id, name, preset or custom, light or dark appearance, its own primary and its document) and accentOverridesPrimary (whether the accent hides that primary). --resolved adds resolved: every token of the active theme, with the accent applied.',
+      'Show your theme (each user has their own; in a Run, that of the user who sent the prompt): the accent (null when the active theme shows its own primary), the default accent, every accent with its #RRGGBB colour, dockLabels, the active theme (id, name, preset or custom, light or dark appearance, its own primary and its document) and accentOverridesPrimary (whether the accent hides that primary). --resolved adds resolved: every token of the active theme, with the accent applied.',
   },
   {
     path: ['theme', 'set'],
     usage:
       'theme set [--theme <id>] [--accent <name> | --clear-accent] [--dock-labels | --no-dock-labels]',
     description:
-      "Change the theme of the whole instance; settings left out keep their value, and at least one is required. Every signed-in web, mobile and desktop client and every open native App restyles without a reload. --theme activates a theme of the library (a preset name such as desk or desk-dark, or a custom theme id from theme list); a dark theme is a theme like any other. --accent replaces the active theme's primary (names come from theme get); --clear-accent lets it show its own. When an accent hides the activated theme's own primary, the result says accentOverridesPrimary and a note on stderr names --clear-accent. A theme whose text would be unreadable with the accent is rejected with THEME_INVALID. --dock-labels shows names under the web dock tiles and --no-dock-labels hides them (the default).",
+      "Change your theme; other users keep theirs. In a Run it changes the theme of the user who sent the prompt (a Run no user prompted gets CONFLICT). Settings left out keep their value, and at least one is required. Your signed-in web, mobile and desktop clients and your open native Apps restyle without a reload. --theme activates a theme of the shared library for you (a preset name such as desk or desk-dark, or a custom theme id from theme list); a dark theme is a theme like any other. --accent replaces the active theme's primary (names come from theme get); --clear-accent lets it show its own. When an accent hides the activated theme's own primary, the result says accentOverridesPrimary and a note on stderr names --clear-accent. A theme whose text would be unreadable with the accent is rejected with THEME_INVALID. --dock-labels shows names under the web dock tiles and --no-dock-labels hides them (the default).",
   },
   {
     path: ['theme', 'list'],
     usage: 'theme list [--limit <n>] [--cursor <cursor>]',
     description:
-      'List the theme library: the presets, then the custom themes, oldest first, each with its id, name, source, appearance, own primary, document, and valid (false, with problems, for a custom theme that no longer passes the rules; it cannot be activated until updated). Without --limit it prints every theme; --limit (1-100) pages and prints nextCursor while more follow.',
+      'List the shared theme library: the presets, then the custom themes, oldest first, each with its id, name, source, appearance, own primary, document, and valid (false, with problems, for a custom theme that no longer passes the rules; it cannot be activated until updated). Without --limit it prints every theme; --limit (1-100) pages and prints nextCursor while more follow.',
   },
   {
     path: ['theme', 'create'],
     usage: 'theme create --file <path|->',
     description:
-      'Save a new custom theme from a theme document (JSON; see theme check) and print it with its id. It is not activated; use theme set --theme <id>. Names are unique ignoring case (preset names included): a taken name is CONFLICT. Rejected with THEME_INVALID, naming each problem, like theme check.',
+      'Save a new custom theme to the shared library from a theme document (JSON; see theme check) and print it with its id. Everyone can use, edit and delete it. It is not activated; use theme set --theme <id>. Names are unique ignoring case (preset names included): a taken name is CONFLICT. Rejected with THEME_INVALID, naming each problem, like theme check.',
   },
   {
     path: ['theme', 'update'],
     usage: 'theme update <id> --file <path|->',
     description:
-      "Replace a custom theme's document whole, its name included (presets cannot be changed; create a copy instead). A name another theme has is CONFLICT. An active theme restyles every client at once and is also checked with the chosen accent. Rejected with THEME_INVALID like theme check; an unknown id is NOT_FOUND.",
+      "Replace a custom theme's document whole, its name included (presets cannot be changed; create a copy instead). A name another theme has is CONFLICT. Every user who has it active restyles at once; when you have it active it is also checked with your accent (another user whose accent no longer reads on it sees the theme's own primary). Rejected with THEME_INVALID like theme check; an unknown id is NOT_FOUND.",
   },
   {
     path: ['theme', 'delete'],
     usage: 'theme delete <id> --yes',
     description:
-      'Delete a custom theme permanently; cannot be undone, so --yes is required. Presets cannot be deleted, and neither can the active theme (CONFLICT): activate another theme first.',
+      'Delete a custom theme from the shared library permanently; cannot be undone, so --yes is required. Presets cannot be deleted, and neither can your own active theme (CONFLICT): activate another theme first. Other users who have it active fall back to desk.',
   },
   {
     path: ['theme', 'check'],
@@ -489,46 +489,46 @@ const definitions: readonly CliCommandDefinition[] = [
     path: ['theme', 'reset'],
     usage: 'theme reset',
     description:
-      'Activate desk with no accent (desk looks as with the default accent) in one change. Dock labels and the custom themes are kept.',
+      'Activate desk with no accent for you (desk looks as with the default accent) in one change. Your dock labels and the shared custom themes are kept.',
   },
   {
     path: ['pin', 'list'],
     usage: 'pin list [--limit <n>] [--cursor <cursor>]',
     description:
-      'List navigation pins: App pins in order (pin id, App id and slug, label, entry point, App status) and pinned dashboards. Without --limit it prints every pin. --limit (1-100) pages one sequence: App pins, then dashboards; pass the printed nextCursor as --cursor for the next page. No nextCursor means the last page.',
+      'List your navigation pins (each user has their own; in a Run, those of the user who sent the prompt): App pins in order (pin id, App id and slug, label, entry point, App status) and pinned dashboards. Without --limit it prints every pin. --limit (1-100) pages one sequence: App pins, then dashboards; pass the printed nextCursor as --cursor for the next page. No nextCursor means the last page.',
   },
   {
     path: ['pin', 'add'],
     usage:
       'pin add (--app <id-or-slug> [--label <text>] [--entry <fragment>] [--if-absent] | --dashboard <id>)',
     description:
-      'Pin an App or dashboard. --app always adds another pin (an App can have several, each with its own label and entry fragment such as /settings) and prints its pin id; --if-absent instead returns the existing pin when the App already has one. The label defaults to the App name. Pinning a dashboard that is already pinned succeeds.',
+      'Pin an App or dashboard to your navigation; other users are unaffected. --app always adds another pin (an App can have several, each with its own label and entry fragment such as /settings) and prints its pin id; --if-absent instead returns your existing pin when you already pinned the App. The label defaults to the App name. Pinning a dashboard that is already pinned succeeds.',
   },
   {
     path: ['pin', 'update'],
     usage:
       'pin update <pin-id> [--label <text>] [--entry <fragment> | --clear-entry]',
     description:
-      'Change an App pin. Omitted fields stay unchanged; --clear-entry makes the pin open the App root.',
+      'Change one of your App pins. Omitted fields stay unchanged; --clear-entry makes the pin open the App root.',
   },
   {
     path: ['pin', 'remove'],
     usage:
       'pin remove (--pin <pin-id> | --app <id-or-slug> | --dashboard <id>)',
     description:
-      'Unpin. --pin deletes that one App pin; --app deletes every pin of the App and prints the removed pin ids. --dashboard clears the pinned flag; the dashboard itself is kept.',
+      'Unpin from your navigation. --pin deletes that one App pin; --app deletes all your pins of the App and prints the removed pin ids. --dashboard clears your pinned flag; the dashboard itself is kept.',
   },
   {
     path: ['pin', 'reorder'],
     usage: 'pin reorder (--pin <pin-id>... | --dashboard <id>...)',
     description:
-      'Reorder App pins or dashboards. Repeat the flag in the new order; listed items move to the front and unlisted ones keep their relative order after them. Prints the complete new order.',
+      'Reorder your App pins or your dashboard order. Repeat the flag in the new order; listed items move to the front and unlisted ones keep their relative order after them. Prints the complete new order.',
   },
   {
     path: ['dashboard', 'list'],
     usage: 'dashboard list [--limit <n>] [--cursor <cursor>]',
     description:
-      'Without --limit, list every dashboard in order: id, name, description, pinned and autoRefreshSeconds (0 is off). Pin, unpin and reorder dashboards with pin add --dashboard, pin remove --dashboard and pin reorder --dashboard. --limit (1-100) prints one page and a nextCursor to pass as --cursor; no nextCursor means the last page.',
+      "Without --limit, list every dashboard in your order: id, name, description, pinned (by you) and autoRefreshSeconds (0 is off). Dashboards are shared; the pinned flag and order are each user's own, and dashboards you never pinned or ordered come last, oldest first. A new user's first visit pins the oldest dashboard, whoever created it. Pin, unpin and reorder dashboards with pin add --dashboard, pin remove --dashboard and pin reorder --dashboard. --limit (1-100) prints one page and a nextCursor to pass as --cursor; no nextCursor means the last page.",
   },
   {
     path: ['dashboard', 'get'],
@@ -540,7 +540,7 @@ const definitions: readonly CliCommandDefinition[] = [
     path: ['dashboard', 'create'],
     usage: 'dashboard create --name <text> [--description <text>]',
     description:
-      'Create an empty dashboard and print its id. It is pinned and placed last.',
+      "Create an empty dashboard and print its id. It is pinned and placed last for you (in a Run, the user who sent the prompt) and not pinned for anyone else; a new user's first visit still pins the oldest dashboard, which can be this one.",
   },
   {
     path: ['dashboard', 'update'],
@@ -585,14 +585,14 @@ const definitions: readonly CliCommandDefinition[] = [
     path: ['preferences', 'get'],
     usage: 'preferences get',
     description:
-      "Show the caller's personal preferences: agentMessageMode (queue or steer) and backgroundAppMinutes (how long a minimised App keeps running on the Desk). With a Run credential, the preferences of the user who sent the run's prompt.",
+      "Show the caller's personal preferences: agentMessageMode (queue or steer), backgroundAppMinutes (how long a minimised App keeps running on the Desk) and language (en, zh-CN, or null when never picked, so each browser follows its own language). With a Run credential, the preferences of the user who sent the run's prompt.",
   },
   {
     path: ['preferences', 'set'],
     usage:
-      'preferences set [--agent-message-mode queue|steer] [--background-app-minutes <1-1440>]',
+      'preferences set [--agent-message-mode queue|steer] [--background-app-minutes <1-1440>] [--language en|zh-CN]',
     description:
-      'Change one or both preferences; at least one flag is required and omitted ones stay as they are. --agent-message-mode sets how a chat message sent while the Agent is working is delivered: queue waits for the run to finish and starts its own run; steer is injected into the running run after its current tool calls finish (applies to messages sent afterwards). --background-app-minutes sets how long a minimised App keeps running on the Desk before it is stopped and later reopens on the page it was left on (default 5).',
+      'Change the given preferences; at least one flag is required and omitted ones stay as they are. --agent-message-mode sets how a chat message sent while the Agent is working is delivered: queue waits for the run to finish and starts its own run; steer is injected into the running run after its current tool calls finish (applies to messages sent afterwards). --background-app-minutes sets how long a minimised App keeps running on the Desk before it is stopped and later reopens on the page it was left on (default 5). --language sets the Web UI language of every browser the user signs in to; open pages switch the next time they load the preference.',
   },
   {
     path: ['notification', 'list'],
@@ -859,8 +859,8 @@ export const commandGroups: Readonly<Record<string, string>> = {
   'model catalog': 'Search the built-in model catalog and control its updates.',
   'image-model': 'Manage image generation models.',
   image: 'Generate images.',
-  theme: 'Show or change the instance theme.',
-  pin: 'Manage navigation pins for Apps and dashboards.',
+  theme: 'Show or change your theme, and manage the shared theme library.',
+  pin: 'Manage your navigation pins for Apps and dashboards.',
   dashboard: 'Manage dashboards.',
   'dashboard widget': 'Add, arrange and remove dashboard widgets.',
   preferences: 'Show or change personal preferences.',

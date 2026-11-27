@@ -1,7 +1,7 @@
 /**
- * The theme this browser draws. The instance setting (`ui.theme`, read
- * through `~queries/theme`) is the source of truth: the server resolves the
- * active theme into every token, and this store keeps the last answer in
+ * The theme this browser draws. The signed-in user's setting (read through
+ * `~queries/theme` and applied by `ThemeSync`) is the source of truth: the
+ * server resolves their active theme into every token, and this store keeps the last answer in
  * localStorage so a reload paints the right theme before the setting has
  * been fetched. Before any answer, the built-in `desk` applies. A dark theme
  * is drawn dark whatever the device prefers.
@@ -64,7 +64,7 @@ function subscribe(listener: () => void): () => void {
   return () => listeners.delete(listener);
 }
 
-/** Apply the instance theme now and remember it for the next load. */
+/** Apply the user's theme now and remember it for the next load. */
 export function applyThemeState(next: WebThemeState): void {
   // Native App players and older pages read the accent name on its own.
   applyAccent(next.accent ?? DEFAULT_ACCENT);

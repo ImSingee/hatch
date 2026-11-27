@@ -8,7 +8,7 @@ built from it without reading the platform's React code.
 
 The values below are those of `desk`, the default theme. A theme is data:
 the instance draws one active theme from its library (see [Themes](#themes)),
-and every client draws the resolved tokens at run time.
+and every client draws the signed-in user's resolved tokens at run time.
 
 ## Where values live
 
@@ -191,9 +191,11 @@ one by one gives unreadable combinations.
   colour, native Apps' status text) and shade 8 of the amber, green, blue,
   orange and destructive ramps (Mobile's status text). The check
   runs with the theme's own `primary` and with the chosen accent.
-- The instance setting (`ui.theme`) holds the accent and the active theme:
-  a preset name or the id of a custom theme. Custom themes live in the
-  `themes` table, a library of at most 100 documents beside the presets.
+- Each user's preferences hold their accent and their active theme: a
+  preset name or the id of a custom theme. A new user draws `desk` with no
+  accent. Custom themes live in the shared `themes` table, a library of at
+  most 100 documents beside the presets that everyone can use, edit and
+  delete; deleting one that others have active falls them back to `desk`.
   Names are unique, ignoring case, preset names included.
 - Light and dark are not modes. `appearance` is a property of a theme: a dark
   theme is activated like any other, and no client follows the device's or
@@ -201,8 +203,9 @@ one by one gives unreadable combinations.
   appearance (Mantine's colour scheme on the web, the window theme on macOS,
   the colour scheme on Mobile).
 - The appearance settings page shows the library as cards: choosing one
-  activates it for every client; "New theme" and "Duplicate" open the editor
-  on a copy; custom themes can be edited and deleted (not the active one).
+  activates it for the user's own clients; "New theme" and "Duplicate" open
+  the editor on a copy; custom themes can be edited and deleted (not the
+  user's own active one).
   The editor sets only the document's fields (name, appearance, nine colours,
   radius, fonts) and shows the platform's problems, translated, on save.
   Switching a theme's appearance starts its colours from `desk` or
@@ -441,7 +444,7 @@ showing it there) and Close (quit). Narrower, only the window in front shows.
 
 - Tile 40 (`sizes.dockTile`), radius 12: the App icon, or a `tiles` fill
   with a white monogram.
-- Names under the tiles are an instance setting (`ui.theme.dockLabels`,
+- Names under the tiles are each user's setting (`user_preferences.dock_labels`,
   Appearance › Show names in the dock), off by default. Shown: 11 / 700,
   neutral shade 8, one line, ellipsis, tile column 64 wide, gap 5. Hidden:
   the tile column is 52 wide.
@@ -552,7 +555,7 @@ may describe it, and is hidden while the menu is open.
 
 Native-runtime Apps draw these components from `@hatch/ui`
 (`sdk-internal/ui`), whose theme `buildAppTheme` builds from the same
-`tokens.json` and the instance accent. The App-side rules, screen patterns
+`tokens.json` and the viewer's accent. The App-side rules, screen patterns
 and the catalogue are in `skills/building-apps/references/design-system.md`.
 
 - `AppShell` follows the App's own pane, not the screen: a sidebar from 720

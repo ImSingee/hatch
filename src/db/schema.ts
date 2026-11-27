@@ -798,15 +798,15 @@ export const agentRunEvents = snakeCase.table(
 
 /**
  * A dashboard is a named board the user arranges widgets on. Users can create
- * multiple dashboards; each owns its own set of widget placements.
+ * multiple dashboards; each owns its own set of widget placements. Dashboards
+ * are shared; whether each user pins one, and where it sits in their order,
+ * is in `user_dashboards`.
  */
 export const dashboards = snakeCase.table('dashboards', {
   id: ulid().$defaultFn(genUlid).primaryKey(),
   name: text().notNull(),
   /** Optional free-form subtitle shown in the dashboard page header. */
   description: text(),
-  /** Whether this dashboard is pinned to the sidebar for quick access. */
-  pinned: boolean().notNull().default(true),
   /**
    * Auto-refresh interval in seconds; 0 disables it. When > 0 the dashboard
    * periodically refreshes every widget (Grafana-style).
@@ -814,10 +814,37 @@ export const dashboards = snakeCase.table('dashboards', {
   autoRefresh: integer('auto_refresh').notNull().default(0),
   /** Monotonic version for widget membership and breakpoint layout drafts. */
   editorRevision: integer('editor_revision').notNull().default(0),
+  /**
+   * Legacy: the instance-wide pin and order from before they became per user
+   * (`user_dashboards`). Unused, and kept one release so a server still on
+   * the previous release can read dashboards; see docs/database-cleanups.md.
+   */
+  pinned: boolean().notNull().default(true),
+  /** Legacy, like `pinned`. */
   sortOrder: integer().notNull().default(0),
   createdAt,
   updatedAt,
 });
+
+/**
+ * One user's view of a dashboard: whether it is pinned to their navigation
+ * and its place in their dashboard order. A dashboard without a row for a
+ * user is unpinned and sorts after that user's rows, oldest first.
+ */
+export const userDashboards = snakeCase.table(
+  'user_dashboards',
+  {
+    userId: text()
+      .notNull()
+      .references(() => user.id, { onDelete: 'cascade' }),
+    dashboardId: text()
+      .notNull()
+      .references(() => dashboards.id, { onDelete: 'cascade' }),
+    pinned: boolean().notNull().default(false),
+    sortOrder: integer().notNull().default(0),
+  },
+  (table) => [primaryKey({ columns: [table.userId, table.dashboardId] })],
+);
 
 export const dashboardBreakpoint = pgEnum('dashboard_breakpoint', [
   'desktop',
@@ -869,10 +896,17 @@ export const dashboardWidgetLayouts = snakeCase.table(
   ],
 );
 
+/** One App shortcut in a user's navigation; each user has their own. */
 export const sidebarItems = snakeCase.table(
   'sidebar_items',
   {
     id: ulid().$defaultFn(genUlid).primaryKey(),
+    /**
+     * Always set by this release, which never reads or changes a row
+     * without it. Nullable for one release so a server still on the
+     * previous one can pin Apps; see docs/database-cleanups.md.
+     */
+    userId: text().references(() => user.id, { onDelete: 'cascade' }),
     appId: text()
       .notNull()
       .references(() => apps.id, { onDelete: 'cascade' }),
@@ -891,6 +925,7 @@ export const sidebarItems = snakeCase.table(
     // Apps may be pinned multiple times (each pin carries its own label and
     // entry hash), so this is a plain lookup index, not a unique constraint.
     index('sidebar_items_app_idx').on(table.appId),
+    index('sidebar_items_user_order_idx').on(table.userId, table.sortOrder),
   ],
 );
 
@@ -935,7 +970,8 @@ export const platformConfig = snakeCase.table('platform_config', {
 /**
  * Custom themes of the instance (`~server/theme-settings`): theme documents
  * people and the Agent author on the web or with the CLI. Presets are not
- * stored. Which theme is active lives in the `ui.theme` platform setting.
+ * stored. The library is shared; which theme each user has active is in
+ * their `user_preferences`.
  * `document` is checked when it is saved; a row that no longer passes the
  * current rules is still listed (flagged) but cannot be activated.
  */
@@ -985,10 +1021,48 @@ export const userPreferences = snakeCase.table(
       .$type<AgentMessageMode>()
       .notNull()
       .default('steer'),
+    /**
+     * The Web UI language the user picked (a `Locale`); null until they pick
+     * one, when each browser follows its own language. Validated by the
+     * service rather than a check constraint, so adding a catalog needs no
+     * migration.
+     */
+    language: text(),
     /** Minutes a minimised App keeps running before the Desk stops it. */
     deskBackgroundMinutes: integer('desk_background_minutes')
       .notNull()
       .default(5),
+    /**
+     * The accent that replaces the active theme's primary (an `AccentName`);
+     * null draws the theme's own primary. Validated by the service, so
+     * retiring an accent needs no migration: a stored name the tokens no
+     * longer define reads as the default accent.
+     */
+    accent: text(),
+    /** Whether the web dock shows tile names; null keeps the default (off). */
+    dockLabels: boolean('dock_labels'),
+    /**
+     * The user's active theme when it is a preset (`desk`, `desk-dark`).
+     * With neither this nor `customThemeId` set, the user draws the default
+     * preset.
+     */
+    themePreset: text('theme_preset'),
+    /**
+     * The user's active theme when it is a custom theme of the shared
+     * library. Deleting that theme clears it, so the user falls back to the
+     * default preset.
+     */
+    customThemeId: text('custom_theme_id').references(() => themes.id, {
+      onDelete: 'set null',
+    }),
+    /**
+     * Whether the user's first visit already pinned the default dashboard.
+     * Kept apart from `user_dashboards` so that losing those rows (their
+     * dashboards were deleted) never makes the user look new again.
+     */
+    dashboardDefaultsApplied: boolean('dashboard_defaults_applied')
+      .notNull()
+      .default(false),
     updatedAt,
   },
   () => [

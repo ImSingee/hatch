@@ -72,6 +72,45 @@ describe('renderTemplate', () => {
 });
 
 describe('createApp', () => {
+  it('pins the new App for its creator only, after their other pins', async () => {
+    await db.delete(schema.user);
+    for (const id of ['creator', 'other'])
+      await db.insert(schema.user).values({
+        id,
+        name: id,
+        email: `${id}@example.com`,
+      });
+    await db
+      .insert(schema.apps)
+      .values({ id: 'old', slug: 'old', name: 'Old' });
+    await db.insert(schema.sidebarItems).values([
+      { userId: 'creator', appId: 'old', label: 'Old', sortOrder: 4 },
+      { userId: 'other', appId: 'old', label: 'Old', sortOrder: 9 },
+    ]);
+    const pinsOf = (userId: string) =>
+      db.query.sidebarItems.findMany({
+        where: { userId },
+        columns: { appId: true, sortOrder: true },
+        orderBy: { sortOrder: 'asc' },
+      });
+
+    const created = await createApp(
+      { slug: 'mine', name: 'Mine' },
+      { creatorId: 'creator' },
+    );
+    expect(await pinsOf('creator')).toEqual([
+      { appId: 'old', sortOrder: 4 },
+      { appId: created.id, sortOrder: 5 },
+    ]);
+    expect(await pinsOf('other')).toEqual([{ appId: 'old', sortOrder: 9 }]);
+
+    // Nobody to pin it for: a Run that no user prompted.
+    const unowned = await createApp({ slug: 'unowned', name: 'Unowned' });
+    expect(
+      await db.query.sidebarItems.findMany({ where: { appId: unowned.id } }),
+    ).toEqual([]);
+  });
+
   it('rejects a duplicate slug but allows a slug equal to another App id', async () => {
     await db.insert(schema.apps).values({
       id: 'legacy-kebab-id',
@@ -183,22 +222,14 @@ describe('createApp', () => {
         currentDeploymentId: null,
         repoPath: `/test/repos/${result.id}.git`,
       });
-      await expect(db.query.sidebarItems.findMany()).resolves.toMatchObject([
-        {
-          appId: result.id,
-          label: 'Hello "World"',
-          sortOrder: 0,
-        },
-      ]);
     },
   );
 
   it('honors an explicit request not to pin the draft', async () => {
-    const result = await createApp({
-      slug: 'unlisted-app',
-      name: 'Unlisted App',
-      pin: false,
-    });
+    const result = await createApp(
+      { slug: 'unlisted-app', name: 'Unlisted App', pin: false },
+      { creatorId: 'creator' },
+    );
 
     await expect(db.query.apps.findFirst()).resolves.toMatchObject({
       id: result.id,

@@ -51,7 +51,8 @@ function readCache(): Record<string, ResolvedTheme> {
 }
 
 /**
- * The instance's active theme (`ui.theme`, resolved by ThemeService) as the
+ * The signed-in user's theme (their active theme and accent, resolved by
+ * ThemeService) as the
  * app's theme. The last answer is kept on the phone, per instance, and drawn
  * from the first frame of a cold start; the instance is asked again on
  * sign-in and whenever the app returns to the foreground. Signed out, or
@@ -60,7 +61,7 @@ function readCache(): Record<string, ResolvedTheme> {
  * controls, the status bar and web pages match it whatever the device's own
  * setting is.
  */
-export function InstanceTheme({ children }: PropsWithChildren) {
+export function UserTheme({ children }: PropsWithChildren) {
   const { api, origin } = useSession();
   // Each instance's last answer: read from the file once at launch, then
   // updated on every answer, so switching back to an instance draws its
