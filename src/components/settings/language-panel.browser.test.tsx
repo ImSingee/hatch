@@ -22,11 +22,14 @@ const fixture = vi.hoisted(() => ({
       }) => Promise<InterfacePreferenceSettings>
     >(),
   error: vi.fn<() => void>(),
+  /** The signed-in user right now, as the session store has it. */
+  currentUser: 'a',
 }));
 vi.mock('~auth/client', () => ({
   authClient: {
     useSession: () => ({ data: { user: { id: 'a' } }, isPending: false }),
   },
+  currentUserId: () => fixture.currentUser,
 }));
 vi.mock('sonner', () => ({
   toast: { success: vi.fn<() => void>(), error: fixture.error },
@@ -40,6 +43,7 @@ beforeEach(() => {
   vi.clearAllMocks();
   fixture.saved = { userId: 'a', language: null };
   fixture.saveFailure = false;
+  fixture.currentUser = 'a';
   fixture.update.mockImplementation(async ({ data }) => {
     if (fixture.saveFailure) throw new Error('Save request failed');
     fixture.saved = { userId: 'a', ...data };
@@ -153,4 +157,24 @@ test('a failed save keeps a language the account saved meanwhile', async () => {
   await vi.waitFor(() => expect(fixture.error).toHaveBeenCalledOnce());
   expect(i18n.resolvedLanguage).toBe('zh-CN');
   focusManager.setFocused(undefined);
+});
+
+test('a save that fails after the account changed leaves the new account alone', async () => {
+  let fail = () => {};
+  fixture.update.mockImplementation(
+    () =>
+      new Promise((_resolve, reject) => {
+        fail = () => reject(new Error('Save request failed'));
+      }),
+  );
+  const screen = await mount(<LanguagePanel />);
+  await screen.getByText('简体中文').click();
+  await vi.waitFor(() => expect(fixture.update).toHaveBeenCalledOnce());
+  // Another tab signs in as someone else, whose language is now on screen.
+  fixture.currentUser = 'b';
+  await i18n.changeLanguage('en');
+  fail();
+  await new Promise((resolve) => setTimeout(resolve, 50));
+  expect(fixture.error).not.toHaveBeenCalled();
+  expect(i18n.resolvedLanguage).toBe('en');
 });

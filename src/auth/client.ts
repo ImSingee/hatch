@@ -23,3 +23,14 @@ export function announceSignIn() {
     clientId: crypto.randomUUID(),
   });
 }
+
+/**
+ * The signed-in user right now, from the session store `useSession` reads;
+ * for code that runs outside a render, such as a request's late callback.
+ */
+export function currentUserId(): string | null {
+  const session = authClient.$store.atoms.session?.get() as
+    | { data?: { user?: { id?: string } } | null }
+    | undefined;
+  return session?.data?.user?.id ?? null;
+}

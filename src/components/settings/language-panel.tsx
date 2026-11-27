@@ -1,7 +1,7 @@
 import { Group, SegmentedControl, Stack, Text } from '@mantine/core';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
-import { authClient } from '~auth/client';
+import { authClient, currentUserId } from '~auth/client';
 import {
   LANGUAGE_NAMES,
   LOCALES,
@@ -41,7 +41,7 @@ export function LanguagePanel() {
         });
       }
       await changeLocale(language);
-      return { previous };
+      return { previous, userId };
     },
     onSuccess: (saved) => {
       if (saved.userId === userId) {
@@ -55,8 +55,11 @@ export function LanguagePanel() {
     // so say that, once the language is back, instead of the raw request
     // error. "Back" is the account's language when it has one, which may
     // have been saved elsewhere while this request was in flight; only
-    // without one does the language from before the click return.
+    // without one does the language from before the click return. When
+    // another account signed in meanwhile, its language is on screen and
+    // this failure is not its business.
     onError: async (_error, _language, context) => {
+      if (!context?.userId || currentUserId() !== context.userId) return;
       const account = userId
         ? queryClient.getQueryData(
             interfacePreferencesQueryOptions(userId).queryKey,
