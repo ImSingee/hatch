@@ -6,13 +6,15 @@
 import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
-import { eq } from 'drizzle-orm';
+import { eq, sql } from 'drizzle-orm';
 import { afterAll, beforeEach, describe, expect, it, vi } from 'vitest';
 
 const mocks = vi.hoisted(() => ({
   builderToken: null as string | null,
   releases: [] as string[],
   release: undefined as undefined | ((id: string) => Promise<void>),
+  /** Runs after `beforeRelease`, before the release is recorded. */
+  beforeRecord: undefined as undefined | ((id: string) => Promise<void>),
   /** Fails the source check of a create, as a commit not on master does. */
   resolve: undefined as undefined | (() => Promise<never>),
   packageLog: '',
@@ -49,18 +51,36 @@ vi.mock('./finalize', () => ({
 vi.mock('./deploy', () => ({
   ReleaseGenerationConflict: class ReleaseGenerationConflict extends Error {},
   releaseDeployment: async (
-    _appId: string,
+    appId: string,
     options: {
       deploymentId: string;
       produce: (dir: string) => Promise<unknown>;
       beforeRelease?: () => Promise<void>;
+      fenceRelease?: (tx: unknown) => Promise<void>;
     },
   ) => {
     await options.produce('/unused');
     await mocks.release?.(options.deploymentId);
     await options.beforeRelease?.();
+    await mocks.beforeRecord?.(options.deploymentId);
+    // Recorded as the platform records a release: under the deploy lock,
+    // behind the requester's fence.
+    const { db, schema } = await import('~/db');
+    const { appDeployLock } = await import('./deploy-lock');
+    const version = mocks.releases.length + 1;
+    await db.transaction(async (tx) => {
+      await appDeployLock.acquire(tx, appId);
+      await options.fenceRelease?.(tx);
+      await tx.insert(schema.deployments).values({
+        id: options.deploymentId,
+        appId,
+        version,
+        status: 'deployed',
+        buildId: options.deploymentId,
+      });
+    });
     mocks.releases.push(options.deploymentId);
-    return { version: mocks.releases.length };
+    return { version };
   },
 }));
 
@@ -94,6 +114,7 @@ beforeEach(async () => {
   mocks.builderToken = null;
   mocks.releases = [];
   mocks.release = undefined;
+  mocks.beforeRecord = undefined;
   mocks.resolve = undefined;
   mocks.packageLog = '';
   await db.delete(schema.deployments);
@@ -202,6 +223,50 @@ describe('creating deployments', () => {
     expect(
       await db.query.appBuilds.findMany({ where: { appId: APP } }),
     ).toHaveLength(1);
+  });
+
+  it('answers a repeated Builder request after the Builder was turned off', async () => {
+    mocks.builderToken = 'token';
+    const first = await create({ build: 'builder', requestId: 'req-b1' });
+    // The platform restarted without a Builder.
+    mocks.builderToken = null;
+    expect((await create({ build: 'builder', requestId: 'req-b1' })).id).toBe(
+      first.id,
+    );
+    // A new Builder request still has none to build it.
+    await expect(
+      create({ build: 'builder', requestId: 'req-b2' }),
+    ).rejects.toMatchObject({ code: 'BUILDER_UNAVAILABLE' });
+    // The App and its generation are still checked first.
+    await expect(
+      create({
+        build: 'builder',
+        requestId: 'req-b1',
+        expectedGeneration: '2000-01-01T00:00:00.000Z',
+      }),
+    ).rejects.toMatchObject({ status: 409 });
+  });
+
+  it('joins nothing for a caller that has already given up', async () => {
+    mocks.builderToken = 'token';
+    const first = await create({ build: 'builder' });
+    const abort = new AbortController();
+    abort.abort();
+    await expect(
+      create({
+        build: 'builder',
+        requestId: 'req-late-join',
+        notify: true,
+        signal: abort.signal,
+      }),
+    ).rejects.toThrow(/canceled/);
+    // Neither the request nor its notification was recorded.
+    expect(
+      await builds.findDeploymentByRequest(APP, 'req-late-join'),
+    ).toBeNull();
+    expect((await builds.getDeployment(APP, first.id)).notifyOnFinish).toBe(
+      false,
+    );
   });
 
   it('creates nothing for a caller that has already given up', async () => {
@@ -429,6 +494,44 @@ describe('builder leases', () => {
     expect(mocks.releases).toEqual([]);
   });
 
+  it('judges a lease when the row is checked, not when the call was made', async () => {
+    // PGlite takes its clock from `Date`, so faking it moves both clocks.
+    vi.useFakeTimers({ toFake: ['Date'] });
+    try {
+      mocks.builderToken = 'token';
+      const deployment = await create({ build: 'builder' });
+      await builds.leaseBuild('builder-1');
+      const lease = { builderId: 'builder-1', attempt: 1 };
+      let late: Promise<unknown>[] = [];
+      // Each call waits behind a transaction holding the database while the
+      // lease runs out.
+      await db.transaction(async (tx) => {
+        await tx.execute(sql`select 1`);
+        late = [
+          builds.leasedBuild(deployment.id, 'builder-1'),
+          builds.renewBuildLease(deployment.id, lease),
+          builds.appendLeasedBuildLog(deployment.id, lease, ['late line']),
+          builds.failBuild(deployment.id, lease, 'late'),
+        ];
+        await new Promise((resolve) => setTimeout(resolve, 50));
+        vi.setSystemTime(Date.now() + builds.BUILD_LEASE_MS + 1000);
+      });
+      const [leased, renewed, appended, failed] = await Promise.all(late);
+      expect({ leased, renewed, appended, failed }).toEqual({
+        leased: null,
+        renewed: false,
+        appended: false,
+        failed: false,
+      });
+      expect(await status(deployment.id)).toBe('building');
+      expect(
+        (await builds.readBuildLog(deployment.id, 0)).map((l) => l.text),
+      ).not.toContain('late line');
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it('queues a lost build again once, then fails it', async () => {
     mocks.builderToken = 'token';
     const deployment = await create({ build: 'builder' });
@@ -497,6 +600,36 @@ describe('builder leases', () => {
     expect(await lastLine(lost.id)).toMatch(/nothing was released/);
   });
 
+  it('records no release once another instance settled the request', async () => {
+    const deployment = await create();
+    // The release paused past the stall limit after it was accepted; the
+    // sweep (of any instance) settled the request before it was recorded.
+    mocks.beforeRecord = async (id) => {
+      expect(await status(id)).toBe('releasing');
+      await db
+        .update(schema.appBuilds)
+        .set({ updatedAt: new Date(Date.now() - 60 * 60_000) })
+        .where(eq(schema.appBuilds.id, id));
+      await builds.sweepBuilds();
+    };
+    const final = await builds.acceptArtifact({
+      appId: APP,
+      buildId: deployment.id,
+      archive: packageArchive,
+    });
+    expect(final).toMatchObject({
+      status: 'failed',
+      errorCode: 'release_interrupted',
+    });
+    expect(
+      await db.query.deployments.findFirst({ where: { id: deployment.id } }),
+    ).toBeUndefined();
+    expect(mocks.releases).toEqual([]);
+    expect((await builds.readBuildLog(deployment.id, 0)).at(-1)?.text).toMatch(
+      /nothing was released/,
+    );
+  });
+
   it('leaves a release that is still running to finish, however long it takes', async () => {
     // A step before the release is recorded (a data migration, say) runs
     // past the stall limit; the release's heartbeat keeps it alive for any
@@ -525,6 +658,21 @@ describe('builder leases', () => {
       expect(final.status).toBe('ready');
     } finally {
       vi.useRealTimers();
+    }
+  });
+
+  it('wakes a follower at once for a change made while it was busy', async () => {
+    const deployment = await create();
+    const changes = await builds.followBuildChanges(deployment.id);
+    try {
+      // The follower has read the build and is sending it; a line commits
+      // before it starts to wait.
+      await builds.appendBuildLog(deployment.id, 'build', 'meanwhile');
+      const started = Date.now();
+      await changes.wait(30_000);
+      expect(Date.now() - started).toBeLessThan(5_000);
+    } finally {
+      changes.close();
     }
   });
 

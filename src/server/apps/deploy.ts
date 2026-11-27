@@ -80,6 +80,15 @@ export type ReleaseDeploymentOptions = {
    * newer release).
    */
   beforeRelease?: () => Promise<void>;
+  /**
+   * Called in the transaction that records the release, under the App's
+   * cross-process deploy lock, before anything is recorded; throwing aborts
+   * the release with nothing recorded. Lets the requester confirm that no
+   * other instance settled its request meanwhile.
+   */
+  fenceRelease?: (
+    tx: Parameters<Parameters<typeof db.transaction>[0]>[0],
+  ) => Promise<void>;
 };
 
 async function warmCommittedBackend(
@@ -840,6 +849,7 @@ async function releaseDeploymentInner(
       const releaseBuild = build;
       await db.transaction(async (tx) => {
         await appDeployLock.acquire(tx, id);
+        await options.fenceRelease?.(tx);
         if (options.expectedGeneration) {
           const [currentApp] = await tx
             .select({ createdAt: schema.apps.createdAt })

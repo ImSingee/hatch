@@ -192,16 +192,17 @@ export async function runDeployments(
   let state: DeploymentView | null = null;
   // Without --follow: every line up to the deployment's log as it stood at
   // the first response that carries it (several responses for a long log),
-  // and none appended since, then stop without waiting for more.
+  // and none appended since, then stop without waiting for more. The
+  // deployment printed is that snapshot, so it matches the lines.
   let snapshot: number | null = null;
   let seen = command.after;
   for await (const message of deployments.watch(
     { ...target, afterSeq: command.after },
     { timeoutMs: command.timeoutMs },
   )) {
-    if (message.deployment) {
+    if (message.deployment && snapshot === null) {
       state = message.deployment;
-      snapshot ??= state.logSeq;
+      snapshot = state.logSeq;
     }
     const bound = snapshot ?? Number.POSITIVE_INFINITY;
     for (const line of message.lines) {

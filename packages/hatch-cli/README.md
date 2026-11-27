@@ -210,7 +210,8 @@ is rejected with `workspace_instance_mismatch`.
     and a native frontend `nsh` of the platform's version (`HATCH_NSH_BIN` or
     `PATH`); a missing or mismatched tool fails with `tool_unavailable` or
     `nsh_unavailable` (exit 7). A build that outlives `--timeout` stops with
-    `local_build_timeout` (exit 7). With `--commit`, the commit must be in
+    `local_build_timeout` (exit 7) and the CLI cancels the deployment, so
+    nothing is left waiting for its package. With `--commit`, the commit must be in
     this checkout (the build does not fetch it): otherwise the deploy fails
     with `source_unavailable` (exit 6) before creating a deployment; run
     `hatch app update` first. Build output goes to stderr. A build that fails
@@ -415,12 +416,17 @@ The next deploy does the same on its own: a finished one is settled, one
 still in progress or unconfirmed fails with `deployment_in_progress` (exit 6)
 until it finishes, is canceled or can be confirmed absent, and a missing one
 fails with `pending_deployment_missing` (exit 6). A deploy whose `--timeout`
-passes while the Builder is working exits 7 with `deployment_in_progress` and
-the deployment in the error details; it keeps running on the platform. A
-deployment that finished before the rest of its log arrived settles by its
+passes while it follows a Builder build exits 7 with `deployment_in_progress`;
+the deployment keeps running on the platform, so follow it with
+`hatch app deployments logs <id> <deployment-id> --follow`. The error details
+carry the `afterSeq` to resume from with `--after` and the deployment when
+one could be read (otherwise `deployment` is `null`). A deployment that
+finished before the rest of its log arrived or could be read settles by its
 outcome, with a note on stderr; `deployments logs --follow` instead fails with
-`deployment_log_incomplete` (exit 7) and the `afterSeq` to resume from with
-`--after`. The push that precedes a deployment is safe to repeat.
+`deployment_log_incomplete` (exit 7), the finished deployment, the `afterSeq`
+to resume from and, when reading failed, the failing error code as `cause`. The
+push that precedes a deployment is safe to
+repeat.
 
 ## Output, errors and unsupported commands
 

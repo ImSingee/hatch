@@ -12,6 +12,7 @@ import {
   chmod,
   mkdir,
   mkdtemp,
+  readdir,
   readFile,
   rm,
   stat,
@@ -19,7 +20,7 @@ import {
 } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
-import { afterAll, describe, expect, it } from 'vitest';
+import { afterAll, describe, expect, it, vi } from 'vitest';
 import { createGitSource } from '~server/source-git';
 
 const root = await mkdtemp(path.join(tmpdir(), 'hatch-bundle-rt-'));
@@ -321,5 +322,111 @@ describe('source the platform writes out', () => {
     } finally {
       await chmod(objects, 0o755);
     }
+  }, 15_000);
+
+  it('rejects instead of answering "not on master" when a pack cannot be read', async () => {
+    // Git answers an object in an unreadable pack as absent, silently.
+    if (process.getuid?.() === 0) return; // root reads it regardless
+    const id = 'rt-unreadable-pack';
+    const commit = await seedPlatformSource(id);
+    const repoDir = path.join(root, 'repos', `${id}.git`);
+    await git(['--git-dir', repoDir, 'repack', '-a', '-d', '-q'], root);
+    const pack = path.join(repoDir, 'objects', 'pack');
+    const packs = (await readdir(pack)).filter((name) =>
+      name.endsWith('.pack'),
+    );
+    expect(packs).toHaveLength(1);
+    await chmod(path.join(pack, packs[0]), 0o000);
+    try {
+      await expect(platform.commitOnMaster(id, commit)).rejects.toThrow(
+        /failed/,
+      );
+      await expect(platform.resolveDeployCommit(id, commit)).rejects.toThrow(
+        /failed/,
+      );
+    } finally {
+      await chmod(path.join(pack, packs[0]), 0o444);
+    }
+    await expect(platform.commitOnMaster(id, commit)).resolves.toBe(true);
+  }, 15_000);
+
+  it('never takes a Git stopped by a signal for an answer', async () => {
+    const id = 'rt-git-signal';
+    await seedPlatformSource(id);
+    // A commit the repository has, on a branch other than master.
+    const seed = path.join(root, `seed-${id}`);
+    await writeFile(path.join(seed, 'README.md'), 'side\n');
+    const commit = await commitAll(seed, 'side');
+    await git(
+      ['push', await platform.ensureRepo(id), 'HEAD:refs/heads/side'],
+      seed,
+    );
+    await expect(platform.commitOnMaster(id, commit)).resolves.toBe(false);
+    // A `git` whose ancestry check is killed before it can answer.
+    const realGit = (
+      await new Promise<string>((resolve, reject) => {
+        const child = spawn('sh', ['-c', 'command -v git']);
+        let out = '';
+        child.stdout.on('data', (d) => (out += d.toString()));
+        child.on('error', reject);
+        child.on('close', () => resolve(out));
+      })
+    ).trim();
+    const bin = await mkdtemp(path.join(root, 'fake-git-'));
+    await writeFile(
+      path.join(bin, 'git'),
+      `#!/bin/sh\nfor arg in "$@"; do\n  [ "$arg" = merge-base ] && kill -KILL $$\ndone\nexec "${realGit}" "$@"\n`,
+      { mode: 0o755 },
+    );
+    vi.stubEnv('PATH', `${bin}${path.delimiter}${process.env.PATH ?? ''}`);
+    try {
+      await expect(platform.commitOnMaster(id, commit)).rejects.toThrow(
+        /SIGKILL/,
+      );
+      await expect(platform.resolveDeployCommit(id, commit)).rejects.toThrow(
+        /SIGKILL/,
+      );
+    } finally {
+      vi.unstubAllEnvs();
+    }
+  }, 15_000);
+
+  it('refuses an explicit commit of a SHA-256 repository', async () => {
+    const id = 'rt-sha256';
+    const repoDir = path.join(root, 'repos', `${id}.git`);
+    await mkdir(path.dirname(repoDir), { recursive: true });
+    await git(
+      [
+        'init',
+        '--bare',
+        '--object-format=sha256',
+        '--initial-branch',
+        'master',
+        repoDir,
+      ],
+      root,
+    );
+    const seed = path.join(root, `seed-${id}`);
+    await mkdir(seed, { recursive: true });
+    await git(
+      ['init', '--object-format=sha256', '--initial-branch', 'master'],
+      seed,
+    );
+    await configureIdentity(seed);
+    await writeFile(path.join(seed, 'README.md'), 'sha256\n');
+    const commit = await commitAll(seed, 'seed sha256');
+    expect(commit).toMatch(/^[0-9a-f]{64}$/);
+    await pushHead(id, seed);
+    const unsupported = {
+      status: 400,
+      message: expect.stringMatching(/SHA-256/),
+    };
+    await expect(platform.resolveDeployCommit(id)).rejects.toMatchObject(
+      unsupported,
+    );
+    // Forty digits of a SHA-256 id would otherwise resolve as an abbreviation.
+    await expect(
+      platform.resolveDeployCommit(id, commit.slice(0, 40)),
+    ).rejects.toMatchObject(unsupported);
   }, 15_000);
 });

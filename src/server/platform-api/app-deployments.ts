@@ -11,9 +11,10 @@ import {
   getDeployment,
   isFinishedBuild,
   listDeployments,
+  followBuildChanges,
   readBuildLog,
-  waitForBuildChange,
   type AppBuild,
+  type BuildChangeFeed,
 } from '~server/apps/builds';
 import { projectAppManifestUrls } from '~server/apps/manifest';
 import { associateAgentSessionApp } from '~server/agent-session-apps';
@@ -221,8 +222,12 @@ export function registerAppDeploymentApi(
       let after = input.afterSeq ?? 0;
       let lastState: string | undefined;
       let lastYieldAt = 0;
+      let changes: BuildChangeFeed | undefined;
       try {
         const app = await appRow(input.id);
+        // Followed before the first read: a change committed while a frame
+        // is read or sent ends the next wait at once.
+        changes = await followBuildChanges(input.deploymentId);
         for (;;) {
           context.signal.throwIfAborted();
           const row = await getDeployment(app.id, input.deploymentId);
@@ -265,11 +270,14 @@ export function registerAppDeploymentApi(
           }
           if (finished) return;
           if (lines.length >= WATCH_BATCH_LINES) continue;
-          await waitForBuildChange(row.id, WATCH_HEARTBEAT_MS, context.signal);
+          await changes.wait(WATCH_HEARTBEAT_MS, context.signal);
         }
       } catch (error) {
         if (context.signal.aborted) return;
         throw publicError(error);
+      } finally {
+        // Also when the client stops reading at a `yield`.
+        changes?.close();
       }
     },
   );

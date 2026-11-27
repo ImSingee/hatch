@@ -5,7 +5,7 @@
  * raw-text elements, inert templates) never decides either place.
  */
 import { describe, expect, it } from 'vitest';
-import { composeAppHtml } from './produce';
+import { composeAppHtml } from './app-html';
 
 const I = '<script>install()</script>';
 const B = '<script type="module">bundle()</script>';
@@ -56,6 +56,35 @@ describe('composing the App page', () => {
     ).toBe(
       '<body><!-- <script src="app.js"></script> --><template>' +
         `<script src="app.js"></script></body></template>${I}${B}\n</body>`,
+    );
+  });
+
+  it('reads a script element to the end tag the browser ends it at', () => {
+    const atBodyEnd = (script: string) =>
+      expect(compose(`<body><script>${script}</script><p>x</p></body>`)).toBe(
+        `<body>${I}<script>${script}</script><p>x</p>${B}\n</body>`,
+      );
+    atBodyEnd('const s = "</body>";');
+    // Inside `<!--`, a `<script>` tag makes the next `</script>` text.
+    atBodyEnd(
+      'const a = "<!--<script>"; const b = "</script>"; ' +
+        'const c = "</body>"; //-->',
+    );
+    // `--!>` leaves a comment but not escaped script text.
+    atBodyEnd('<!--<script>--!></script></body>-->');
+    // `<!-->` is over at once, and `<scriptx>` is no script tag.
+    expect(compose('<body><script><!--><script></script></body>')).toBe(
+      `<body>${I}<script><!--><script></script>${B}\n</body>`,
+    );
+    expect(compose('<body><script><!--<scriptx></script></body>')).toBe(
+      `<body>${I}<script><!--<scriptx></script>${B}\n</body>`,
+    );
+    // The bundle tag is replaced through its end tag's attributes.
+    expect(compose('<body><script src="app.js"></script x=">"></body>')).toBe(
+      `<body>${I}${B}</body>`,
+    );
+    expect(() => compose('<body><script><!--<script></script>')).toThrow(
+      /unclosed/,
     );
   });
 

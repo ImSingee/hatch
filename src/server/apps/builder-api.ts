@@ -28,7 +28,7 @@ import {
   leaseBuild,
   leasedBuild,
   renewBuildLease,
-  waitForBuildChange,
+  followBuildChanges,
 } from './builds';
 import { archiveAppCommit } from './git';
 
@@ -143,15 +143,19 @@ export async function handleBuilderApiRequest(
       if (!res.writableFinished) abort.abort();
     });
     const deadline = Date.now() + LEASE_WAIT_MS;
-    let build = await leaseBuild(body.builderId);
-    while (!build && Date.now() < deadline) {
-      await waitForBuildChange(
-        BUILD_QUEUE_CHANNEL,
-        Math.min(5_000, deadline - Date.now()),
-        abort.signal,
-      );
-      if (abort.signal.aborted) return;
+    // Follow the queue before the first claim: a build queued while a claim
+    // is running ends the next wait at once.
+    const queue = await followBuildChanges(BUILD_QUEUE_CHANNEL);
+    let build: Awaited<ReturnType<typeof leaseBuild>>;
+    try {
       build = await leaseBuild(body.builderId);
+      while (!build && Date.now() < deadline) {
+        await queue.wait(Math.min(5_000, deadline - Date.now()), abort.signal);
+        if (abort.signal.aborted) return;
+        build = await leaseBuild(body.builderId);
+      }
+    } finally {
+      queue.close();
     }
     if (abort.signal.aborted) {
       // The Builder left after the claim; its lease expires and the

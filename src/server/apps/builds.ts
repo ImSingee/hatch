@@ -66,6 +66,14 @@ export function isFinishedBuild(status: AppBuildStatus): boolean {
 
 /** How long a builder holds a build without renewing its lease. */
 export const BUILD_LEASE_MS = 60_000;
+/**
+ * Leases are set and judged by the database clock, read when the row is
+ * checked: `now()` is the transaction's start, and a statement waiting on
+ * a row lock must not pass on a lease that expired while it waited. One
+ * clock for every instance, whatever their hosts' clocks say.
+ */
+const DB_NOW = sql`clock_timestamp()`;
+const LEASE_UNTIL = sql`clock_timestamp() + ${BUILD_LEASE_MS}::integer * interval '1 millisecond'`;
 /** Lease losses before a build fails instead of being queued again. */
 const MAX_BUILD_ATTEMPTS = 2;
 /** How long a local-mode deployment waits for its upload. */
@@ -301,19 +309,6 @@ export async function createDeployment(
 ): Promise<AppBuild> {
   const message = input.message.trim();
   if (!message) throw new AppError('A deployment message is required.', 400);
-  const mode: AppBuildMode =
-    input.build === 'auto'
-      ? builderEnabled()
-        ? 'builder'
-        : 'local'
-      : input.build;
-  if (mode === 'builder' && !builderEnabled()) {
-    throw new DeploymentRequestError(
-      'BUILDER_UNAVAILABLE',
-      'This platform has no dedicated Builder; build locally with ' +
-        '`hatch app deploy --build local`.',
-    );
-  }
   const app = await db.query.apps.findFirst({
     where: { id: input.appId },
     columns: { id: true, createdAt: true },
@@ -330,10 +325,24 @@ export async function createDeployment(
   }
   const requestId = input.requestId || null;
   // A repeated request gets the deployment it made, even if its commit has
-  // left master since (a restore): look it up before checking the source.
+  // left master since (a restore) or the platform has no Builder any more:
+  // look it up before checking the source or the build mode.
   if (requestId) {
     const repeated = await deploymentOfRequest(db, input.appId, requestId);
     if (repeated) return repeated;
+  }
+  const mode: AppBuildMode =
+    input.build === 'auto'
+      ? builderEnabled()
+        ? 'builder'
+        : 'local'
+      : input.build;
+  if (mode === 'builder' && !builderEnabled()) {
+    throw new DeploymentRequestError(
+      'BUILDER_UNAVAILABLE',
+      'This platform has no dedicated Builder; build locally with ' +
+        '`hatch app deploy --build local`.',
+    );
   }
   // Source first: only a commit already on master can be deployed.
   const commit = await resolveDeployCommit(input.appId, input.commit);
@@ -396,6 +405,8 @@ export async function createDeployment(
         : [];
       if (joined) {
         await record(joined.id);
+        // Both writes roll back for a caller that has already given up.
+        throwIfCanceled(input.signal);
         return { row: joined, joined: true };
       }
     }
@@ -445,9 +456,7 @@ export async function createDeployment(
           : `Deployment waiting for the local build of ${commit}`,
     });
     // Commit nothing for a caller that has already given up on this call.
-    if (input.signal?.aborted) {
-      throw new AppError('The create request was canceled.', 499);
-    }
+    throwIfCanceled(input.signal);
     return { row, joined: false, superseded: superseded.map((s) => s.id) };
   });
   if (created.joined) return created.row;
@@ -455,6 +464,13 @@ export async function createDeployment(
   if (mode === 'builder') await notifyBuild(BUILD_QUEUE_CHANNEL);
   await notifyBuild(created.row.id);
   return (await getDeploymentRow(input.appId, created.row.id)) ?? created.row;
+}
+
+/** Inside a create's transaction: roll it back once the caller gave up. */
+function throwIfCanceled(signal: AbortSignal | undefined): void {
+  if (signal?.aborted) {
+    throw new AppError('The create request was canceled.', 499);
+  }
 }
 
 /** The deployment a create request with `requestId` made, if it made one. */
@@ -640,32 +656,61 @@ function ensureListening(): Promise<void> {
   return listening;
 }
 
+/** Changes of one build, followed from the moment the feed was opened. */
+export type BuildChangeFeed = {
+  /**
+   * Resolve at the first change since the feed opened or the previous wait
+   * returned (at once if one came meanwhile), at `timeoutMs`, or on abort.
+   */
+  wait(timeoutMs: number, signal?: AbortSignal): Promise<void>;
+  /** Stop following; a wait in progress returns. */
+  close(): void;
+};
+
 /**
- * Wait until a build changes (a log line or a state move) or `timeoutMs`
- * passes. Followers re-read durable state after every wake-up, so a missed
- * notification only delays them until the next poll.
+ * Follow a build: open the feed, then read the build. A change committed
+ * after the feed opened, even while the reader was still busy with its
+ * last read, ends the next wait at once instead of at its timeout. A
+ * notification lost elsewhere still waits for the timeout, after which the
+ * reader re-reads durable state.
  */
-export async function waitForBuildChange(
+export async function followBuildChanges(
   buildId: string,
-  timeoutMs: number,
-  signal?: AbortSignal,
-): Promise<void> {
-  if (signal?.aborted) return;
-  await new Promise<void>((resolve) => {
-    const waiter: Waiter = { buildId, wake: () => done() };
-    const timer = setTimeout(() => done(), timeoutMs);
-    const done = () => {
-      clearTimeout(timer);
+): Promise<BuildChangeFeed> {
+  let changed = false;
+  let release: (() => void) | undefined;
+  const waiter: Waiter = {
+    buildId,
+    wake: () => {
+      changed = true;
+      release?.();
+    },
+  };
+  waiters.add(waiter);
+  // LISTEN is in place before the caller's first read.
+  await ensureListening();
+  return {
+    async wait(timeoutMs, signal) {
+      if (!changed && !signal?.aborted && waiters.has(waiter)) {
+        await new Promise<void>((resolve) => {
+          const timer = setTimeout(() => done(), timeoutMs);
+          const done = () => {
+            clearTimeout(timer);
+            signal?.removeEventListener('abort', done);
+            release = undefined;
+            resolve();
+          };
+          release = done;
+          signal?.addEventListener('abort', done, { once: true });
+        });
+      }
+      changed = false;
+    },
+    close() {
       waiters.delete(waiter);
-      signal?.removeEventListener('abort', done);
-      resolve();
-    };
-    waiters.add(waiter);
-    signal?.addEventListener('abort', done, { once: true });
-    // The deadline and the abort already apply while LISTEN is set up; a
-    // wake-up missed meanwhile only delays the follower to its next poll.
-    void ensureListening();
-  });
+      release?.();
+    },
+  };
 }
 
 /** A stable failure code for an error raised while accepting a package. */
@@ -706,14 +751,15 @@ export type BuildLease = { builderId: string; attempt: number };
 
 /**
  * Row predicate: the build is still held by exactly this lease, and the lease
- * has not expired (the sweeper may not have reclaimed it yet).
+ * has not expired (the sweeper may not have reclaimed it yet), by the
+ * database clock when the row is checked (see `DB_NOW`).
  */
 function heldBy(lease: BuildLease) {
   return and(
     eq(schema.appBuilds.status, 'building'),
     eq(schema.appBuilds.builderId, lease.builderId),
     eq(schema.appBuilds.attempts, lease.attempt),
-    gt(schema.appBuilds.leaseExpiresAt, new Date()),
+    gt(schema.appBuilds.leaseExpiresAt, DB_NOW),
   );
 }
 
@@ -891,10 +937,27 @@ export async function acceptArtifact(
         );
         if (!releasing) throw new Error('The deployment changed state.');
       },
+      // Under the deploy lock the sweeper settles a stalled release with: a
+      // request another instance already settled (`release_interrupted`,
+      // say) records no deployment, so the two never disagree.
+      fenceRelease: async (tx) => {
+        const [current] = await tx
+          .select({ status: schema.appBuilds.status })
+          .from(schema.appBuilds)
+          .where(eq(schema.appBuilds.id, row.id))
+          .for('update');
+        if (current?.status !== 'releasing') {
+          throw new SettledRelease(current?.status ?? 'missing');
+        }
+      },
     });
   } catch (error) {
     clearInterval(heartbeat);
     await cleanUp(work);
+    // Settled elsewhere before anything was recorded: that outcome stands.
+    if (error instanceof SettledRelease) {
+      return getDeployment(row.appId, row.id);
+    }
     if (error instanceof SupersededRelease) {
       return (
         (await transition(
@@ -952,6 +1015,13 @@ async function cleanUp(work: string): Promise<void> {
 /** Largest dependency tree the platform installs to evaluate a manifest. */
 const MANIFEST_INSTALL_MAX_BYTES = 1024 * 1024 * 1024;
 
+/** The request was settled by another instance while it was releasing. */
+class SettledRelease extends Error {
+  constructor(readonly status: string) {
+    super(`The deployment is ${status}; its release was not recorded.`);
+  }
+}
+
 class SupersededRelease extends Error {
   constructor(readonly newerId: string) {
     super(`Deployment ${newerId} was released first.`);
@@ -1002,7 +1072,7 @@ function claimQueuedBuild(builderId: string): Promise<AppBuild | null> {
       .set({
         status: 'building',
         builderId,
-        leaseExpiresAt: new Date(Date.now() + BUILD_LEASE_MS),
+        leaseExpiresAt: LEASE_UNTIL,
         attempts: sql`${schema.appBuilds.attempts} + 1`,
         startedAt: new Date(),
       })
@@ -1030,7 +1100,7 @@ export async function renewBuildLease(
 ): Promise<boolean> {
   const [row] = await db
     .update(schema.appBuilds)
-    .set({ leaseExpiresAt: new Date(Date.now() + BUILD_LEASE_MS) })
+    .set({ leaseExpiresAt: LEASE_UNTIL })
     .where(and(eq(schema.appBuilds.id, buildId), heldBy(lease)))
     .returning({ id: schema.appBuilds.id });
   return Boolean(row);
@@ -1074,16 +1144,18 @@ export async function leasedBuild(
   buildId: string,
   builderId: string,
 ): Promise<AppBuild | null> {
-  return (
-    (await db.query.appBuilds.findFirst({
-      where: {
-        id: buildId,
-        builderId,
-        status: 'building',
-        leaseExpiresAt: { gt: new Date() },
-      },
-    })) ?? null
-  );
+  const [row] = await db
+    .select()
+    .from(schema.appBuilds)
+    .where(
+      and(
+        eq(schema.appBuilds.id, buildId),
+        eq(schema.appBuilds.builderId, builderId),
+        eq(schema.appBuilds.status, 'building'),
+        gt(schema.appBuilds.leaseExpiresAt, DB_NOW),
+      ),
+    );
+  return row ?? null;
 }
 
 let sweeping: Promise<void> | undefined;
@@ -1097,19 +1169,22 @@ let sweeping: Promise<void> | undefined;
 export function sweepBuilds(): Promise<void> {
   sweeping ??= (async () => {
     const now = Date.now();
-    const lost = await db.query.appBuilds.findMany({
-      where: {
-        status: 'building',
-        leaseExpiresAt: { lt: new Date(now) },
-      },
-    });
+    const lost = await db
+      .select()
+      .from(schema.appBuilds)
+      .where(
+        and(
+          eq(schema.appBuilds.status, 'building'),
+          lt(schema.appBuilds.leaseExpiresAt, DB_NOW),
+        ),
+      );
     for (const build of lost) {
       if (build.attempts < MAX_BUILD_ATTEMPTS) {
         const requeued = await transition(
           build.id,
           ['building'],
           { status: 'queued', builderId: null, leaseExpiresAt: null },
-          lt(schema.appBuilds.leaseExpiresAt, new Date(now)),
+          lt(schema.appBuilds.leaseExpiresAt, DB_NOW),
           {
             stream: 'platform',
             text: `Builder ${build.builderId ?? 'unknown'} stopped responding; queued again.`,
@@ -1125,7 +1200,7 @@ export function sweepBuilds(): Promise<void> {
             errorCode: 'builder_lost',
             errorMessage: 'The Builder stopped responding during the build.',
           },
-          lt(schema.appBuilds.leaseExpiresAt, new Date(now)),
+          lt(schema.appBuilds.leaseExpiresAt, DB_NOW),
           {
             stream: 'platform',
             text: 'The Builder stopped responding during the build.',

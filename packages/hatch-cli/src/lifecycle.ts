@@ -163,6 +163,11 @@ export async function runLifecycle(
       'invalid_arguments',
       '--commit cannot be combined with --reconcile.',
     );
+  if (values.reconcile && values['retry-after-confirming'] !== undefined)
+    throw new CliError(
+      'invalid_retry_confirmation',
+      '--reconcile only reports the pending deployment; run --retry-after-confirming <commit> on its own.',
+    );
   if (
     values.build !== undefined &&
     !['auto', 'builder', 'local'].includes(String(values.build))
@@ -436,13 +441,14 @@ export async function runLifecycle(
         'Resource was deleted/recreated. Clone into a new directory; local work was retained.',
         6,
       );
-    await client.apps.associate({ params: { id: metadata.id }, body: {} });
-    await configureOrigin(root, credential, metadata.id, signal, helperConfig);
     // The checkout's pending deployment as the platform records it: by the
     // deployment id once known, else by the request id the create sent.
     const lookupPending = async (
       pending: NonNullable<Workspace['pending']>,
     ) => {
+      // The platform answers for the moment the lookup was sent: a create
+      // that landed after that is not in the answer.
+      const sentAt = Date.now();
       const found = pending.deploymentId
         ? await api.deployments
             .get({ id: metadata.id, deploymentId: pending.deploymentId })
@@ -470,7 +476,7 @@ export async function runLifecycle(
         : pending.deploymentId
           ? 'missing'
           : !!pending.requestId &&
-              Date.now() >
+              sentAt >
                 Date.parse(pending.createDeadline ?? pending.startedAt) +
                   CREATE_SETTLE_GRACE_MS
             ? 'not-created'
@@ -478,13 +484,8 @@ export async function runLifecycle(
       return { found, state };
     };
     // --reconcile only reads the platform record, so local edits made while
-    // the deployment runs do not block it.
+    // the deployment runs do not block it, and it associates nothing.
     if (operation === 'deploy' && values.reconcile) {
-      if (values['retry-after-confirming'] !== undefined)
-        throw new CliError(
-          'invalid_retry_confirmation',
-          '--reconcile only reports the pending deployment; run --retry-after-confirming <commit> on its own.',
-        );
       const pending = metadata.pending;
       if (!pending)
         throw new CliError(
@@ -492,13 +493,16 @@ export async function runLifecycle(
           'No pending deployment to reconcile.',
         );
       const { found, state } = await lookupPending(pending);
-      output({ id: metadata.id, state, pending, deployment: found ?? null });
+      // A settled deployment is reported once the checkout has forgotten it.
       if (state === 'finished' || state === 'not-created') {
         delete metadata.pending;
         await saveWorkspace(root, metadata);
       }
+      output({ id: metadata.id, state, pending, deployment: found ?? null });
       return;
     }
+    await client.apps.associate({ params: { id: metadata.id }, body: {} });
+    await configureOrigin(root, credential, metadata.id, signal, helperConfig);
     // A plain push or a deploy of an already pushed commit never reads the
     // working tree, so uncommitted work does not block it.
     if (operation === 'update' || (operation === 'deploy' && !values.commit))
@@ -909,7 +913,9 @@ const FINAL_LOOKUP_MS = 5_000;
  * arrived. Past `deadline` it fails with `deployment_in_progress`, leaving
  * the deployment running, or with `deployment_log_incomplete` (and the
  * finished deployment and the sequence to resume from) when only the rest
- * of its log is missing.
+ * of its log is missing. Once a finished state is known, a later failure to
+ * read the log also ends in `deployment_log_incomplete`, so the caller can
+ * settle that outcome; cancellation always ends the follow as it is.
  */
 export async function followDeployment(
   deployments: DeploymentsClient,
@@ -924,86 +930,124 @@ export async function followDeployment(
   },
 ): Promise<DeploymentView> {
   let after = options.afterSeq;
-  let last: DeploymentView | null = null;
+  // Set by the stream and the final lookup, the freshest state known.
+  let last = null as DeploymentView | null;
   // A terminal status alone is not the end: its log must have arrived too.
   const complete = (state: DeploymentView | null) =>
     !!state?.finished && after >= state.logSeq;
-  // The stream stops early enough to leave time to read the final state.
-  const watchUntil =
-    options.deadline -
-    Math.min(FINAL_LOOKUP_MS, Math.floor((options.deadline - Date.now()) / 4));
-  const pause = (ms: number) =>
-    new Promise((resolve) =>
-      setTimeout(resolve, Math.max(0, Math.min(ms, watchUntil - Date.now()))),
+  const canceled = (error: unknown) =>
+    !!options.signal?.aborted ||
+    (error instanceof CliError && error.exitCode === 130);
+  const resume = () =>
+    `hatch app deployments logs ${options.id} ${options.deploymentId} --after ${after}`;
+  const incomplete = (state: DeploymentView, cause?: unknown) => {
+    const code = cause
+      ? cause instanceof CliError
+        ? cause.code
+        : 'internal_error'
+      : undefined;
+    return new CliError(
+      'deployment_log_incomplete',
+      `Deployment ${options.deploymentId} is ${state.status}, but its log after line ${after} ${code ? `could not be read (${code})` : 'did not arrive in time'}. Print the rest with ${resume()}.`,
+      7,
+      undefined,
+      { deployment: state, afterSeq: after, ...(code ? { cause: code } : {}) },
     );
-  for (;;) {
-    options.signal?.throwIfAborted();
-    const remaining = watchUntil - Date.now();
-    if (remaining <= 0) break;
-    const before = after;
-    try {
-      for await (const message of deployments.watch(
-        { id: options.id, deploymentId: options.deploymentId, afterSeq: after },
-        { timeoutMs: remaining, signal: options.signal },
-      )) {
-        for (const line of message.lines) {
-          after = line.seq;
-          if (options.platformOnly && line.stream !== 'platform') continue;
-          process.stderr.write(`${line.text}\n`);
+  };
+  // A failure other than a timeout or cancellation keeps a known outcome.
+  const settle = (error: unknown) => {
+    if (!canceled(error) && last?.finished) return incomplete(last, error);
+    return error;
+  };
+  /** Stream the log until it is complete or `until` passes. */
+  const watch = async (until: number) => {
+    const pause = (ms: number) =>
+      new Promise((resolve) =>
+        setTimeout(resolve, Math.max(0, Math.min(ms, until - Date.now()))),
+      );
+    for (;;) {
+      options.signal?.throwIfAborted();
+      const remaining = until - Date.now();
+      if (remaining <= 0) return;
+      const before = after;
+      try {
+        for await (const message of deployments.watch(
+          {
+            id: options.id,
+            deploymentId: options.deploymentId,
+            afterSeq: after,
+          },
+          { timeoutMs: remaining, signal: options.signal },
+        )) {
+          for (const line of message.lines) {
+            after = line.seq;
+            if (options.platformOnly && line.stream !== 'platform') continue;
+            process.stderr.write(`${line.text}\n`);
+          }
+          if (message.deployment) {
+            if (last && message.deployment.status !== last.status)
+              process.stderr.write(`-> ${message.deployment.status}\n`);
+            last = message.deployment;
+          }
+          if (complete(last)) return;
         }
-        if (message.deployment) {
-          if (last && message.deployment.status !== last.status)
-            process.stderr.write(`-> ${message.deployment.status}\n`);
-          last = message.deployment;
-        }
-        if (last && complete(last)) return last;
+        // The stream ended before the whole log arrived: resume from the
+        // last line, after a pause when it brought nothing new.
+        if (after === before) await pause(1000);
+      } catch (error) {
+        // A dropped or timed-out stream (exit 7) resumes from the last line
+        // seen; any other failure is the caller's to report.
+        if (
+          canceled(error) ||
+          !(error instanceof CliError) ||
+          error.exitCode !== 7
+        )
+          throw settle(error);
+        await pause(1000);
       }
-      // The stream ended before the whole log arrived: resume from the last
-      // line, after a pause when it brought nothing new.
-      if (after === before) await pause(1000);
-    } catch (error) {
-      // A dropped or timed-out stream (exit 7) resumes from the last line
-      // seen; any other failure is the caller's to report.
-      if (options.signal?.aborted) throw error;
-      if (!(error instanceof CliError) || error.exitCode !== 7) throw error;
-      await pause(1000);
     }
-  }
+  };
+  // The stream stops early enough to leave time to read the final state.
+  await watch(
+    options.deadline -
+      Math.min(
+        FINAL_LOOKUP_MS,
+        Math.floor((options.deadline - Date.now()) / 4),
+      ),
+  );
+  if (last && complete(last)) return last;
   // The last frame may be older than the deployment: read it with what is
-  // left of the budget, keeping the last frame when that fails too.
-  let state = last;
+  // left of the budget, keeping the last frame when that times out.
   const left = options.deadline - Date.now();
-  if (!complete(state) && left > 0)
-    state = await deployments
+  if (left > 0)
+    last = await deployments
       .get(
         { id: options.id, deploymentId: options.deploymentId },
         { timeoutMs: left, signal: options.signal },
       )
       .catch((error: unknown) => {
         if (
-          options.signal?.aborted ||
+          canceled(error) ||
           !(error instanceof CliError) ||
           error.exitCode !== 7
         )
-          throw error;
+          throw settle(error);
         return last;
       });
-  if (state && complete(state)) return state;
-  const resume = `hatch app deployments logs ${options.id} ${options.deploymentId} --after ${after}`;
-  if (state?.finished)
-    throw new CliError(
-      'deployment_log_incomplete',
-      `Deployment ${options.deploymentId} is ${state.status}, but its log after line ${after} did not arrive in time. Print the rest with ${resume}.`,
-      7,
-      undefined,
-      { deployment: state, afterSeq: after },
-    );
+  if (last && complete(last)) return last;
+  // Still running with time left: the deadline ends the follow, not the
+  // share it kept for the lookup.
+  if (!last?.finished && options.deadline > Date.now()) {
+    await watch(options.deadline);
+    if (last && complete(last)) return last;
+  }
+  if (last?.finished) throw incomplete(last);
   throw new CliError(
     'deployment_in_progress',
-    `Deployment ${options.deploymentId} is still ${state?.status ?? 'running'}. Follow it with ${resume} --follow.`,
+    `Deployment ${options.deploymentId} is still ${last?.status ?? 'running'}. Follow it with ${resume()} --follow.`,
     7,
     undefined,
-    { deployment: state, afterSeq: after },
+    { deployment: last, afterSeq: after },
   );
 }
 function isRejected(error: unknown) {

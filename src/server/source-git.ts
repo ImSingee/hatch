@@ -131,30 +131,48 @@ done
 exit 0
 `;
 
+/**
+ * Run Git to completion. A Git that exited without a status (stopped by a
+ * signal) gave no answer at all, so it rejects even with `allowFailure`:
+ * callers read exit statuses as answers (`merge-base --is-ancestor`).
+ */
 function git(
   args: string[],
-  opts: { cwd?: string } = {},
+  opts: { cwd?: string; input?: string } = {},
 ): Promise<CommandResult> {
   return new Promise((resolve, reject) => {
     const child = spawn('git', args, {
       cwd: opts.cwd,
       env: process.env,
-      stdio: ['ignore', 'pipe', 'pipe'],
+      stdio: ['pipe', 'pipe', 'pipe'],
     });
     let stdout = '';
     let stderr = '';
-    child.stdout.on('data', (d) => (stdout += d.toString()));
-    child.stderr.on('data', (d) => (stderr += d.toString()));
+    child.stdout.setEncoding('utf8');
+    child.stderr.setEncoding('utf8');
+    child.stdout.on('data', (chunk: string) => (stdout += chunk));
+    child.stderr.on('data', (chunk: string) => (stderr += chunk));
     child.on('error', reject);
-    child.on('close', (code) => {
-      resolve({ exitCode: code ?? 0, stdout, stderr });
+    // A Git that exits before reading its input is reported by `close`.
+    child.stdin.on('error', () => {});
+    child.stdin.end(opts.input ?? '');
+    child.on('close', (code, signal) => {
+      if (code === null) {
+        reject(
+          new Error(
+            `git ${args.join(' ')} failed: stopped by ${signal ?? 'a signal'}`,
+          ),
+        );
+        return;
+      }
+      resolve({ exitCode: code, stdout, stderr });
     });
   });
 }
 
 async function runGit(
   args: string[],
-  opts: { cwd?: string; allowFailure?: boolean } = {},
+  opts: { cwd?: string; input?: string; allowFailure?: boolean } = {},
 ): Promise<CommandResult> {
   const result = await git(args, opts);
   if (!opts.allowFailure && result.exitCode !== 0) {
@@ -209,7 +227,8 @@ function assertTreeWithinBudget(
         }
       }
     });
-    child.stderr.on('data', (chunk) => (stderr += chunk.toString()));
+    child.stderr.setEncoding('utf8');
+    child.stderr.on('data', (chunk: string) => (stderr += chunk));
     child.once('error', (error) => reject(over ?? error));
     child.once('close', (code) => {
       if (over) reject(over);
@@ -222,13 +241,61 @@ function assertTreeWithinBudget(
   });
 }
 
+/**
+ * The object id `ref` names, or null when there is no such ref. Rejects when
+ * Git cannot tell (`--verify --quiet` exits 1 only for a name it cannot
+ * resolve). A full ref is resolved from the refs alone, without reading the
+ * object it names.
+ */
 async function refCommit(repoDir: string, ref: string): Promise<string | null> {
   const result = await runGit(
-    ['--git-dir', repoDir, 'rev-parse', '--verify', ref],
+    ['--git-dir', repoDir, 'rev-parse', '--verify', '--quiet', ref],
     { allowFailure: true },
   );
-  if (result.exitCode !== 0) return null;
+  if (result.exitCode === 1) return null;
+  if (result.exitCode !== 0) {
+    throw new Error(
+      `git rev-parse ${ref} failed: ${(result.stderr || result.stdout).trim()}`,
+    );
+  }
   return result.stdout.trim();
+}
+
+/**
+ * The type of each object in `ids` (full ids), null for one that is not in
+ * the repository. Rejects when Git reports it could not read the store.
+ *
+ * An unreadable pack is indistinguishable from an absent object here (Git
+ * answers `missing` without a word on stderr), so a caller that knows an
+ * object must exist (the master tip) treats `missing` for it as a fault.
+ */
+async function objectTypes(
+  repoDir: string,
+  ids: readonly string[],
+): Promise<(string | null)[]> {
+  const result = await runGit(
+    ['--git-dir', repoDir, 'cat-file', '--batch-check'],
+    { allowFailure: true, input: ids.map((id) => `${id}\n`).join('') },
+  );
+  const answers = result.stdout.split('\n').slice(0, ids.length);
+  if (
+    result.exitCode !== 0 ||
+    /^(?:error|fatal):/m.test(result.stderr) ||
+    answers.length !== ids.length
+  ) {
+    throw new Error(
+      `git cat-file --batch-check failed: ${(result.stderr || result.stdout).trim()}`,
+    );
+  }
+  return answers.map((answer, index) => {
+    const id = ids[index];
+    if (answer === `${id} missing`) return null;
+    const [answered, type] = answer.split(' ');
+    if (answered !== id || !type) {
+      throw new Error(`git cat-file --batch-check failed: ${answer}`);
+    }
+    return type;
+  });
 }
 
 export function createGitSource(cfg: GitSourceConfig) {
@@ -301,25 +368,24 @@ export function createGitSource(cfg: GitSourceConfig) {
     return isOnMaster(repoDir, commit);
   }
 
-  /** Whether `ref` names a commit; rejects when Git cannot tell. */
-  async function hasCommit(repoDir: string, ref: string): Promise<boolean> {
-    const result = await runGit(
-      ['--git-dir', repoDir, 'rev-parse', '--verify', '--quiet', ref],
-      { allowFailure: true },
-    );
-    // --quiet --verify exits 1 for a name that is no object, 128 on errors.
-    if (result.exitCode === 0) return true;
-    if (result.exitCode === 1) return false;
-    throw new Error(
-      `git rev-parse ${ref} failed: ${(result.stderr || result.stdout).trim()}`,
-    );
-  }
-
-  /** True when `commit` is the master tip or one of its ancestors. */
+  /**
+   * True when `commit` (a full id) is the master tip or one of its ancestors;
+   * false when it is not, or is no commit of this repository. Rejects when Git
+   * cannot tell (an unreadable repository), which is not "not on master".
+   */
   async function isOnMaster(repoDir: string, commit: string): Promise<boolean> {
     const master = `refs/heads/${SOURCE_BRANCH}`;
-    if (!(await hasCommit(repoDir, `${master}^{commit}`))) return false;
-    if (!(await hasCommit(repoDir, `${commit}^{commit}`))) return false;
+    const tip = await refCommit(repoDir, master);
+    if (!tip) return false;
+    // The tip is read as well: an object the ref names but Git cannot read
+    // means the store is unreadable, never that `commit` is absent from it.
+    const [tipType, commitType] = await objectTypes(repoDir, [tip, commit]);
+    if (tipType !== 'commit') {
+      throw new Error(
+        `git cat-file ${master} failed: ${tip} is ${tipType ?? 'unreadable'}`,
+      );
+    }
+    if (commitType !== 'commit') return false;
     const result = await runGit(
       ['--git-dir', repoDir, 'merge-base', '--is-ancestor', commit, master],
       { allowFailure: true },
@@ -356,10 +422,10 @@ export function createGitSource(cfg: GitSourceConfig) {
           'deployments do not support yet.',
         400,
       );
-    if (!requested) {
-      if (!COMMIT_ID.test(master)) throw unsupported();
-      return master;
-    }
+    // The repository's format first: in a SHA-256 repository a 40-digit id
+    // would still resolve, as an abbreviation of a 64-digit one.
+    if (!COMMIT_ID.test(master)) throw unsupported();
+    if (!requested) return master;
     if (/^[0-9a-f]{64}$/.test(requested)) throw unsupported();
     if (!COMMIT_ID.test(requested)) {
       throw new AppError(
@@ -367,11 +433,10 @@ export function createGitSource(cfg: GitSourceConfig) {
         400,
       );
     }
-    const commit = await refCommit(repoDir, `${requested}^{commit}`);
-    if (!commit || !(await isOnMaster(repoDir, commit))) {
+    if (!(await isOnMaster(repoDir, requested))) {
       throw notOnMaster(id, requested);
     }
-    return commit;
+    return requested;
   }
 
   /**
@@ -487,7 +552,8 @@ export function createGitSource(cfg: GitSourceConfig) {
     const stop = () => {
       if (!exited) child.kill('SIGKILL');
     };
-    child.stderr.on('data', (chunk) => (stderr += chunk.toString()));
+    child.stderr.setEncoding('utf8');
+    child.stderr.on('data', (chunk: string) => (stderr += chunk));
     child.stdout.pipe(output, { end: false });
     output.once('close', stop);
     signal?.addEventListener('abort', () => output.destroy(), { once: true });
