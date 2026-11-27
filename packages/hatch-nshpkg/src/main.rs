@@ -673,6 +673,41 @@ fn pack(flags: &Flags) -> Result<Value> {
 
 // ---------------------------------------------------------------- verify
 
+/// An exclusive hold on a trust state directory, released when dropped.
+struct StateLock(PathBuf);
+
+impl StateLock {
+    fn take(dir: &Path) -> Result<StateLock> {
+        fs::create_dir_all(dir).map_err(internal)?;
+        let file = dir.join(".hatch-nshpkg.lock");
+        fs::OpenOptions::new()
+            .write(true)
+            .create_new(true)
+            .open(&file)
+            .map_err(|e| {
+                if e.kind() == std::io::ErrorKind::AlreadyExists {
+                    refused(
+                        "state_in_use",
+                        format!(
+                            "another verify uses {} (remove {} if none runs)",
+                            dir.display(),
+                            file.display()
+                        ),
+                    )
+                } else {
+                    internal(format!("{}: {e}", file.display()))
+                }
+            })?;
+        Ok(StateLock(file))
+    }
+}
+
+impl Drop for StateLock {
+    fn drop(&mut self) {
+        let _ = fs::remove_file(&self.0);
+    }
+}
+
 /// Verifies packages in order as a shell trusting `--root` would, accepting
 /// each one that verifies: later packages with older builds are refused.
 /// `--revocations` applies a revocation list; `--state` keeps the store's
@@ -684,6 +719,12 @@ fn verify(flags: &Flags) -> Result<Value> {
     if flags.positional.is_empty() {
         return Err(Failure::Usage("name at least one package".into()));
     }
+    // One run at a time per state directory: each run reads the accepted
+    // builds once and saves them whole, so two at once could lower them.
+    let _lock = match flags.get("state") {
+        Some(dir) => Some(StateLock::take(Path::new(dir))?),
+        None => None,
+    };
     let mut store = match flags.get("state") {
         Some(dir) => TrustStore::open(dir).map_err(internal)?,
         None => TrustStore::new(),
@@ -692,8 +733,17 @@ fn verify(flags: &Flags) -> Result<Value> {
     if let Some(list) = flags.get("revocations") {
         let list = Revocations::from_json(&read_text(Path::new(list))?)
             .map_err(|e| Failure::Usage(format!("--revocations: {e}")))?;
-        // A list the store already has (or an older one) changes nothing.
-        let _ = store.update_revocations(list);
+        match store.update_revocations(list) {
+            Ok(_) => {}
+            // The store already has this list or a newer one.
+            Err(nsh_package::Error::StaleRevocations { .. }) => {}
+            Err(error) => {
+                return Err(refused(
+                    "invalid_revocations",
+                    format!("the revocation list cannot be applied: {error}"),
+                ));
+            }
+        }
     }
     let mut results = Vec::new();
     for path in &flags.positional {

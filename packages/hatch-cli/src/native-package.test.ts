@@ -57,6 +57,18 @@ describe('hatch app package and runtime-trust arguments', () => {
     );
   });
 
+  it.each([['0'], ['3601'], ['soon']])(
+    'rejects --timeout %s before refreshing a Run credential',
+    (timeout) => {
+      expect(() =>
+        parse('package', 'notes', '--out', 'a.nshpkg', '--timeout', timeout),
+      ).toThrow(expect.objectContaining({ code: 'invalid_timeout' }));
+      expect(() => parse('runtime-trust', '--timeout', timeout)).toThrow(
+        expect.objectContaining({ code: 'invalid_timeout' }),
+      );
+    },
+  );
+
   it('names the trust files nsh verify reads', () => {
     expect(
       trustFiles({

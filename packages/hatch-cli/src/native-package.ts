@@ -9,6 +9,7 @@ import {
   openClient,
   parseCommandArgs,
   textFlag,
+  timeoutSeconds,
   type Flags,
 } from './command-session';
 import { CliError } from './error';
@@ -28,8 +29,10 @@ export function parseNativePackageCommand(
   offset: number,
 ): { command: NativePackageCommand; flags: Flags } {
   const operation = args[offset + 1];
+  // Global flags too: a bad one must fail before a Run credential refresh.
   const checked = (parsed: { flags: Flags; positionals: string[] }) => {
     textFlag(parsed.flags, 'workdir');
+    timeoutSeconds(parsed.flags);
     return parsed;
   };
   if (operation === 'package') {

@@ -129,9 +129,9 @@ async function ensurePackage(
   let pending = packing.get(file);
   if (!pending) {
     pending = (async () => {
-      await fs.mkdir(path.dirname(file), { recursive: true });
       const staged = path.join(path.dirname(file), `.pack-${randomUUID()}`);
       try {
+        await fs.mkdir(path.dirname(file), { recursive: true });
         await runNshpkg([
           'pack',
           '--input',
@@ -155,8 +155,9 @@ async function ensurePackage(
           if (error.code !== 'EEXIST') throw error;
         });
       } finally {
-        await fs.rm(staged, { force: true });
+        // A failure is never cached: the next request tries again.
         packing.delete(file);
+        await fs.rm(staged, { force: true }).catch(() => {});
       }
     })();
     packing.set(file, pending);
