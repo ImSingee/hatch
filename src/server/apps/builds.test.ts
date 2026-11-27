@@ -15,6 +15,14 @@ const mocks = vi.hoisted(() => ({
   release: undefined as undefined | ((id: string) => Promise<void>),
   /** Runs after `beforeRelease`, before the release is recorded. */
   beforeRecord: undefined as undefined | ((id: string) => Promise<void>),
+  /** Runs before the release takes its locks. */
+  beforeLock: undefined as undefined | ((id: string) => Promise<void>),
+  /** Apps whose Data cutover lock a release (of any instance) holds. */
+  cutoverHeld: new Set<string>(),
+  /** Records the release, then fails to finish activating it. */
+  unfinished: false,
+  /** The activation recovery the sweep runs. */
+  reconcile: undefined as undefined | ((appId: string) => Promise<void>),
   /** Fails the source check of a create, as a commit not on master does. */
   resolve: undefined as undefined | (() => Promise<never>),
   packageLog: '',
@@ -48,8 +56,32 @@ vi.mock('./finalize', () => ({
     tooling: {},
   }),
 }));
+// The Data cutover session lock, as one process sees every instance's.
+vi.mock('./data-table/provision', () => ({
+  tryWithAppDataCutoverLock: async <T>(id: string, fn: () => Promise<T>) => {
+    if (mocks.cutoverHeld.has(id)) return { locked: false };
+    mocks.cutoverHeld.add(id);
+    try {
+      return { locked: true, value: await fn() };
+    } finally {
+      mocks.cutoverHeld.delete(id);
+    }
+  },
+}));
 vi.mock('./deploy', () => ({
   ReleaseGenerationConflict: class ReleaseGenerationConflict extends Error {},
+  ReleaseUnfinished: class ReleaseUnfinished extends Error {
+    constructor(
+      readonly deploymentId: string,
+      readonly version: number | null,
+    ) {
+      super(`Deployment ${deploymentId} did not finish.`);
+    }
+  },
+  reconcilePendingActivation: async (appId: string) => {
+    await mocks.reconcile?.(appId);
+    return null;
+  },
   releaseDeployment: async (
     appId: string,
     options: {
@@ -59,28 +91,50 @@ vi.mock('./deploy', () => ({
       fenceRelease?: (tx: unknown) => Promise<void>;
     },
   ) => {
-    await options.produce('/unused');
-    await mocks.release?.(options.deploymentId);
-    await options.beforeRelease?.();
-    await mocks.beforeRecord?.(options.deploymentId);
-    // Recorded as the platform records a release: under the deploy lock,
-    // behind the requester's fence.
+    await mocks.beforeLock?.(options.deploymentId);
     const { db, schema } = await import('~/db');
     const { appDeployLock } = await import('./deploy-lock');
-    const version = mocks.releases.length + 1;
-    await db.transaction(async (tx) => {
-      await appDeployLock.acquire(tx, appId);
-      await options.fenceRelease?.(tx);
-      await tx.insert(schema.deployments).values({
-        id: options.deploymentId,
-        appId,
-        version,
-        status: 'deployed',
-        buildId: options.deploymentId,
+    // Released as the platform releases: under the cutover lock, behind the
+    // requester's fence before anything changes and again when recorded.
+    mocks.cutoverHeld.add(appId);
+    try {
+      await db.transaction(async (tx) => {
+        await appDeployLock.acquire(tx, appId);
+        await options.fenceRelease?.(tx);
       });
-    });
-    mocks.releases.push(options.deploymentId);
-    return { version };
+      await options.produce('/unused');
+      await mocks.release?.(options.deploymentId);
+      await options.beforeRelease?.();
+      await mocks.beforeRecord?.(options.deploymentId);
+      const version = mocks.releases.length + 1;
+      await db.transaction(async (tx) => {
+        await appDeployLock.acquire(tx, appId);
+        await options.fenceRelease?.(tx);
+        await tx.insert(schema.deployments).values({
+          id: options.deploymentId,
+          appId,
+          version,
+          status: 'deployed',
+          buildId: options.deploymentId,
+        });
+        if (mocks.unfinished) {
+          await tx
+            .update(schema.apps)
+            .set({ dataActivationId: options.deploymentId })
+            .where(eq(schema.apps.id, appId));
+        }
+      });
+      if (mocks.unfinished) {
+        const { ReleaseUnfinished } = await import('./deploy');
+        throw new ReleaseUnfinished(options.deploymentId, version, {
+          cause: new Error('The live backup could not be removed.'),
+        });
+      }
+      mocks.releases.push(options.deploymentId);
+      return { version };
+    } finally {
+      mocks.cutoverHeld.delete(appId);
+    }
   },
 }));
 
@@ -115,6 +169,10 @@ beforeEach(async () => {
   mocks.releases = [];
   mocks.release = undefined;
   mocks.beforeRecord = undefined;
+  mocks.beforeLock = undefined;
+  mocks.cutoverHeld.clear();
+  mocks.unfinished = false;
+  mocks.reconcile = undefined;
   mocks.resolve = undefined;
   mocks.packageLog = '';
   await db.delete(schema.deployments);
@@ -600,12 +658,17 @@ describe('builder leases', () => {
     expect(await lastLine(lost.id)).toMatch(/nothing was released/);
   });
 
-  it('records no release once another instance settled the request', async () => {
+  it('changes nothing for a release another instance settled before it took its locks', async () => {
     const deployment = await create();
+    let produced = false;
+    mocks.release = async () => {
+      produced = true;
+    };
     // The release paused past the stall limit after it was accepted; the
-    // sweep (of any instance) settled the request before it was recorded.
-    mocks.beforeRecord = async (id) => {
-      expect(await status(id)).toBe('releasing');
+    // sweep (of any instance) settled the request before the release took
+    // its locks.
+    mocks.beforeLock = async (id) => {
+      expect(await status(id)).toBe('verifying');
       await db
         .update(schema.appBuilds)
         .set({ updatedAt: new Date(Date.now() - 60 * 60_000) })
@@ -621,6 +684,7 @@ describe('builder leases', () => {
       status: 'failed',
       errorCode: 'release_interrupted',
     });
+    expect(produced).toBe(false);
     expect(
       await db.query.deployments.findFirst({ where: { id: deployment.id } }),
     ).toBeUndefined();
@@ -628,6 +692,56 @@ describe('builder leases', () => {
     expect((await builds.readBuildLog(deployment.id, 0)).at(-1)?.text).toMatch(
       /nothing was released/,
     );
+  });
+
+  it('settles no release while it holds its locks, however quiet it is', async () => {
+    const deployment = await create();
+    mocks.beforeRecord = async (id) => {
+      await db
+        .update(schema.appBuilds)
+        .set({ updatedAt: new Date(Date.now() - 60 * 60_000) })
+        .where(eq(schema.appBuilds.id, id));
+      await builds.sweepBuilds();
+      expect(await status(id)).toBe('releasing');
+    };
+    const final = await builds.acceptArtifact({
+      appId: APP,
+      buildId: deployment.id,
+      archive: packageArchive,
+    });
+    expect(final).toMatchObject({ status: 'ready', deploymentVersion: 1 });
+  });
+
+  it('reports a recorded release ready only once its activation is recovered', async () => {
+    const deployment = await create();
+    // Recorded and live, but finishing its activation failed.
+    mocks.unfinished = true;
+    const final = await builds.acceptArtifact({
+      appId: APP,
+      buildId: deployment.id,
+      archive: packageArchive,
+    });
+    expect(final).toMatchObject({ status: 'releasing', errorCode: null });
+    let recoveries = 0;
+    mocks.reconcile = async (appId) => {
+      recoveries += 1;
+      if (recoveries === 1) throw new Error('Still failing.');
+      await db
+        .update(schema.apps)
+        .set({ dataActivationId: null })
+        .where(eq(schema.apps.id, appId));
+    };
+    // The next sweep takes it up at once, and again after a failed recovery.
+    await builds.sweepBuilds();
+    expect(await status(deployment.id)).toBe('releasing');
+    await builds.sweepBuilds();
+    expect(recoveries).toBe(2);
+    expect(
+      await db.query.appBuilds.findFirst({ where: { id: deployment.id } }),
+    ).toMatchObject({ status: 'ready', deploymentVersion: 1 });
+    // Settled, it is no longer recovered.
+    await builds.sweepBuilds();
+    expect(recoveries).toBe(2);
   });
 
   it('leaves a release that is still running to finish, however long it takes', async () => {

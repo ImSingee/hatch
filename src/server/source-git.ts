@@ -16,6 +16,7 @@ import {
   chmod,
   mkdir,
   mkdtemp,
+  readdir,
   readFile,
   rm,
   writeFile,
@@ -298,6 +299,76 @@ async function objectTypes(
   });
 }
 
+/** Alternates Git follows from one object directory to the next. */
+const MAX_ALTERNATE_DEPTH = 5;
+
+/**
+ * Rejects unless this process can read every place Git would look for
+ * `id`: each file of each pack directory, the object's loose path, and the
+ * same in every alternate object directory. Git answers an object it cannot
+ * open as `missing` (exit 0, nothing on stderr), so a `missing` answer means
+ * absent only once this holds.
+ */
+async function assertObjectStoreReadable(
+  objectsDir: string,
+  id: string,
+  depth = 0,
+): Promise<void> {
+  const failed = (target: string, error: unknown): Error =>
+    new Error(
+      `git object store read failed: ${target} cannot be read ` +
+        `(${(error as NodeJS.ErrnoException).code ?? String(error)})`,
+    );
+  /** Whether `target` exists; rejects when it exists but cannot be read. */
+  const readable = async (target: string, mode: number): Promise<boolean> => {
+    try {
+      await access(target, mode);
+      return true;
+    } catch (error) {
+      // Gone is fine: a push or repack may have replaced it meanwhile.
+      if ((error as NodeJS.ErrnoException).code === 'ENOENT') return false;
+      throw failed(target, error);
+    }
+  };
+  if (!(await readable(objectsDir, fsConstants.R_OK | fsConstants.X_OK))) {
+    throw failed(objectsDir, 'ENOENT');
+  }
+  await readable(
+    path.join(objectsDir, id.slice(0, 2), id.slice(2)),
+    fsConstants.R_OK,
+  );
+  const packDir = path.join(objectsDir, 'pack');
+  if (await readable(packDir, fsConstants.R_OK | fsConstants.X_OK)) {
+    const entries = await readdir(packDir).catch((error) => {
+      if ((error as NodeJS.ErrnoException).code === 'ENOENT') return [];
+      throw failed(packDir, error);
+    });
+    for (const entry of entries) {
+      await readable(path.join(packDir, entry), fsConstants.R_OK);
+    }
+  }
+  const alternatesFile = path.join(objectsDir, 'info', 'alternates');
+  const alternates = await readFile(alternatesFile, 'utf8').catch((error) => {
+    if ((error as NodeJS.ErrnoException).code === 'ENOENT') return '';
+    throw failed(alternatesFile, error);
+  });
+  for (const line of alternates.split('\n')) {
+    const alternate = line.trim();
+    if (!alternate || alternate.startsWith('#')) continue;
+    if (depth >= MAX_ALTERNATE_DEPTH) {
+      throw new Error(
+        `git object store read failed: alternates nest deeper than ` +
+          `${MAX_ALTERNATE_DEPTH} at ${alternatesFile}`,
+      );
+    }
+    await assertObjectStoreReadable(
+      path.resolve(objectsDir, alternate),
+      id,
+      depth + 1,
+    );
+  }
+}
+
 export function createGitSource(cfg: GitSourceConfig) {
   /**
    * Install the push policy. Skipped when the current hook is already in
@@ -384,6 +455,12 @@ export function createGitSource(cfg: GitSourceConfig) {
       throw new Error(
         `git cat-file ${master} failed: ${tip} is ${tipType ?? 'unreadable'}`,
       );
+    }
+    if (commitType === null) {
+      // Absent, or in a pack Git could not open: only a store this process
+      // can read in full makes it absent.
+      await assertObjectStoreReadable(path.join(repoDir, 'objects'), commit);
+      return false;
     }
     if (commitType !== 'commit') return false;
     const result = await runGit(

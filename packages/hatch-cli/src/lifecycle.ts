@@ -771,6 +771,23 @@ export async function runLifecycle(
         deadline,
         ...options,
       });
+    // Follow to the end; a deployment that finished before the rest of its
+    // log arrived settles by its outcome.
+    const followToEnd = (options: {
+      afterSeq: number;
+      platformOnly: boolean;
+      signal?: AbortSignal;
+    }) =>
+      follow(options).catch((error: unknown) => {
+        if (
+          error instanceof CliError &&
+          error.code === 'deployment_log_incomplete'
+        ) {
+          process.stderr.write(`${error.message}\n`);
+          return (error.details as { deployment: DeploymentView }).deployment;
+        }
+        throw error;
+      });
     let final = created;
     if (created.build === 'local' && created.status === 'awaiting_artifact') {
       let archive: Buffer;
@@ -827,11 +844,14 @@ export async function runLifecycle(
       // The platform verifies and releases during the upload; show its
       // progress meanwhile. The local build already printed its own output.
       const watch = new AbortController();
-      const watching = follow({
+      const watching = followToEnd({
         afterSeq: created.logSeq,
         platformOnly: true,
         signal: watch.signal,
-      }).catch(() => null);
+      }).then(
+        (deployment) => ({ deployment }),
+        (error: unknown) => ({ error }),
+      );
       try {
         final = await deployments.upload({
           id: metadata.id,
@@ -843,22 +863,17 @@ export async function runLifecycle(
         await watching;
         throw error;
       }
-      await watching;
+      // --no-wait leaves a release the platform has yet to finish to it.
+      if (!final.finished && values['no-wait']) watch.abort();
+      const watched = await watching;
+      // The platform may hand a release that committed but has yet to
+      // finish on to its recovery sweep; the watch followed it to its end.
+      if (!final.finished && !values['no-wait']) {
+        if ('error' in watched) throw watched.error;
+        final = watched.deployment;
+      }
     } else if (!created.finished && !values['no-wait']) {
-      final = await follow({ afterSeq: 0, platformOnly: false }).catch(
-        (error: unknown) => {
-          // The deployment finished; only the rest of its log did not
-          // arrive in time. The deploy settles by its outcome.
-          if (
-            error instanceof CliError &&
-            error.code === 'deployment_log_incomplete'
-          ) {
-            process.stderr.write(`${error.message}\n`);
-            return (error.details as { deployment: DeploymentView }).deployment;
-          }
-          throw error;
-        },
-      );
+      final = await followToEnd({ afterSeq: 0, platformOnly: false });
     }
     if (!final.finished) {
       // --no-wait: the platform finishes the deployment on its own.

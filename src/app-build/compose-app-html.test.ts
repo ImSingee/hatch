@@ -88,6 +88,78 @@ describe('composing the App page', () => {
     );
   });
 
+  it('reads SVG and MathML content by the foreign-content rules', () => {
+    // A self-closing SVG `style` is over at `/>`; it holds no raw text.
+    expect(
+      compose('<body><svg><style/></svg><script src="app.js"></script></body>'),
+    ).toBe(`<body><svg><style/></svg>${I}${B}</body>`);
+    // SVG `style` and `script` contents are markup, so a CDATA section is
+    // what hides text there; an SVG script runs, after the installer.
+    expect(
+      compose(
+        '<body><svg><style><![CDATA[ p::after { content: "</body>"; } ]]>' +
+          '</style><script>early()</script></svg><p>x</p></body>',
+      ),
+    ).toBe(
+      `<body>${I}<svg><style><![CDATA[ p::after { content: "</body>"; } ]]>` +
+        `</style><script>early()</script></svg><p>x</p>${B}\n</body>`,
+    );
+    // HTML integration points and MathML text integration points take HTML
+    // elements again, raw text included.
+    const integrated =
+      '<svg><foreignObject><style>"</body>"</style></foreignObject>' +
+      '<desc><textarea></body></textarea></desc></svg>' +
+      '<math><mi><style>"</body>"</style></mi>' +
+      '<annotation-xml encoding="TEXT&sol;html"><xmp></body></xmp>' +
+      '</annotation-xml></math>';
+    expect(compose(`<body>${integrated}<p>x</p></body>`)).toBe(
+      `<body>${integrated}<p>x</p>${I}${B}\n</body>`,
+    );
+    // An HTML start tag such as `<p>` breaks out of SVG.
+    expect(compose('<body><svg><g><p><style>"</body>"</style></body>')).toBe(
+      `<body><svg><g><p><style>"</body>"</style>${I}${B}\n</body>`,
+    );
+    // An SVG `template` is no inert HTML template, and an SVG script's
+    // `src` names no bundle.
+    expect(
+      compose(
+        '<body><svg><template/><script src="app.js"/></svg>' +
+          '<script src="app.js"></script></body>',
+      ),
+    ).toBe(`<body>${I}<svg><template/><script src="app.js"/></svg>${B}</body>`);
+    // An HTML template's end closes the SVG left open in it.
+    expect(
+      compose(
+        '<body><template><svg></template><style>"</body>"</style></body>',
+      ),
+    ).toBe(
+      `<body><template><svg></template><style>"</body>"</style>${I}${B}\n</body>`,
+    );
+    // The bundle never goes into an SVG element left open.
+    expect(() => compose('<body><svg><circle/></body></html>')).toThrow(
+      /unclosed/,
+    );
+  });
+
+  it('matches the bundle tag by the src value the browser reads', () => {
+    for (const src of [
+      '&#46;/app.js',
+      '&#x2E;&sol;app&period;js',
+      '&#46/app.js',
+      ' &#9;app.js ',
+      'ap&#x0A;p.js',
+    ]) {
+      expect(compose(`<body><script src="${src}"></script></body>`)).toBe(
+        `<body>${I}${B}</body>`,
+      );
+    }
+    for (const src of ['&amp;#46;/app.js', '&nbsp;app.js', '&period/app.js']) {
+      expect(compose(`<body><script src="${src}"></script></body>`)).toBe(
+        `<body>${I}<script src="${src}"></script>${B}\n</body>`,
+      );
+    }
+  });
+
   it('keeps the bundle from closing its own script element', () => {
     expect(
       composeAppHtml('<body></body>', '', 'x("</SCRIPT>")', 'app/index.html'),

@@ -7,6 +7,7 @@ import { promises as fs } from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { afterAll, afterEach, expect, it, vi } from 'vitest';
+import { withSandboxOwnership } from '~agent/shell-sandbox';
 import { platformBuildHost } from './build-host';
 
 const root = await fs.realpath(
@@ -45,7 +46,12 @@ it('runs buf with the sandbox home, never the host user configuration', async ()
     sdkDigest: 'test',
     sandbox: { home, pnpmStoreDir: path.join(root, 'store') },
   });
-  const result = await sandboxed.runBuf(args, module);
+  // Where buf runs as the sandbox identity, the fixture (its module, its
+  // output and the sandbox home) is that identity's while it runs, as a
+  // build copy is; elsewhere this hands nothing over.
+  const result = await withSandboxOwnership([root], () =>
+    sandboxed.runBuf(args, module),
+  );
   expect(result.output).toBe('');
   expect(result.code).toBe(0);
 });

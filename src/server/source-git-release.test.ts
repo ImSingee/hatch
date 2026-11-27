@@ -350,6 +350,43 @@ describe('source the platform writes out', () => {
     await expect(platform.commitOnMaster(id, commit)).resolves.toBe(true);
   }, 15_000);
 
+  it('rejects instead of answering "not on master" when the commit is in an unreadable pack of its own', async () => {
+    // Master's tip reads fine; only the candidate's pack does not, and Git
+    // still answers that candidate as absent.
+    if (process.getuid?.() === 0) return; // root reads it regardless
+    const id = 'rt-unreadable-other-pack';
+    await seedPlatformSource(id);
+    const repoDir = path.join(root, 'repos', `${id}.git`);
+    await git(['--git-dir', repoDir, 'repack', '-a', '-d', '-q'], root);
+    const seed = path.join(root, `seed-${id}`);
+    await writeFile(path.join(seed, 'README.md'), 'side\n');
+    const side = await commitAll(seed, 'side');
+    await git(['push', repoDir, 'HEAD:refs/heads/side'], seed);
+    const pack = path.join(repoDir, 'objects', 'pack');
+    const before = new Set(await readdir(pack));
+    await git(['--git-dir', repoDir, 'repack', '-d', '-q'], root);
+    const sidePacks = (await readdir(pack)).filter(
+      (name) => name.endsWith('.pack') && !before.has(name),
+    );
+    expect(sidePacks).toHaveLength(1);
+    await expect(platform.commitOnMaster(id, side)).resolves.toBe(false);
+    await chmod(path.join(pack, sidePacks[0]), 0o000);
+    try {
+      await expect(platform.commitOnMaster(id, side)).rejects.toThrow(/failed/);
+      // An id the store does not hold is still a clean "not on master" only
+      // while every object can be read; this one cannot be told apart.
+      await expect(platform.commitOnMaster(id, 'e'.repeat(40))).rejects.toThrow(
+        /failed/,
+      );
+    } finally {
+      await chmod(path.join(pack, sidePacks[0]), 0o444);
+    }
+    await expect(platform.commitOnMaster(id, side)).resolves.toBe(false);
+    await expect(platform.commitOnMaster(id, 'e'.repeat(40))).resolves.toBe(
+      false,
+    );
+  }, 15_000);
+
   it('never takes a Git stopped by a signal for an answer', async () => {
     const id = 'rt-git-signal';
     await seedPlatformSource(id);

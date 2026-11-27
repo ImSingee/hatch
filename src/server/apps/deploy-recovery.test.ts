@@ -19,6 +19,8 @@ const mocks = vi.hoisted(() => ({
   deploymentReadFailures: new Set<string>(),
   appUpdateFailure: undefined as Error | undefined,
   releaseCommitAckFailure: undefined as Error | undefined,
+  /** With the lost acknowledgement, the deployment row cannot be read. */
+  releaseOutcomeUnreadable: false,
   events: [] as string[],
   heldAppLocks: new Set<string>(),
   heldCutoverLocks: new Set<string>(),
@@ -284,6 +286,10 @@ vi.mock('~/db', () => {
         if (inserted && mocks.releaseCommitAckFailure) {
           const failure = mocks.releaseCommitAckFailure;
           mocks.releaseCommitAckFailure = undefined;
+          const activeApp = mocks.appStack.at(-1);
+          if (mocks.releaseOutcomeUnreadable && activeApp) {
+            mocks.deploymentReadFailures.add(activeApp);
+          }
           throw failure;
         }
         return result;
@@ -345,7 +351,11 @@ vi.mock('./data-table/provision', () => ({
   },
 }));
 
-import { reconcilePendingAppActivations, releaseDeployment } from './deploy';
+import {
+  reconcilePendingAppActivations,
+  ReleaseUnfinished,
+  releaseDeployment,
+} from './deploy';
 import type { BuildResult } from './build';
 
 let deploymentSeq = 0;
@@ -527,6 +537,7 @@ describe('App deployment activation recovery', () => {
     mocks.deploymentReadFailures.clear();
     mocks.appUpdateFailure = undefined;
     mocks.releaseCommitAckFailure = undefined;
+    mocks.releaseOutcomeUnreadable = false;
     mocks.events.length = 0;
     mocks.heldAppLocks.clear();
     mocks.heldCutoverLocks.clear();
@@ -708,6 +719,101 @@ describe('App deployment activation recovery', () => {
       appId: id,
       deploymentRevision: result.deploymentId,
     });
+  });
+
+  it('reports a committed release whose activation cannot finish as unfinished, keeping its fence', async () => {
+    const id = 'committed-unfinished';
+    const app = appState(id, {
+      status: 'draft',
+      currentDeploymentId: null,
+      capabilities: null,
+      backendMode: null,
+      dataActivationId: null,
+    });
+    mocks.apps.set(id, app);
+    mocks.buildApp.mockImplementationOnce(stageFrontendBuild);
+    // The live backup is cleared once before the swap, then by each attempt
+    // to finish the committed release: both of those fail.
+    const cleanupFailure = new Error('live backup cleanup failed');
+    const realRm = fs.rm.bind(fs);
+    let backupRemovals = 0;
+    vi.spyOn(fs, 'rm').mockImplementation(async (target, options) => {
+      if (String(target).includes('.bak-') && ++backupRemovals > 1) {
+        throw cleanupFailure;
+      }
+      return realRm(target, options);
+    });
+
+    const failure = await deployApp(id, {
+      message: 'Committed deployment',
+      commit: 'source-commit',
+    }).catch((error: unknown) => error);
+
+    expect(failure).toBeInstanceOf(ReleaseUnfinished);
+    expect(failure).toMatchObject({ version: 1, cause: cleanupFailure });
+    const deploymentId = (failure as ReleaseUnfinished).deploymentId;
+    expect(backupRemovals).toBe(3);
+    expect(mocks.deployments.has(deploymentId)).toBe(true);
+    expect(app).toMatchObject({
+      currentDeploymentId: deploymentId,
+      dataActivationId: deploymentId,
+    });
+  });
+
+  it('reports a release whose COMMIT outcome cannot be read as unfinished, keeping its fence', async () => {
+    const id = 'commit-outcome-unknown';
+    const app = appState(id, {
+      status: 'draft',
+      currentDeploymentId: null,
+      capabilities: null,
+      backendMode: null,
+      dataActivationId: null,
+    });
+    mocks.apps.set(id, app);
+    mocks.buildApp.mockImplementationOnce(stageFrontendBuild);
+    const ackFailure = new Error('connection lost after COMMIT');
+    mocks.releaseCommitAckFailure = ackFailure;
+    mocks.releaseOutcomeUnreadable = true;
+
+    const failure = await deployApp(id, {
+      message: 'Unconfirmed deployment',
+      commit: 'source-commit',
+    }).catch((error: unknown) => error);
+
+    expect(failure).toBeInstanceOf(ReleaseUnfinished);
+    expect(failure).toMatchObject({ version: null, cause: ackFailure });
+    expect(app.dataActivationId).toBe(
+      (failure as ReleaseUnfinished).deploymentId,
+    );
+  });
+
+  it('changes nothing for a release whose fence rejects once it holds the locks', async () => {
+    const id = 'fenced-release';
+    const app = appState(id, { status: 'deployed' });
+    mocks.apps.set(id, app);
+    const settled = new Error('settled elsewhere');
+    const fenceRelease = vi.fn<() => Promise<void>>(async () => {
+      expect(mocks.heldCutoverLocks.has(id)).toBe(true);
+      throw settled;
+    });
+
+    await expect(
+      releaseDeployment(id, {
+        message: 'Fenced deployment',
+        deploymentId: 'deployment-fenced',
+        sourceCommit: 'source-commit',
+        buildOrigin: 'builder',
+        produce: (outputDir) =>
+          mocks.buildApp(id, { outputDir }) as Promise<BuildResult>,
+        fenceRelease,
+      }),
+    ).rejects.toBe(settled);
+
+    expect(fenceRelease).toHaveBeenCalledOnce();
+    expect(mocks.buildApp).not.toHaveBeenCalled();
+    // A pending activation is left for recovery, not recovered here.
+    expect(app.dataActivationId).toBe('deployment-pending');
+    expect(mocks.updates).toHaveLength(0);
   });
 
   it('clears a committed release fence with an exact deployment CAS', async () => {

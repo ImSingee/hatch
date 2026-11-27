@@ -46,6 +46,31 @@ export class ReleaseGenerationConflict extends AppError {
   }
 }
 
+/**
+ * A release that got past the point where it can be confirmed undone: it
+ * committed (`version` is its recorded version) but did not finish its
+ * activation, or its COMMIT outcome is unknown (`version` is null). Its
+ * activation fence stays set, so `reconcilePendingActivation` completes or
+ * undoes it; until then it is neither released nor failed.
+ */
+export class ReleaseUnfinished extends Error {
+  constructor(
+    readonly deploymentId: string,
+    readonly version: number | null,
+    options: { cause: unknown },
+  ) {
+    super(
+      version === null
+        ? `Deployment ${deploymentId} may have been recorded; its release ` +
+            'is recovered from the recorded deployments.'
+        : `Deployment ${deploymentId} was released as version ${version}, ` +
+            'but finishing its activation failed.',
+      options,
+    );
+    this.name = 'ReleaseUnfinished';
+  }
+}
+
 export type DeployResult = {
   deploymentId: string;
   version: number;
@@ -81,10 +106,12 @@ export type ReleaseDeploymentOptions = {
    */
   beforeRelease?: () => Promise<void>;
   /**
-   * Called in the transaction that records the release, under the App's
-   * cross-process deploy lock, before anything is recorded; throwing aborts
-   * the release with nothing recorded. Lets the requester confirm that no
-   * other instance settled its request meanwhile.
+   * Lets the requester confirm that no other instance settled its request.
+   * Called inside a transaction holding the App's cross-process deploy lock,
+   * twice: first thing once the release holds its locks, before anything
+   * (crash recovery, a Data migration) is changed, and again in the
+   * transaction that records the release. Throwing aborts the release; the
+   * first call leaves everything as it was.
    */
   fenceRelease?: (
     tx: Parameters<Parameters<typeof db.transaction>[0]>[0],
@@ -281,7 +308,9 @@ export { appDeployLock } from './deploy-lock';
  * Reconcile a durable activation fence left by a crash or an unavailable
  * COMMIT acknowledgement. The caller must hold the per-App cutover lock.
  */
-async function reconcilePendingActivation(id: string): Promise<string | null> {
+export async function reconcilePendingActivation(
+  id: string,
+): Promise<string | null> {
   const state = await db.transaction(async (tx) => {
     // Wait for a release transaction whose client disappeared while PostgreSQL
     // was still resolving COMMIT, then inspect its exact deployment id.
@@ -512,6 +541,15 @@ async function releaseDeploymentInner(
   const message = options.message?.trim();
   if (!message) {
     throw new Error('A deployment message is required.');
+  }
+  // A sweeper settles a stalled request under the same locks, so one that
+  // settled this request before the release took them stops it here.
+  const { fenceRelease } = options;
+  if (fenceRelease) {
+    await db.transaction(async (tx) => {
+      await appDeployLock.acquire(tx, id);
+      await fenceRelease(tx);
+    });
   }
 
   // A previous process may have died after swapping live bytes or while
@@ -1026,14 +1064,21 @@ async function releaseDeploymentInner(
       // The release transaction committed and is already live. Finish the same
       // idempotent post-commit work as the ordinary success path and report
       // success instead of falling through to destructive failure cleanup.
-      await appDatabaseLease?.release();
-      await finishCommittedRelease(
-        id,
-        liveBackup,
-        deploymentId,
-        build.source.backendMode === 'long-running' &&
-          build.source.capabilities.backend,
-      );
+      // Failing again, it is still released: recovery finishes it.
+      try {
+        await appDatabaseLease?.release();
+        await finishCommittedRelease(
+          id,
+          liveBackup,
+          deploymentId,
+          build.source.backendMode === 'long-running' &&
+            build.source.capabilities.backend,
+        );
+      } catch (finishError) {
+        throw new ReleaseUnfinished(deploymentId, version, {
+          cause: finishError,
+        });
+      }
       return {
         deploymentId,
         version,
@@ -1131,6 +1176,9 @@ async function releaseDeploymentInner(
           ),
         )
         .catch(() => {});
+    }
+    if (releaseOutcomeUnknown) {
+      throw new ReleaseUnfinished(deploymentId, null, { cause: error });
     }
     throw error;
   } finally {

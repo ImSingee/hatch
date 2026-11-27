@@ -18,6 +18,7 @@
  *        -> {status, errorCode, errorMessage}
  *   POST /internal/api/builds/:id/fail       {message, code?}
  *        code: `app_build_failed` (default) or `APP_MANIFEST_INVALID`.
+ *        message: at most FAILURE_MESSAGE_MAX_CHARS characters.
  *
  * A call made under a lease that has since moved on (canceled, superseded,
  * expired and leased again) gets 409 {error: 'build_not_leased'}.
@@ -38,6 +39,28 @@ export const LOG_BATCH_MAX_LINES = 5_000;
 export const LOG_BATCH_MAX_BYTES = 1024 * 1024;
 /** Longest build log line kept; longer lines are cut (both sides). */
 export const LOG_LINE_MAX_CHARS = 16_000;
+/** Longest failure message the platform takes (UTF-16 code units). */
+export const FAILURE_MESSAGE_MAX_CHARS = 64_000;
+
+/**
+ * `message` as a failure report can carry it: unchanged when it fits,
+ * otherwise its start and its end (where tools tend to put the error), with
+ * a line between them saying how much was left out of the report.
+ */
+export function boundFailureMessage(message: string): string {
+  if (message.length <= FAILURE_MESSAGE_MAX_CHARS) return message;
+  const gap = (omitted: number) =>
+    `\n[builder] … ${omitted} characters left out here; see the build ` +
+    'log for the whole message …\n';
+  // No gap is longer than one that leaves out the whole message.
+  const room = FAILURE_MESSAGE_MAX_CHARS - gap(message.length).length;
+  let head = Math.ceil(room / 2);
+  let tail = message.length - (room - head);
+  // Never split a surrogate pair.
+  if (/[\ud800-\udbff]/.test(message[head - 1]!)) head -= 1;
+  if (/[\udc00-\udfff]/.test(message[tail]!)) tail += 1;
+  return message.slice(0, head) + gap(tail - head) + message.slice(tail);
+}
 
 export type LeasedBuild = {
   id: string;

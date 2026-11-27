@@ -41,12 +41,14 @@ import { platformBuildHost } from '../server/apps/build-host';
 import { AppManifestValidationError } from '../server/apps/manifest-validation';
 import { LogShipper } from './log-shipper';
 import {
+  boundFailureMessage,
   BUILD_TOKEN_HEADER,
   BUILDER_API_PREFIX,
   BUILDER_PROTOCOL_VERSION,
   HEARTBEAT_MS,
   LEASE_WAIT_MS,
   LOG_FLUSH_MS,
+  LOG_LINE_MAX_CHARS,
   type LeasedBuild,
 } from './protocol';
 
@@ -331,6 +333,46 @@ async function startBuilder(): Promise<void> {
         body: JSON.stringify({ lines }),
       }),
     );
+    /**
+     * Record the build's failure with the platform; never throws. A message
+     * past the report's limit is cut there, so the build log gets it whole.
+     */
+    const reportFailure = async (message: string, code?: string) => {
+      const reported = boundFailureMessage(message);
+      if (reported !== message) {
+        // In pieces the log keeps whole (it cuts longer lines).
+        const pieces = message.split('\n').flatMap((line) =>
+          Array.from(
+            {
+              length: Math.max(1, Math.ceil(line.length / LOG_LINE_MAX_CHARS)),
+            },
+            (_, piece) =>
+              line.slice(
+                piece * LOG_LINE_MAX_CHARS,
+                (piece + 1) * LOG_LINE_MAX_CHARS,
+              ),
+          ),
+        );
+        logs.push(['[builder] The build failed:', ...pieces]);
+        await logs.drain(LOG_DRAIN_MS, stop.signal);
+      }
+      if (stop.signal.aborted) return;
+      const response = await call(`/${build.id}/fail`, {
+        method: 'POST',
+        build,
+        body: JSON.stringify({ message: reported, code }),
+      }).catch((error: unknown) => {
+        console.error(`[builder] ${build.id}: failure report failed:`, error);
+        return null;
+      });
+      if (!response || response.ok) return;
+      // 409: the lease moved on (canceled, or expired and leased again).
+      const reason = await response.text().catch(() => '');
+      console.error(
+        `[builder] ${build.id}: the platform did not record the failure ` +
+          `(${response.status}) ${reason}`,
+      );
+    };
     let work: string | undefined;
     try {
       await mkdir(BUILD_WORK_DIR, { recursive: true });
@@ -453,27 +495,37 @@ async function startBuilder(): Promise<void> {
         message?: string;
       };
       if (!result.ok) {
-        await call(`/${build.id}/fail`, {
-          method: 'POST',
-          build,
-          body: JSON.stringify({
-            message: result.message ?? 'The build stopped without a result.',
-            code: result.code,
-          }),
-        });
+        await reportFailure(
+          result.message ?? 'The build stopped without a result.',
+          result.code,
+        );
         return;
       }
       const packaged = new Uint8Array(await packBuildDirectory(outDir));
       stop.signal.throwIfAborted();
+      // Stopped with the run: a canceled deployment's upload ends at once.
+      // The platform's lease ends too once it has the package (it verifies
+      // and releases it, and settles the deployment either way), so a
+      // stopped wait for its answer is no failure.
       const uploaded = await call(`/${build.id}/artifact`, {
         method: 'PUT',
         build,
+        signal: stop.signal,
         timeoutMs: UPLOAD_TIMEOUT_MS,
         headers: { 'content-type': 'application/gzip' },
         body: packaged,
-      }).catch((error) => {
-        // Once sent, the platform settles the deployment either way.
-        console.error(`[builder] ${build.id}: upload did not finish:`, error);
+      }).catch((error: unknown) => {
+        if (stop.signal.aborted) {
+          console.log(
+            `[builder] ${build.id}: ` +
+              (leaseLost
+                ? 'lease ended during the upload (the platform has the ' +
+                  'package, or the build was canceled)'
+                : 'stopped during the upload'),
+          );
+        } else {
+          console.error(`[builder] ${build.id}: upload did not finish:`, error);
+        }
         return null;
       });
       if (!uploaded) return;
@@ -485,13 +537,9 @@ async function startBuilder(): Promise<void> {
       if (stop.signal.aborted) return;
       console.error(`[builder] ${build.id} failed:`, error);
       await logs.drain(LOG_DRAIN_MS, stop.signal);
-      await call(`/${build.id}/fail`, {
-        method: 'POST',
-        build,
-        body: JSON.stringify({
-          message: error instanceof Error ? error.message : String(error),
-        }),
-      }).catch(() => {});
+      await reportFailure(
+        error instanceof Error ? error.message : String(error),
+      );
     } finally {
       clearInterval(heartbeat);
       shutdown.signal.removeEventListener('abort', onShutdown);

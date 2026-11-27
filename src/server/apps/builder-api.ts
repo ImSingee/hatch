@@ -10,6 +10,7 @@ import { z } from 'zod';
 import {
   BUILD_TOKEN_HEADER,
   BUILDER_PROTOCOL_VERSION,
+  FAILURE_MESSAGE_MAX_CHARS,
   LEASE_WAIT_MS,
   LOG_BATCH_MAX_BYTES,
   LOG_BATCH_MAX_LINES,
@@ -241,7 +242,7 @@ export async function handleBuilderApiRequest(
     const body = await readJson(
       req,
       z.object({
-        message: z.string().max(64_000),
+        message: z.string().max(FAILURE_MESSAGE_MAX_CHARS),
         code: z.enum(['app_build_failed', 'APP_MANIFEST_INVALID']).optional(),
       }),
     );

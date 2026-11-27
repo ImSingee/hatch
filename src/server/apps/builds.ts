@@ -26,13 +26,22 @@ import type { AppBuildMode, AppBuildStatus, JsonObject } from '~/db/schema';
 import { getPlatformEnv } from '~env';
 import { AppError } from '~server/errors';
 import { DeploymentRequestError } from './deployment-errors';
-import { LOG_LINE_MAX_CHARS } from '../../builder/protocol';
+import {
+  FAILURE_MESSAGE_MAX_CHARS,
+  LOG_LINE_MAX_CHARS,
+} from '../../builder/protocol';
 import { BuildArchiveError, unpackBuildArchive } from '../../app-build/archive';
 import { platformSdkDigest } from '../platform-api/sdk';
 import { asBuildError } from './build';
 import { platformBuildHost } from './build-host';
 import { DataMigrationApprovalRequired } from './data-table/migrate';
-import { ReleaseGenerationConflict, releaseDeployment } from './deploy';
+import { tryWithAppDataCutoverLock } from './data-table/provision';
+import {
+  reconcilePendingActivation,
+  ReleaseGenerationConflict,
+  ReleaseUnfinished,
+  releaseDeployment,
+} from './deploy';
 import { appDeployLock } from './deploy-lock';
 import { BuildPackageError, finalizeBuild } from './finalize';
 import { checkoutAppCommit, resolveDeployCommit } from './git';
@@ -68,9 +77,10 @@ export function isFinishedBuild(status: AppBuildStatus): boolean {
 export const BUILD_LEASE_MS = 60_000;
 /**
  * Leases are set and judged by the database clock, read when the row is
- * checked: `now()` is the transaction's start, and a statement waiting on
- * a row lock must not pass on a lease that expired while it waited. One
- * clock for every instance, whatever their hosts' clocks say.
+ * checked (see `lockBuildRow`): `now()` is the transaction's start, and a
+ * write that waited on a row lock must not pass on a lease that expired
+ * while it waited. One clock for every instance, whatever their hosts'
+ * clocks say.
  */
 const DB_NOW = sql`clock_timestamp()`;
 const LEASE_UNTIL = sql`clock_timestamp() + ${BUILD_LEASE_MS}::integer * interval '1 millisecond'`;
@@ -121,6 +131,22 @@ function logLines(text: string | readonly string[]): string[] {
 }
 
 /**
+ * Lock the build row inside `tx`, before a guarded write judges it. An
+ * UPDATE that finds its row locked waits, and PostgreSQL checks its WHERE
+ * again only if the holder committed a change to the row; after a rollback
+ * the write goes ahead on the look it took before waiting, though a lease
+ * may have run out meanwhile. Holding the lock first, the guarded statement
+ * never waits: it reads the row, and the clock, with the lock held.
+ */
+async function lockBuildRow(tx: Tx, buildId: string): Promise<void> {
+  await tx
+    .select({ id: schema.appBuilds.id })
+    .from(schema.appBuilds)
+    .where(eq(schema.appBuilds.id, buildId))
+    .for('update');
+}
+
+/**
  * Append lines inside `tx`. `guard` narrows the build row the append may
  * touch (a Builder's current lease, say); returns null when it matched none.
  */
@@ -132,6 +158,7 @@ async function insertLog(
 ): Promise<number | null> {
   const lines = logLines(entry.text);
   if (lines.length === 0) return null;
+  if (guard) await lockBuildRow(tx, buildId);
   const [row] = await tx
     .update(schema.appBuilds)
     .set({ logSeq: sql`${schema.appBuilds.logSeq} + ${lines.length}` })
@@ -181,7 +208,10 @@ type TransitionValues = Partial<typeof schema.appBuilds.$inferInsert> & {
   status: AppBuildStatus;
 };
 
-/** Move a build between states inside `tx`; null when the move matched none. */
+/**
+ * Move a build between states inside `tx`; null when the move matched none.
+ * `extra` narrows the row further (a lease, say), judged with the row locked.
+ */
 async function moveBuild(
   tx: Tx,
   buildId: string,
@@ -195,6 +225,7 @@ async function moveBuild(
   log?: LogEntry,
 ): Promise<AppBuild | null> {
   const finished = isFinishedBuild(values.status);
+  if (extra) await lockBuildRow(tx, buildId);
   const [moved] = await tx
     .update(schema.appBuilds)
     .set({
@@ -567,7 +598,7 @@ export async function cancelDeployment(
       {
         status: 'failed',
         errorCode: failure.code,
-        errorMessage: failure.message.slice(0, 64_000),
+        errorMessage: failure.message.slice(0, FAILURE_MESSAGE_MAX_CHARS),
       },
       undefined,
       { stream: 'build', text: failure.message },
@@ -752,7 +783,8 @@ export type BuildLease = { builderId: string; attempt: number };
 /**
  * Row predicate: the build is still held by exactly this lease, and the lease
  * has not expired (the sweeper may not have reclaimed it yet), by the
- * database clock when the row is checked (see `DB_NOW`).
+ * database clock when the row is checked (see `DB_NOW`). A write guarded by
+ * it locks the row first (`lockBuildRow`).
  */
 function heldBy(lease: BuildLease) {
   return and(
@@ -775,7 +807,9 @@ export type AcceptArtifactInput = {
 /**
  * Accept the build package of one deployment and release it. Returns the
  * deployment in its final state; a rejected package is a `failed`
- * deployment, not an error.
+ * deployment, not an error. The one exception is a release that was
+ * recorded (or perhaps was) but did not finish activating: it is returned
+ * still `releasing`, and the sweep settles it once recovery succeeds.
  */
 export async function acceptArtifact(
   input: AcceptArtifactInput,
@@ -937,16 +971,19 @@ export async function acceptArtifact(
         );
         if (!releasing) throw new Error('The deployment changed state.');
       },
-      // Under the deploy lock the sweeper settles a stalled release with: a
+      // Under the locks the sweeper settles a stalled release with: a
       // request another instance already settled (`release_interrupted`,
-      // say) records no deployment, so the two never disagree.
+      // say) changes and records nothing, so the two never disagree.
       fenceRelease: async (tx) => {
         const [current] = await tx
           .select({ status: schema.appBuilds.status })
           .from(schema.appBuilds)
           .where(eq(schema.appBuilds.id, row.id))
           .for('update');
-        if (current?.status !== 'releasing') {
+        if (
+          current?.status !== 'verifying' &&
+          current?.status !== 'releasing'
+        ) {
           throw new SettledRelease(current?.status ?? 'missing');
         }
       },
@@ -957,6 +994,15 @@ export async function acceptArtifact(
     // Settled elsewhere before anything was recorded: that outcome stands.
     if (error instanceof SettledRelease) {
       return getDeployment(row.appId, row.id);
+    }
+    // Recorded, or perhaps recorded, so not a failure: the request stays
+    // `releasing` until the sweep has recovered the activation.
+    if (error instanceof ReleaseUnfinished) {
+      console.error(`[apps] release of ${row.id} did not finish:`, error);
+      return (
+        (await handOverUnfinishedRelease(row.id, error)) ??
+        (await getDeployment(row.appId, row.id))
+      );
     }
     if (error instanceof SupersededRelease) {
       return (
@@ -1004,6 +1050,45 @@ export async function acceptArtifact(
       { stream: 'platform', text: `Released version ${released.version}.` },
     )) ?? (await getDeployment(row.appId, row.id))
   );
+}
+
+/**
+ * Leave an unfinished release to the sweep, which recovers its activation
+ * and settles the request from the recorded deployments. The request is
+ * marked as gone quiet, so the next sweep of any instance takes it up
+ * rather than one a stall limit from now.
+ */
+async function handOverUnfinishedRelease(
+  buildId: string,
+  error: ReleaseUnfinished,
+): Promise<AppBuild | null> {
+  const row = await db.transaction(async (tx) => {
+    // The line first: a log append advances updatedAt as well.
+    await insertLog(
+      tx,
+      buildId,
+      {
+        stream: 'platform',
+        text:
+          error.version === null
+            ? 'The release may have been recorded; recovering it.'
+            : `Released version ${error.version}; finishing its activation failed, retrying.`,
+      },
+      eq(schema.appBuilds.status, 'releasing'),
+    );
+    return moveBuild(
+      tx,
+      buildId,
+      ['releasing'],
+      {
+        status: 'releasing',
+        updatedAt: new Date(Date.now() - RELEASE_STALL_MS - 1),
+      },
+      undefined,
+    );
+  });
+  if (row) await notifyBuild(row.id);
+  return row;
 }
 
 async function cleanUp(work: string): Promise<void> {
@@ -1098,11 +1183,14 @@ export async function renewBuildLease(
   buildId: string,
   lease: BuildLease,
 ): Promise<boolean> {
-  const [row] = await db
-    .update(schema.appBuilds)
-    .set({ leaseExpiresAt: LEASE_UNTIL })
-    .where(and(eq(schema.appBuilds.id, buildId), heldBy(lease)))
-    .returning({ id: schema.appBuilds.id });
+  const [row] = await db.transaction(async (tx) => {
+    await lockBuildRow(tx, buildId);
+    return tx
+      .update(schema.appBuilds)
+      .set({ leaseExpiresAt: LEASE_UNTIL })
+      .where(and(eq(schema.appBuilds.id, buildId), heldBy(lease)))
+      .returning({ id: schema.appBuilds.id });
+  });
   return Boolean(row);
 }
 
@@ -1131,7 +1219,7 @@ export async function failBuild(
     {
       status: 'failed',
       errorCode: code,
-      errorMessage: message.slice(0, 64_000),
+      errorMessage: message.slice(0, FAILURE_MESSAGE_MAX_CHARS),
     },
     heldBy(lease),
     { stream: 'platform', text: 'Build failed.' },
@@ -1156,6 +1244,19 @@ export async function leasedBuild(
       ),
     );
   return row ?? null;
+}
+
+/**
+ * Row predicate: the build is still on the attempt the sweep found lost, and
+ * its lease is still expired. Whether that attempt is queued again or fails
+ * is decided from its count, so it must not land on a later attempt another
+ * instance's sweep and a Builder started meanwhile.
+ */
+function lostAttempt(build: AppBuild) {
+  return and(
+    eq(schema.appBuilds.attempts, build.attempts),
+    lt(schema.appBuilds.leaseExpiresAt, DB_NOW),
+  );
 }
 
 let sweeping: Promise<void> | undefined;
@@ -1184,7 +1285,7 @@ export function sweepBuilds(): Promise<void> {
           build.id,
           ['building'],
           { status: 'queued', builderId: null, leaseExpiresAt: null },
-          lt(schema.appBuilds.leaseExpiresAt, DB_NOW),
+          lostAttempt(build),
           {
             stream: 'platform',
             text: `Builder ${build.builderId ?? 'unknown'} stopped responding; queued again.`,
@@ -1200,7 +1301,7 @@ export function sweepBuilds(): Promise<void> {
             errorCode: 'builder_lost',
             errorMessage: 'The Builder stopped responding during the build.',
           },
-          lt(schema.appBuilds.leaseExpiresAt, DB_NOW),
+          lostAttempt(build),
           {
             stream: 'platform',
             text: 'The Builder stopped responding during the build.',
@@ -1245,40 +1346,63 @@ export function sweepBuilds(): Promise<void> {
 
 /**
  * Settle a verify or release that stopped making progress, from the recorded
- * deployments. A release records its deployment row under the App's deploy
- * lock, so holding it here means none is mid-commit: the row read under it
- * is final for this check. The move applies only while the request is
- * exactly as selected (every write to it, a state move or a log line,
- * advances updatedAt), so a release that resumed in between is left alone.
+ * deployments. A release runs under the App's Data cutover lock, a session
+ * lock its process keeps until the release ends or the process stops; the
+ * sweep takes it in the same order (cutover, then the deploy lock inside its
+ * transaction) and passes a request by for this sweep when someone holds it,
+ * so a live release, however quiet, is never settled under it. Holding the
+ * deploy lock as well means no release is mid-commit: the deployment row
+ * read under it is final for this check. The move applies only while the
+ * request is exactly as selected (every write to it, a state move or a log
+ * line, advances updatedAt), so a release that resumed in between is left
+ * alone; one that had not taken its locks yet stops at its fence.
  */
 async function settleStalledRelease(build: AppBuild): Promise<void> {
-  const settled = await db.transaction(async (tx) => {
-    await appDeployLock.acquire(tx, build.appId);
-    const recorded = await tx.query.deployments.findFirst({
-      where: { id: build.id, appId: build.appId },
-      columns: { version: true },
+  const outcome = await tryWithAppDataCutoverLock(build.appId, async () => {
+    // A release that recorded its deployment but did not finish activating
+    // it (or whose COMMIT went unconfirmed) still holds the App's activation
+    // fence: recover it first, as platform startup does, and settle the
+    // request only once that succeeded. Failing, it waits for the next sweep.
+    const app = await db.query.apps.findFirst({
+      where: { id: build.appId },
+      columns: { dataActivationId: true },
     });
-    return moveBuild(
-      tx,
-      build.id,
-      [build.status],
-      recorded
-        ? { status: 'ready', deploymentVersion: recorded.version }
-        : {
-            status: 'failed',
-            errorCode: 'release_interrupted',
-            errorMessage: 'The platform stopped while releasing.',
-          },
-      eq(schema.appBuilds.updatedAt, build.updatedAt),
-      {
-        stream: 'platform',
-        text: recorded
-          ? `Released version ${recorded.version}; the platform stopped before confirming it.`
-          : 'The platform stopped while releasing; nothing was released.',
-      },
-    );
+    if (app?.dataActivationId === build.id) {
+      try {
+        await reconcilePendingActivation(build.appId);
+      } catch (error) {
+        console.error(`[apps] recovery of release ${build.id} failed:`, error);
+        return null;
+      }
+    }
+    return db.transaction(async (tx) => {
+      await appDeployLock.acquire(tx, build.appId);
+      const recorded = await tx.query.deployments.findFirst({
+        where: { id: build.id, appId: build.appId },
+        columns: { version: true },
+      });
+      return moveBuild(
+        tx,
+        build.id,
+        [build.status],
+        recorded
+          ? { status: 'ready', deploymentVersion: recorded.version }
+          : {
+              status: 'failed',
+              errorCode: 'release_interrupted',
+              errorMessage: 'The platform stopped while releasing.',
+            },
+        eq(schema.appBuilds.updatedAt, build.updatedAt),
+        {
+          stream: 'platform',
+          text: recorded
+            ? `Released version ${recorded.version}, confirmed from the recorded deployment.`
+            : 'The platform stopped while releasing; nothing was released.',
+        },
+      );
+    });
   });
-  if (settled) await announceMove(settled);
+  if (outcome.locked && outcome.value) await announceMove(outcome.value);
 }
 
 let sweeper: ReturnType<typeof setInterval> | undefined;
