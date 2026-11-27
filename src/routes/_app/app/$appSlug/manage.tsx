@@ -513,6 +513,12 @@ function useManageSections(
       icon: icon(IconBell),
       color: 'pink',
     },
+    Boolean(manifest?.ai?.roles.length) && {
+      key: 'ai',
+      label: t('appManage.section.ai'),
+      icon: icon(IconSparkles),
+      color: 'grape',
+    },
     hasApi && {
       key: 'api',
       label: t('appManage.section.api'),

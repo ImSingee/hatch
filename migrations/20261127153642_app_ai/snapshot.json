@@ -1,0 +1,616 @@
+{
+  "type": "diff",
+  "version": "10",
+  "dialect": "postgres",
+  "id": "4f2cebd8-6bc7-4a0d-885c-655f0d539d20",
+  "prevIds": ["dc150875-020c-44bc-8f6c-9def61003b5c"],
+  "footprints": [
+    {
+      "statementType": "create_table",
+      "statementTarget": ["table", "public", "app_ai_role_bindings"],
+      "writes": [
+        "s|tbl|public.app_ai_role_bindings",
+        "n|tbl|public.app_ai_role_bindings",
+        "e|tbl|public.app_ai_role_bindings",
+        "n|rel|public.app_ai_role_bindings",
+        "n|type|public.app_ai_role_bindings",
+        "n|rel|public.app_ai_role_bindings_pkey"
+      ],
+      "reads": ["n|sch|public"]
+    },
+    {
+      "statementType": "create_table",
+      "statementTarget": ["table", "public", "app_ai_usage"],
+      "writes": [
+        "s|tbl|public.app_ai_usage",
+        "n|tbl|public.app_ai_usage",
+        "e|tbl|public.app_ai_usage",
+        "n|rel|public.app_ai_usage",
+        "n|type|public.app_ai_usage",
+        "n|rel|public.app_ai_usage_pkey"
+      ],
+      "reads": ["n|sch|public"]
+    },
+    {
+      "statementType": "add_column",
+      "statementTarget": [
+        "column",
+        "public",
+        "apps",
+        "ai_monthly_budget_micros"
+      ],
+      "writes": [
+        "s|col|public.apps.ai_monthly_budget_micros",
+        "n|col|public.apps.ai_monthly_budget_micros",
+        "e|col|public.apps.ai_monthly_budget_micros"
+      ],
+      "reads": ["n|tbl|public.apps", "n|sch|public"]
+    },
+    {
+      "statementType": "create_index",
+      "statementTarget": [
+        "index",
+        "public",
+        "app_ai_usage",
+        "app_ai_usage_app_created_idx"
+      ],
+      "writes": [
+        "s|idx|public.app_ai_usage_app_created_idx",
+        "n|idx|public.app_ai_usage_app_created_idx",
+        "e|idx|public.app_ai_usage_app_created_idx",
+        "n|rel|public.app_ai_usage_app_created_idx"
+      ],
+      "reads": [
+        "n|tbl|public.app_ai_usage",
+        "n|sch|public",
+        "n|col|public.app_ai_usage.app_id",
+        "n|col|public.app_ai_usage.created_at"
+      ]
+    },
+    {
+      "statementType": "create_fk",
+      "statementTarget": ["table", "public", "app_ai_role_bindings"],
+      "writes": [
+        "s|fk|public.app_ai_role_bindings.app_ai_role_bindings_app_id_apps_id_fkey",
+        "n|fk|public.app_ai_role_bindings.app_ai_role_bindings_app_id_apps_id_fkey",
+        "e|fk|public.app_ai_role_bindings.app_ai_role_bindings_app_id_apps_id_fkey",
+        "n|con|public.app_ai_role_bindings.app_ai_role_bindings_app_id_apps_id_fkey"
+      ],
+      "reads": [
+        "n|tbl|public.app_ai_role_bindings",
+        "n|sch|public",
+        "n|tbl|public.apps",
+        "n|sch|public",
+        "n|col|public.app_ai_role_bindings.app_id",
+        "n|col|public.apps.id",
+        "e|uniqueness|public.apps.id"
+      ]
+    },
+    {
+      "statementType": "create_fk",
+      "statementTarget": ["table", "public", "app_ai_role_bindings"],
+      "writes": [
+        "s|fk|public.app_ai_role_bindings.app_ai_role_bindings_model_row_id_agent_models_id_fkey",
+        "n|fk|public.app_ai_role_bindings.app_ai_role_bindings_model_row_id_agent_models_id_fkey",
+        "e|fk|public.app_ai_role_bindings.app_ai_role_bindings_model_row_id_agent_models_id_fkey",
+        "n|con|public.app_ai_role_bindings.app_ai_role_bindings_model_row_id_agent_models_id_fkey"
+      ],
+      "reads": [
+        "n|tbl|public.app_ai_role_bindings",
+        "n|sch|public",
+        "n|tbl|public.agent_models",
+        "n|sch|public",
+        "n|col|public.app_ai_role_bindings.model_row_id",
+        "n|col|public.agent_models.id",
+        "e|uniqueness|public.agent_models.id"
+      ]
+    },
+    {
+      "statementType": "create_fk",
+      "statementTarget": ["table", "public", "app_ai_usage"],
+      "writes": [
+        "s|fk|public.app_ai_usage.app_ai_usage_app_id_apps_id_fkey",
+        "n|fk|public.app_ai_usage.app_ai_usage_app_id_apps_id_fkey",
+        "e|fk|public.app_ai_usage.app_ai_usage_app_id_apps_id_fkey",
+        "n|con|public.app_ai_usage.app_ai_usage_app_id_apps_id_fkey"
+      ],
+      "reads": [
+        "n|tbl|public.app_ai_usage",
+        "n|sch|public",
+        "n|tbl|public.apps",
+        "n|sch|public",
+        "n|col|public.app_ai_usage.app_id",
+        "n|col|public.apps.id",
+        "e|uniqueness|public.apps.id"
+      ]
+    }
+  ],
+  "deltas": [
+    {
+      "op": "create",
+      "row": {
+        "schema": "public",
+        "name": "app_ai_role_bindings",
+        "isRlsEnabled": false,
+        "entityType": "tables"
+      }
+    },
+    {
+      "op": "create",
+      "row": {
+        "schema": "public",
+        "name": "app_ai_usage",
+        "isRlsEnabled": false,
+        "entityType": "tables"
+      }
+    },
+    {
+      "op": "create",
+      "row": {
+        "schema": "public",
+        "table": "app_ai_role_bindings",
+        "name": "app_id",
+        "type": "text",
+        "typeSchema": null,
+        "notNull": true,
+        "dimensions": 0,
+        "default": null,
+        "generated": null,
+        "identity": null,
+        "entityType": "columns"
+      }
+    },
+    {
+      "op": "create",
+      "row": {
+        "schema": "public",
+        "table": "app_ai_role_bindings",
+        "name": "role",
+        "type": "text",
+        "typeSchema": null,
+        "notNull": true,
+        "dimensions": 0,
+        "default": null,
+        "generated": null,
+        "identity": null,
+        "entityType": "columns"
+      }
+    },
+    {
+      "op": "create",
+      "row": {
+        "schema": "public",
+        "table": "app_ai_role_bindings",
+        "name": "model_row_id",
+        "type": "text",
+        "typeSchema": null,
+        "notNull": true,
+        "dimensions": 0,
+        "default": null,
+        "generated": null,
+        "identity": null,
+        "entityType": "columns"
+      }
+    },
+    {
+      "op": "create",
+      "row": {
+        "schema": "public",
+        "table": "app_ai_role_bindings",
+        "name": "updated_at",
+        "type": "timestamp with time zone",
+        "typeSchema": null,
+        "notNull": true,
+        "dimensions": 0,
+        "default": "now()",
+        "generated": null,
+        "identity": null,
+        "entityType": "columns"
+      }
+    },
+    {
+      "op": "create",
+      "row": {
+        "schema": "public",
+        "table": "app_ai_usage",
+        "name": "id",
+        "type": "text",
+        "typeSchema": null,
+        "notNull": true,
+        "dimensions": 0,
+        "default": null,
+        "generated": null,
+        "identity": null,
+        "entityType": "columns"
+      }
+    },
+    {
+      "op": "create",
+      "row": {
+        "schema": "public",
+        "table": "app_ai_usage",
+        "name": "app_id",
+        "type": "text",
+        "typeSchema": null,
+        "notNull": true,
+        "dimensions": 0,
+        "default": null,
+        "generated": null,
+        "identity": null,
+        "entityType": "columns"
+      }
+    },
+    {
+      "op": "create",
+      "row": {
+        "schema": "public",
+        "table": "app_ai_usage",
+        "name": "deployment_id",
+        "type": "text",
+        "typeSchema": null,
+        "notNull": false,
+        "dimensions": 0,
+        "default": null,
+        "generated": null,
+        "identity": null,
+        "entityType": "columns"
+      }
+    },
+    {
+      "op": "create",
+      "row": {
+        "schema": "public",
+        "table": "app_ai_usage",
+        "name": "role",
+        "type": "text",
+        "typeSchema": null,
+        "notNull": true,
+        "dimensions": 0,
+        "default": null,
+        "generated": null,
+        "identity": null,
+        "entityType": "columns"
+      }
+    },
+    {
+      "op": "create",
+      "row": {
+        "schema": "public",
+        "table": "app_ai_usage",
+        "name": "kind",
+        "type": "text",
+        "typeSchema": null,
+        "notNull": true,
+        "dimensions": 0,
+        "default": null,
+        "generated": null,
+        "identity": null,
+        "entityType": "columns"
+      }
+    },
+    {
+      "op": "create",
+      "row": {
+        "schema": "public",
+        "table": "app_ai_usage",
+        "name": "provider_name",
+        "type": "text",
+        "typeSchema": null,
+        "notNull": true,
+        "dimensions": 0,
+        "default": null,
+        "generated": null,
+        "identity": null,
+        "entityType": "columns"
+      }
+    },
+    {
+      "op": "create",
+      "row": {
+        "schema": "public",
+        "table": "app_ai_usage",
+        "name": "model_id",
+        "type": "text",
+        "typeSchema": null,
+        "notNull": true,
+        "dimensions": 0,
+        "default": null,
+        "generated": null,
+        "identity": null,
+        "entityType": "columns"
+      }
+    },
+    {
+      "op": "create",
+      "row": {
+        "schema": "public",
+        "table": "app_ai_usage",
+        "name": "input_tokens",
+        "type": "integer",
+        "typeSchema": null,
+        "notNull": true,
+        "dimensions": 0,
+        "default": "0",
+        "generated": null,
+        "identity": null,
+        "entityType": "columns"
+      }
+    },
+    {
+      "op": "create",
+      "row": {
+        "schema": "public",
+        "table": "app_ai_usage",
+        "name": "output_tokens",
+        "type": "integer",
+        "typeSchema": null,
+        "notNull": true,
+        "dimensions": 0,
+        "default": "0",
+        "generated": null,
+        "identity": null,
+        "entityType": "columns"
+      }
+    },
+    {
+      "op": "create",
+      "row": {
+        "schema": "public",
+        "table": "app_ai_usage",
+        "name": "cache_read_tokens",
+        "type": "integer",
+        "typeSchema": null,
+        "notNull": true,
+        "dimensions": 0,
+        "default": "0",
+        "generated": null,
+        "identity": null,
+        "entityType": "columns"
+      }
+    },
+    {
+      "op": "create",
+      "row": {
+        "schema": "public",
+        "table": "app_ai_usage",
+        "name": "cache_write_tokens",
+        "type": "integer",
+        "typeSchema": null,
+        "notNull": true,
+        "dimensions": 0,
+        "default": "0",
+        "generated": null,
+        "identity": null,
+        "entityType": "columns"
+      }
+    },
+    {
+      "op": "create",
+      "row": {
+        "schema": "public",
+        "table": "app_ai_usage",
+        "name": "images",
+        "type": "integer",
+        "typeSchema": null,
+        "notNull": true,
+        "dimensions": 0,
+        "default": "0",
+        "generated": null,
+        "identity": null,
+        "entityType": "columns"
+      }
+    },
+    {
+      "op": "create",
+      "row": {
+        "schema": "public",
+        "table": "app_ai_usage",
+        "name": "cost_micros",
+        "type": "bigint",
+        "typeSchema": null,
+        "notNull": true,
+        "dimensions": 0,
+        "default": "0",
+        "generated": null,
+        "identity": null,
+        "entityType": "columns"
+      }
+    },
+    {
+      "op": "create",
+      "row": {
+        "schema": "public",
+        "table": "app_ai_usage",
+        "name": "cost_known",
+        "type": "boolean",
+        "typeSchema": null,
+        "notNull": true,
+        "dimensions": 0,
+        "default": "true",
+        "generated": null,
+        "identity": null,
+        "entityType": "columns"
+      }
+    },
+    {
+      "op": "create",
+      "row": {
+        "schema": "public",
+        "table": "app_ai_usage",
+        "name": "status",
+        "type": "text",
+        "typeSchema": null,
+        "notNull": true,
+        "dimensions": 0,
+        "default": null,
+        "generated": null,
+        "identity": null,
+        "entityType": "columns"
+      }
+    },
+    {
+      "op": "create",
+      "row": {
+        "schema": "public",
+        "table": "app_ai_usage",
+        "name": "error_code",
+        "type": "text",
+        "typeSchema": null,
+        "notNull": false,
+        "dimensions": 0,
+        "default": null,
+        "generated": null,
+        "identity": null,
+        "entityType": "columns"
+      }
+    },
+    {
+      "op": "create",
+      "row": {
+        "schema": "public",
+        "table": "app_ai_usage",
+        "name": "duration_ms",
+        "type": "integer",
+        "typeSchema": null,
+        "notNull": true,
+        "dimensions": 0,
+        "default": "0",
+        "generated": null,
+        "identity": null,
+        "entityType": "columns"
+      }
+    },
+    {
+      "op": "create",
+      "row": {
+        "schema": "public",
+        "table": "app_ai_usage",
+        "name": "created_at",
+        "type": "timestamp with time zone",
+        "typeSchema": null,
+        "notNull": true,
+        "dimensions": 0,
+        "default": "now()",
+        "generated": null,
+        "identity": null,
+        "entityType": "columns"
+      }
+    },
+    {
+      "op": "create",
+      "row": {
+        "schema": "public",
+        "table": "apps",
+        "name": "ai_monthly_budget_micros",
+        "type": "bigint",
+        "typeSchema": null,
+        "notNull": false,
+        "dimensions": 0,
+        "default": null,
+        "generated": null,
+        "identity": null,
+        "entityType": "columns"
+      }
+    },
+    {
+      "op": "create",
+      "row": {
+        "schema": "public",
+        "table": "app_ai_usage",
+        "name": "app_ai_usage_app_created_idx",
+        "nameExplicit": true,
+        "columns": [
+          {
+            "value": "app_id",
+            "isExpression": false,
+            "asc": true,
+            "nullsFirst": false,
+            "opclass": null
+          },
+          {
+            "value": "created_at",
+            "isExpression": false,
+            "asc": true,
+            "nullsFirst": false,
+            "opclass": null
+          }
+        ],
+        "isUnique": false,
+        "where": null,
+        "with": "",
+        "method": "btree",
+        "entityType": "indexes"
+      }
+    },
+    {
+      "op": "create",
+      "row": {
+        "schema": "public",
+        "table": "app_ai_role_bindings",
+        "name": "app_ai_role_bindings_app_id_apps_id_fkey",
+        "nameExplicit": false,
+        "columns": ["app_id"],
+        "schemaTo": "public",
+        "tableTo": "apps",
+        "columnsTo": ["id"],
+        "onUpdate": "NO ACTION",
+        "onDelete": "CASCADE",
+        "entityType": "fks"
+      }
+    },
+    {
+      "op": "create",
+      "row": {
+        "schema": "public",
+        "table": "app_ai_role_bindings",
+        "name": "app_ai_role_bindings_model_row_id_agent_models_id_fkey",
+        "nameExplicit": false,
+        "columns": ["model_row_id"],
+        "schemaTo": "public",
+        "tableTo": "agent_models",
+        "columnsTo": ["id"],
+        "onUpdate": "NO ACTION",
+        "onDelete": "CASCADE",
+        "entityType": "fks"
+      }
+    },
+    {
+      "op": "create",
+      "row": {
+        "schema": "public",
+        "table": "app_ai_usage",
+        "name": "app_ai_usage_app_id_apps_id_fkey",
+        "nameExplicit": false,
+        "columns": ["app_id"],
+        "schemaTo": "public",
+        "tableTo": "apps",
+        "columnsTo": ["id"],
+        "onUpdate": "NO ACTION",
+        "onDelete": "CASCADE",
+        "entityType": "fks"
+      }
+    },
+    {
+      "op": "create",
+      "row": {
+        "schema": "public",
+        "table": "app_ai_role_bindings",
+        "name": "app_ai_role_bindings_pkey",
+        "columns": ["app_id", "role"],
+        "nameExplicit": false,
+        "entityType": "pks"
+      }
+    },
+    {
+      "op": "create",
+      "row": {
+        "schema": "public",
+        "table": "app_ai_usage",
+        "name": "app_ai_usage_pkey",
+        "columns": ["id"],
+        "nameExplicit": false,
+        "entityType": "pks"
+      }
+    }
+  ]
+}

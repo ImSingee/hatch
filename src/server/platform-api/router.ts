@@ -9,6 +9,15 @@ import {
   startTaskRun,
 } from '~server/apps/tasks/service';
 import { runMessage, runSummaryMessage, tasksMessage } from './app-tasks';
+import { appAiCallMessage, appAiMessage, appAiTotalMessage } from './app-ai';
+import {
+  getAppAiSettings,
+  listAppAiUsage,
+  setAppAiBudget,
+  setAppAiRoleModel,
+  summarizeAppAiUsage,
+} from '~server/apps/ai/settings';
+import { monthStart } from '~server/apps/ai/usage';
 import { fromJson, toJson, type JsonValue } from '@bufbuild/protobuf';
 import { ValueSchema } from '@bufbuild/protobuf/wkt';
 import { EmptyFilter } from 'drizzle-orm/relations';
@@ -794,6 +803,55 @@ export function registerPlatformApi(
   router.rpc(AppService.method.getAppDoc, async (input) => {
     const doc = await readAppDoc((await find(input.id)).id, input.docId);
     return { ...doc, doc: appDocMessage(doc.doc) };
+  });
+  router.rpc(AppService.method.getAppAi, async (input) => {
+    try {
+      return {
+        ai: appAiMessage(await getAppAiSettings((await find(input.id)).id)),
+      };
+    } catch (error) {
+      throw publicError(error);
+    }
+  });
+  router.rpc(AppService.method.setAppAiRoleModel, async (input) => {
+    try {
+      const { id } = await find(input.id);
+      return {
+        ai: appAiMessage(
+          await setAppAiRoleModel(id, input.role, input.model ?? null),
+        ),
+      };
+    } catch (error) {
+      throw publicError(error);
+    }
+  });
+  router.rpc(AppService.method.setAppAiBudget, async (input) => {
+    try {
+      const { id } = await find(input.id);
+      return {
+        ai: appAiMessage(await setAppAiBudget(id, input.budgetUsd ?? null)),
+      };
+    } catch (error) {
+      throw publicError(error);
+    }
+  });
+  router.rpc(AppService.method.listAppAiUsage, async (input) => {
+    try {
+      const { id } = await find(input.id);
+      const [page, totals] = await Promise.all([
+        listAppAiUsage(id, { limit: input.limit, cursor: input.cursor }),
+        summarizeAppAiUsage(id),
+      ]);
+      return {
+        appId: id,
+        calls: page.calls.map(appAiCallMessage),
+        nextCursor: page.nextCursor ?? undefined,
+        monthTotals: totals.map(appAiTotalMessage),
+        monthStart: monthStart().toISOString(),
+      };
+    } catch (error) {
+      throw publicError(error);
+    }
   });
   router.service(PreferenceService, {
     getAgentPreferences: async (_input, context) => ({

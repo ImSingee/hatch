@@ -398,6 +398,20 @@ shared webhook secret, which the Web UI shows on the task page, is printed only
 by `rotate-webhook-secret`, which mints a new one (it also replaces the App
 webhook's secret). No Agent Tool is added.
 
+## App AI settings: CLI only, no Agent Tool
+
+`hatch app ai show|set-model|budget|usage` calls `AppService/GetAppAi`,
+`SetAppAiRoleModel`, `SetAppAiBudget` and `ListAppAiUsage`, which use the same
+`src/server/apps/ai/settings.ts` service as the AI section of the App manage
+page. Sessions, API keys and Run JWTs have the same authority, and no
+operation is bound to a device or browser. The CLI covers every Web UI read
+and action: the declared roles with the effective model, picking or clearing
+a role's model, setting or removing the monthly budget, this month's spend
+and totals, and the call history (the CLI pages through all of it with
+`--cursor`; the UI shows the latest calls). The App's own AI calls go through
+the signed App runtime endpoints `/api/app/<id>/ai/chat` and `/ai/image`
+(`@hatch/app/ai`), not the public API. No Agent Tool is added.
+
 ## Known gaps
 
 `AgentService` (model catalog, Agent sessions) and `WorkspaceService`

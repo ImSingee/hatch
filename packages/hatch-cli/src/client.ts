@@ -22,6 +22,8 @@ import {
 } from '@connectrpc/connect';
 import { createConnectTransport } from '@connectrpc/connect-web';
 import {
+  type AppAi,
+  type AppAiModel,
   type AppBackend,
   type AppTask,
   type AppTaskRun,
@@ -549,6 +551,42 @@ function taskRunView(value: AppTaskRun | undefined) {
   };
 }
 export type AppTaskRunView = ReturnType<typeof taskRunView>;
+
+function aiModelView(model: AppAiModel) {
+  return {
+    id: model.id,
+    providerName: model.providerName,
+    modelId: model.modelId,
+    name: model.name,
+    ref: model.ref,
+    reasoning: model.reasoning,
+  };
+}
+
+function appAiView(value: AppAi | undefined) {
+  const ai = required(value);
+  return {
+    appId: ai.appId,
+    available: ai.available,
+    roles: ai.roles.map((role) => ({
+      name: role.name,
+      kind: role.kind,
+      description: role.description,
+      needs: role.needs,
+      model: role.model ? aiModelView(role.model) : null,
+      bound: role.bound,
+      unavailable: role.unavailable,
+      missingNeeds: role.missingNeeds,
+    })),
+    budgetUsd: ai.budgetUsd ?? null,
+    monthSpendUsd: ai.monthSpendUsd,
+    monthUnpricedCalls: ai.monthUnpricedCalls,
+    monthStart: ai.monthStart,
+    chatModels: ai.chatModels.map(aiModelView),
+    imageModels: ai.imageModels.map(aiModelView),
+  };
+}
+export type AppAiView = ReturnType<typeof appAiView>;
 
 export function cliClient(transport: Transport) {
   const apps = createClient(AppService, transport);
@@ -1256,6 +1294,54 @@ export function cliClient(transport: Transport) {
         rotateWebhookSecret: async (input: { id: string }) => {
           const result = await apps.rotateAppWebhookSecret(input);
           return { appId: result.appId, secret: result.secret };
+        },
+      },
+      ai: {
+        show: async (input: { id: string }) =>
+          appAiView((await apps.getAppAi(input)).ai),
+        setModel: async (input: { id: string; role: string; model?: string }) =>
+          appAiView((await apps.setAppAiRoleModel(input)).ai),
+        setBudget: async (input: { id: string; budgetUsd?: number }) =>
+          appAiView((await apps.setAppAiBudget(input)).ai),
+        usage: async (input: {
+          id: string;
+          limit?: number;
+          cursor?: string;
+        }) => {
+          const result = await apps.listAppAiUsage(input);
+          return {
+            appId: result.appId,
+            calls: result.calls.map((call) => ({
+              id: call.id,
+              createdAt: call.createdAt,
+              role: call.role,
+              kind: call.kind,
+              providerName: call.providerName,
+              modelId: call.modelId,
+              status: call.status,
+              errorCode: call.errorCode ?? null,
+              inputTokens: call.inputTokens,
+              outputTokens: call.outputTokens,
+              cacheReadTokens: call.cacheReadTokens,
+              cacheWriteTokens: call.cacheWriteTokens,
+              images: call.images,
+              costUsd: call.costUsd ?? null,
+              durationMs: call.durationMs,
+            })),
+            nextCursor: result.nextCursor ?? null,
+            monthStart: result.monthStart,
+            monthTotals: result.monthTotals.map((row) => ({
+              role: row.role,
+              providerName: row.providerName,
+              modelId: row.modelId,
+              calls: row.calls,
+              inputTokens: Number(row.inputTokens),
+              outputTokens: Number(row.outputTokens),
+              images: row.images,
+              costUsd: row.costUsd,
+              unpricedCalls: row.unpricedCalls,
+            })),
+          };
         },
       },
       kv: async (input: {

@@ -370,6 +370,8 @@ const supportedCapabilitiesSchema = z.object({
   notifications: z.boolean().default(false),
   /** Declares runnable backend RPC methods (tasks). */
   tasks: z.boolean().default(false),
+  /** Calls the platform's configured AI models through declared roles. */
+  ai: z.boolean().default(false),
 });
 
 export const capabilitiesSchema = supportedCapabilitiesSchema
@@ -467,6 +469,63 @@ export const notificationsConfigSchema = z
         path: [],
       });
     }
+  });
+
+/** AI model role name, e.g. `summarize` or `cover-image`. */
+export const AI_ROLE_RE = /^[a-z][a-z0-9_-]{0,31}$/;
+/** Most model roles one App may declare. */
+export const AI_ROLES_MAX_COUNT = 20;
+
+/** What a model role is used for: text/tool chat, or image generation. */
+export const aiRoleKindSchema = z.enum(['chat', 'image']);
+/** Model features a chat role relies on; the owner is warned when missing. */
+export const aiRoleNeedSchema = z.enum(['tools', 'vision', 'reasoning']);
+
+export const aiRoleSchema = z
+  .object({
+    name: z
+      .string()
+      .regex(
+        AI_ROLE_RE,
+        'name must be 1-32 lowercase letters, digits, "_" or "-", starting with a letter',
+      ),
+    kind: aiRoleKindSchema,
+    /** Shown to the owner when picking the model for this role. */
+    description: z.string().trim().min(1).max(300),
+    needs: z.array(aiRoleNeedSchema).max(3).optional(),
+  })
+  .strict()
+  .superRefine((role, ctx) => {
+    if (role.kind === 'image' && role.needs?.length) {
+      ctx.addIssue({
+        code: 'custom',
+        message: 'needs applies only to chat roles',
+        path: ['needs'],
+      });
+    }
+  });
+
+/**
+ * Model roles the App backend calls through `@hatch/app/ai`. The App names a
+ * role; the owner picks which configured model serves it.
+ */
+export const aiConfigSchema = z
+  .object({
+    roles: z.array(aiRoleSchema).min(1).max(AI_ROLES_MAX_COUNT),
+  })
+  .strict()
+  .superRefine((config, ctx) => {
+    const seen = new Set<string>();
+    config.roles.forEach((role, index) => {
+      if (seen.has(role.name)) {
+        ctx.addIssue({
+          code: 'custom',
+          message: 'duplicate AI role name',
+          path: ['roles', index, 'name'],
+        });
+      }
+      seen.add(role.name);
+    });
   });
 
 /** External doc identifier, used in CLI arguments and artifact filenames. */
@@ -616,6 +675,8 @@ export const sourceManifestSchema = z
     notifications: notificationsConfigSchema.optional(),
     /** Runnable backend RPC methods (tasks capability). */
     tasks: tasksConfigSchema.optional(),
+    /** AI model roles the backend calls (ai capability). */
+    ai: aiConfigSchema.optional(),
     /**
      * Markdown docs for external callers of this App's webhook or RPC API.
      * Declare them only when the App is meant to be called by other services.
@@ -703,6 +764,26 @@ export const sourceManifestSchema = z
         path: ['capabilities', 'notifications'],
       });
     }
+    if (manifest.capabilities.ai !== Boolean(manifest.ai)) {
+      ctx.addIssue({
+        code: 'custom',
+        message: manifest.ai
+          ? 'ai is declared but capabilities.ai is false'
+          : 'capabilities.ai is true but ai is not declared',
+        path: ['ai'],
+      });
+    }
+    if (
+      manifest.capabilities.ai &&
+      (!manifest.capabilities.backend || !manifest.backend)
+    ) {
+      ctx.addIssue({
+        code: 'custom',
+        message:
+          'capabilities.ai requires capabilities.backend and backend.entry',
+        path: ['capabilities', 'ai'],
+      });
+    }
     if (manifest.capabilities.tasks !== Boolean(manifest.tasks)) {
       ctx.addIssue({
         code: 'custom',
@@ -761,3 +842,5 @@ export type AppCapabilitiesShape = z.infer<typeof capabilitiesSchema>;
 /** Platform-side inbound-webhook auth mode (see webhookConfigSchema). */
 export type WebhookAuth = z.infer<typeof webhookConfigSchema>['auth'];
 export type NotificationsConfig = z.infer<typeof notificationsConfigSchema>;
+export type AiConfig = z.infer<typeof aiConfigSchema>;
+export type AiRole = z.infer<typeof aiRoleSchema>;

@@ -70,6 +70,7 @@ import { Route as ApiAgentRunsRunIdEventsRouteImport } from './routes/api/agent/
 import { Route as ApiAgentSessionsSessionIdAutoRetryRouteImport } from './routes/api/agent/sessions/$sessionId/auto-retry'
 import { Route as ApiAgentSessionsSessionIdPendingRouteImport } from './routes/api/agent/sessions/$sessionId/pending'
 import { Route as ApiAppRuntimeNshVersionSplatRouteImport } from './routes/api/app-runtime/nsh/$version/$'
+import { Route as ApiAppAppIdAiActionRouteImport } from './routes/api/app/$appId/ai/$action'
 import { Route as ApiAppAppIdAppSplatRouteImport } from './routes/api/app/$appId/app/$'
 import { Route as ApiAppAppIdDataSplatRouteImport } from './routes/api/app/$appId/data/$'
 import { Route as ApiAppAppIdHookSplatRouteImport } from './routes/api/app/$appId/hook/$'
@@ -404,6 +405,11 @@ const ApiAppRuntimeNshVersionSplatRoute =
     path: '/api/app-runtime/nsh/$version/$',
     getParentRoute: () => rootRouteImport,
   } as any)
+const ApiAppAppIdAiActionRoute = ApiAppAppIdAiActionRouteImport.update({
+  id: '/api/app/$appId/ai/$action',
+  path: '/api/app/$appId/ai/$action',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const ApiAppAppIdAppSplatRoute = ApiAppAppIdAppSplatRouteImport.update({
   id: '/api/app/$appId/app/$',
   path: '/api/app/$appId/app/$',
@@ -555,6 +561,7 @@ export interface FileRoutesByFullPath {
   '/api/agent/sessions/$sessionId/auto-retry': typeof ApiAgentSessionsSessionIdAutoRetryRoute
   '/api/agent/sessions/$sessionId/pending': typeof ApiAgentSessionsSessionIdPendingRouteWithChildren
   '/api/app-runtime/nsh/$version/$': typeof ApiAppRuntimeNshVersionSplatRoute
+  '/api/app/$appId/ai/$action': typeof ApiAppAppIdAiActionRoute
   '/api/app/$appId/app/$': typeof ApiAppAppIdAppSplatRoute
   '/api/app/$appId/data/$': typeof ApiAppAppIdDataSplatRoute
   '/api/app/$appId/hook/$': typeof ApiAppAppIdHookSplatRoute
@@ -629,6 +636,7 @@ export interface FileRoutesByTo {
   '/api/agent/sessions/$sessionId/auto-retry': typeof ApiAgentSessionsSessionIdAutoRetryRoute
   '/api/agent/sessions/$sessionId/pending': typeof ApiAgentSessionsSessionIdPendingRouteWithChildren
   '/api/app-runtime/nsh/$version/$': typeof ApiAppRuntimeNshVersionSplatRoute
+  '/api/app/$appId/ai/$action': typeof ApiAppAppIdAiActionRoute
   '/api/app/$appId/app/$': typeof ApiAppAppIdAppSplatRoute
   '/api/app/$appId/data/$': typeof ApiAppAppIdDataSplatRoute
   '/api/app/$appId/hook/$': typeof ApiAppAppIdHookSplatRoute
@@ -709,6 +717,7 @@ export interface FileRoutesById {
   '/api/agent/sessions/$sessionId/auto-retry': typeof ApiAgentSessionsSessionIdAutoRetryRoute
   '/api/agent/sessions/$sessionId/pending': typeof ApiAgentSessionsSessionIdPendingRouteWithChildren
   '/api/app-runtime/nsh/$version/$': typeof ApiAppRuntimeNshVersionSplatRoute
+  '/api/app/$appId/ai/$action': typeof ApiAppAppIdAiActionRoute
   '/api/app/$appId/app/$': typeof ApiAppAppIdAppSplatRoute
   '/api/app/$appId/data/$': typeof ApiAppAppIdDataSplatRoute
   '/api/app/$appId/hook/$': typeof ApiAppAppIdHookSplatRoute
@@ -789,6 +798,7 @@ export interface FileRouteTypes {
     | '/api/agent/sessions/$sessionId/auto-retry'
     | '/api/agent/sessions/$sessionId/pending'
     | '/api/app-runtime/nsh/$version/$'
+    | '/api/app/$appId/ai/$action'
     | '/api/app/$appId/app/$'
     | '/api/app/$appId/data/$'
     | '/api/app/$appId/hook/$'
@@ -863,6 +873,7 @@ export interface FileRouteTypes {
     | '/api/agent/sessions/$sessionId/auto-retry'
     | '/api/agent/sessions/$sessionId/pending'
     | '/api/app-runtime/nsh/$version/$'
+    | '/api/app/$appId/ai/$action'
     | '/api/app/$appId/app/$'
     | '/api/app/$appId/data/$'
     | '/api/app/$appId/hook/$'
@@ -942,6 +953,7 @@ export interface FileRouteTypes {
     | '/api/agent/sessions/$sessionId/auto-retry'
     | '/api/agent/sessions/$sessionId/pending'
     | '/api/app-runtime/nsh/$version/$'
+    | '/api/app/$appId/ai/$action'
     | '/api/app/$appId/app/$'
     | '/api/app/$appId/data/$'
     | '/api/app/$appId/hook/$'
@@ -991,6 +1003,7 @@ export interface RootRouteChildren {
   ApiAgentSessionsSessionIdAutoRetryRoute: typeof ApiAgentSessionsSessionIdAutoRetryRoute
   ApiAgentSessionsSessionIdPendingRoute: typeof ApiAgentSessionsSessionIdPendingRouteWithChildren
   ApiAppRuntimeNshVersionSplatRoute: typeof ApiAppRuntimeNshVersionSplatRoute
+  ApiAppAppIdAiActionRoute: typeof ApiAppAppIdAiActionRoute
   ApiAppAppIdAppSplatRoute: typeof ApiAppAppIdAppSplatRoute
   ApiAppAppIdDataSplatRoute: typeof ApiAppAppIdDataSplatRoute
   ApiAppAppIdHookSplatRoute: typeof ApiAppAppIdHookSplatRoute
@@ -1431,6 +1444,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiAppRuntimeNshVersionSplatRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/api/app/$appId/ai/$action': {
+      id: '/api/app/$appId/ai/$action'
+      path: '/api/app/$appId/ai/$action'
+      fullPath: '/api/app/$appId/ai/$action'
+      preLoaderRoute: typeof ApiAppAppIdAiActionRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/api/app/$appId/app/$': {
       id: '/api/app/$appId/app/$'
       path: '/api/app/$appId/app/$'
@@ -1766,6 +1786,7 @@ const rootRouteChildren: RootRouteChildren = {
   ApiAgentSessionsSessionIdPendingRoute:
     ApiAgentSessionsSessionIdPendingRouteWithChildren,
   ApiAppRuntimeNshVersionSplatRoute: ApiAppRuntimeNshVersionSplatRoute,
+  ApiAppAppIdAiActionRoute: ApiAppAppIdAiActionRoute,
   ApiAppAppIdAppSplatRoute: ApiAppAppIdAppSplatRoute,
   ApiAppAppIdDataSplatRoute: ApiAppAppIdDataSplatRoute,
   ApiAppAppIdHookSplatRoute: ApiAppAppIdHookSplatRoute,
@@ -1780,13 +1801,3 @@ const rootRouteChildren: RootRouteChildren = {
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
   ._addFileTypes<FileRouteTypes>()
-
-import type { getRouter } from './router.tsx'
-import type { startInstance } from './start.ts'
-declare module '@tanstack/react-start' {
-  interface Register {
-    ssr: true
-    router: Awaited<ReturnType<typeof getRouter>>
-    config: Awaited<ReturnType<typeof startInstance.getOptions>>
-  }
-}

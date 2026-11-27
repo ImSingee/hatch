@@ -8,6 +8,7 @@ import { runGitCredential } from './git-credential';
 import { runData } from './data';
 import { runBackend } from './backend';
 import { parseTaskCommand, runTask } from './task';
+import { parseAiCommand, runAi } from './ai';
 import { parseDocsCommand, runDocs } from './docs';
 import { runBackendInvocation, BackendInvocationError } from './invoke';
 import { runWebhook } from './webhook';
@@ -84,6 +85,8 @@ try {
     parseTaskCommand(args, offset);
   if (!showHelp && name === 'app' && args[offset + 1] === 'docs')
     parseDocsCommand(args, offset);
+  if (!showHelp && name === 'app' && args[offset + 1] === 'ai')
+    parseAiCommand(args, offset);
   if (!showHelp && !offline)
     await refreshRunEnvironment(process.env, controller.signal);
   if (showHelp) {
@@ -127,6 +130,8 @@ try {
     await runTask(args, offset, controller.signal);
   else if (name === 'app' && operation === 'docs')
     await runDocs(args, offset, controller.signal);
+  else if (name === 'app' && operation === 'ai')
+    await runAi(args, offset, controller.signal);
   else if (
     name === 'image-model' ||
     name === 'image' ||

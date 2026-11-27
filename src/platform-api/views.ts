@@ -74,6 +74,7 @@ export const appManifestViewSchema = z.object({
     dataTable: z.boolean(),
     notifications: z.boolean().optional(),
     tasks: z.boolean().optional(),
+    ai: z.boolean().optional(),
   }),
   backendMode: mode,
   backend: z
@@ -140,6 +141,19 @@ export const appManifestViewSchema = z.object({
         z.object({ kind: str, name: str, description: str.optional() }),
       ),
       destination: z.object({ description: str.optional() }).optional(),
+    })
+    .optional(),
+  ai: z
+    .object({
+      url: str,
+      roles: z.array(
+        z.object({
+          name: str,
+          kind: z.enum(['chat', 'image']),
+          description: str,
+          needs: z.array(z.enum(['tools', 'vision', 'reasoning'])).optional(),
+        }),
+      ),
     })
     .optional(),
   api: z

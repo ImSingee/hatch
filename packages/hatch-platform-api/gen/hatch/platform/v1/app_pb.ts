@@ -27,7 +27,7 @@ import type { JsonObject, Message } from '@bufbuild/protobuf';
 export const file_hatch_platform_v1_app: GenFile =
   /*@__PURE__*/
   fileDesc(
-    'ChtoYXRjaC9wbGF0Zm9ybS92MS9hcHAucHJvdG8SEWhhdGNoLnBsYXRmb3JtLnYxIhEKD0xpc3RBcHBzUmVxdWVzdCJCChBMaXN0QXBwc1Jlc3BvbnNlEi4KCXJlc291cmNlcxgBIAMoCzIbLmhhdGNoLnBsYXRmb3JtLnYxLlJlc291cmNlIp4BChBDcmVhdGVBcHBSZXF1ZXN0Ei0KBHNsdWcYASABKAlCH7pIHHIaEAEYQDIUXlthLXowLTldW2EtejAtOS1dKiQSFwoEbmFtZRgCIAEoCUIJukgGcgQQARhAEhgKC2Rlc2NyaXB0aW9uGAMgASgJSACIAQESEAoDcGluGAQgASgISAGIAQFCDgoMX2Rlc2NyaXB0aW9uQgYKBF9waW4iYwoRQ3JlYXRlQXBwUmVzcG9uc2USCgoCaWQYASABKAkSDAoEc2x1ZxgCIAEoCRIMCgRuYW1lGAMgASgJEiYKBWZpbGVzGAQgAygLMhcuaGF0Y2gucGxhdGZvcm0udjEuRmlsZSInCg1HZXRBcHBSZXF1ZXN0EhYKAmlkGAEgASgJQgq6SAdyBRABGL8BIj8KDkdldEFwcFJlc3BvbnNlEi0KCHJlc291cmNlGAEgASgLMhsuaGF0Y2gucGxhdGZvcm0udjEuUmVzb3VyY2Ui4wIKEERlcGxveUFwcFJlcXVlc3QSFgoCaWQYASABKAlCCrpIB3IFEAEYvwESGAoHbWVzc2FnZRgCIAEoCUIHukgEcgIQARIbCgpnZW5lcmF0aW9uGAMgASgJQge6SARyAhABEhMKBmJ1bmRsZRgEIAEoDEgAiAEBEi0KIGFsbG93X2Rlc3RydWN0aXZlX2RhdGFfbWlncmF0aW9uGAUgASgISAGIAQESMwodZGF0YV9taWdyYXRpb25fYXBwcm92YWxfdG9rZW4YBiABKAlCB7pIBHICEAFIAogBARIqCgZjb21taXQYByABKAlCFbpIEnIQMg5eWzAtOWEtZl17NDB9JEgDiAEBQgkKB19idW5kbGVCIwohX2FsbG93X2Rlc3RydWN0aXZlX2RhdGFfbWlncmF0aW9uQiAKHl9kYXRhX21pZ3JhdGlvbl9hcHByb3ZhbF90b2tlbkIJCgdfY29tbWl0IkYKEURlcGxveUFwcFJlc3BvbnNlEjEKCmRlcGxveW1lbnQYASABKAsyHS5oYXRjaC5wbGF0Zm9ybS52MS5EZXBsb3ltZW50IkYKElJvbGxiYWNrQXBwUmVxdWVzdBIWCgJpZBgBIAEoCUIKukgHcgUQARi/ARIYCgd2ZXJzaW9uGAIgASgNQge6SAQqAiAAIksKE1JvbGxiYWNrQXBwUmVzcG9uc2USNAoIcmVzdG9yZWQYASABKAsyIi5oYXRjaC5wbGF0Zm9ybS52MS5SZXN0b3JlZFZlcnNpb24iWgoRUXVlcnlBcHBLdlJlcXVlc3QSFgoCaWQYASABKAlCCrpIB3IFEAEYvwESLQoFaW5wdXQYAiABKAsyFi5nb29nbGUucHJvdG9idWYuVmFsdWVCBrpIA8gBASI8ChJRdWVyeUFwcEt2UmVzcG9uc2USJgoGcmVzdWx0GAEgASgLMhYuZ29vZ2xlLnByb3RvYnVmLlZhbHVlImEKGFF1ZXJ5QXBwRGF0YVRhYmxlUmVxdWVzdBIWCgJpZBgBIAEoCUIKukgHcgUQARi/ARItCgVpbnB1dBgCIAEoCzIWLmdvb2dsZS5wcm90b2J1Zi5WYWx1ZUIGukgDyAEBIkMKGVF1ZXJ5QXBwRGF0YVRhYmxlUmVzcG9uc2USJgoGcmVzdWx0GAEgASgLMhYuZ29vZ2xlLnByb3RvYnVmLlZhbHVlIkEKEVF1ZXJ5QXBwRGJSZXF1ZXN0EhYKAmlkGAEgASgJQgq6SAdyBRABGL8BEhQKA3NxbBgCIAEoCUIHukgEcgIQASI1ChJRdWVyeUFwcERiUmVzcG9uc2USDAoEdGV4dBgBIAEoCRIRCglyb3dfY291bnQYAiABKA0iNAoaQXNzb2NpYXRlQXBwU2Vzc2lvblJlcXVlc3QSFgoCaWQYASABKAlCCrpIB3IFEAEYvwEiQgobQXNzb2NpYXRlQXBwU2Vzc2lvblJlc3BvbnNlEg4KBmFwcF9pZBgBIAEoCRITCgthc3NvY2lhdGlvbhgCIAEoCSL7AgoRQXBwQmFja2VuZFJ1bnRpbWUSDQoFc3RhdGUYASABKAkSEAoDcGlkGAIgASgNSACIAQESEQoEcG9ydBgDIAEoDUgBiAEBEhcKCnN0YXJ0ZWRfYXQYBCABKAlIAogBARIXCgpzdG9wcGVkX2F0GAUgASgJSAOIAQESGwoObGFzdF9leGl0X2NvZGUYBiABKAVIBIgBARIdChBsYXN0X2V4aXRfc2lnbmFsGAcgASgJSAWIAQESFwoKbGFzdF9lcnJvchgIIAEoCUgGiAEBEhUKDXJlc3RhcnRfY291bnQYCSABKA0SEgoKa2VlcF9hbGl2ZRgKIAEoCBIaChJkcmFpbmluZ19pbnN0YW5jZXMYCyABKA1CBgoEX3BpZEIHCgVfcG9ydEINCgtfc3RhcnRlZF9hdEINCgtfc3RvcHBlZF9hdEIRCg9fbGFzdF9leGl0X2NvZGVCEwoRX2xhc3RfZXhpdF9zaWduYWxCDQoLX2xhc3RfZXJyb3IilAEKCkFwcEJhY2tlbmQSCgoCaWQYASABKAkSDAoEc2x1ZxgCIAEoCRIMCgRuYW1lGAMgASgJEgwKBG1vZGUYBCABKAkSGQoRcnVudGltZV9zdXBwb3J0ZWQYBSABKAgSNQoHcnVudGltZRgGIAEoCzIkLmhhdGNoLnBsYXRmb3JtLnYxLkFwcEJhY2tlbmRSdW50aW1lIm0KFkxpc3RBcHBCYWNrZW5kc1JlcXVlc3QSHQoFbGltaXQYASABKA1CCbpIBioEGGQoAUgAiAEBEh8KBmN1cnNvchgCIAEoCUIKukgHcgUQARi/AUgBiAEBQggKBl9saW1pdEIJCgdfY3Vyc29yInQKF0xpc3RBcHBCYWNrZW5kc1Jlc3BvbnNlEi8KCGJhY2tlbmRzGAEgAygLMh0uaGF0Y2gucGxhdGZvcm0udjEuQXBwQmFja2VuZBIYCgtuZXh0X2N1cnNvchgCIAEoCUgAiAEBQg4KDF9uZXh0X2N1cnNvciIuChRHZXRBcHBCYWNrZW5kUmVxdWVzdBIWCgJpZBgBIAEoCUIKukgHcgUQARi/ASJHChVHZXRBcHBCYWNrZW5kUmVzcG9uc2USLgoHYmFja2VuZBgBIAEoCzIdLmhhdGNoLnBsYXRmb3JtLnYxLkFwcEJhY2tlbmQiMAoWU3RhcnRBcHBCYWNrZW5kUmVxdWVzdBIWCgJpZBgBIAEoCUIKukgHcgUQARi/ASJJChdTdGFydEFwcEJhY2tlbmRSZXNwb25zZRIuCgdiYWNrZW5kGAEgASgLMh0uaGF0Y2gucGxhdGZvcm0udjEuQXBwQmFja2VuZCI+ChVTdG9wQXBwQmFja2VuZFJlcXVlc3QSFgoCaWQYASABKAlCCrpIB3IFEAEYvwESDQoFZm9yY2UYAiABKAgiSAoWU3RvcEFwcEJhY2tlbmRSZXNwb25zZRIuCgdiYWNrZW5kGAEgASgLMh0uaGF0Y2gucGxhdGZvcm0udjEuQXBwQmFja2VuZCJBChhSZXN0YXJ0QXBwQmFja2VuZFJlcXVlc3QSFgoCaWQYASABKAlCCrpIB3IFEAEYvwESDQoFZm9yY2UYAiABKAgiSwoZUmVzdGFydEFwcEJhY2tlbmRSZXNwb25zZRIuCgdiYWNrZW5kGAEgASgLMh0uaGF0Y2gucGxhdGZvcm0udjEuQXBwQmFja2VuZCJOCgdBcHBJY29uEhAKA2tleRgBIAEoCUgAiAEBEhEKBHBhdGgYAiABKAlIAYgBARINCgVzaXplcxgDIAMoDUIGCgRfa2V5QgcKBV9wYXRoIisKEUdldEFwcEljb25SZXF1ZXN0EhYKAmlkGAEgASgJQgq6SAdyBRABGL8BIj4KEkdldEFwcEljb25SZXNwb25zZRIoCgRpY29uGAEgASgLMhouaGF0Y2gucGxhdGZvcm0udjEuQXBwSWNvbiKKAQoRU2V0QXBwSWNvblJlcXVlc3QSFgoCaWQYASABKAlCCrpIB3IFEAEYvwESHQoFaW1hZ2UYAiABKAxCDLpICXoHEAEYgICAAkgAEi0KDGNhbmRpZGF0ZV9pZBgDIAEoCUIVukgSchAyDl5bYS1mMC05XXszMn0kSABCDwoGc291cmNlEgW6SAIIASI+ChJTZXRBcHBJY29uUmVzcG9uc2USKAoEaWNvbhgBIAEoCzIaLmhhdGNoLnBsYXRmb3JtLnYxLkFwcEljb24iLQoTQ2xlYXJBcHBJY29uUmVxdWVzdBIWCgJpZBgBIAEoCUIKukgHcgUQARi/ASJAChRDbGVhckFwcEljb25SZXNwb25zZRIoCgRpY29uGAEgASgLMhouaGF0Y2gucGxhdGZvcm0udjEuQXBwSWNvbiJ4CgtBcHBUYXNrQ3JvbhIMCgRuYW1lGAEgASgJEhAKCHNjaGVkdWxlGAIgASgJEiUKBWlucHV0GAMgASgLMhYuZ29vZ2xlLnByb3RvYnVmLlZhbHVlEhUKCG5leHRfcnVuGAQgASgJSACIAQFCCwoJX25leHRfcnVuIj8KDUFwcFRhc2tSdW5SZWYSCgoCaWQYASABKAkSDgoGc3RhdHVzGAIgASgJEhIKCmNyZWF0ZWRfYXQYAyABKAkisgMKB0FwcFRhc2sSDAoEbmFtZRgBIAEoCRIOCgZtZXRob2QYAiABKAkSEgoFdGl0bGUYAyABKAlIAIgBARIYCgtkZXNjcmlwdGlvbhgEIAEoCUgBiAEBEhgKC2NvbmN1cnJlbmN5GAUgASgNSAKIAQESEgoKaW5wdXRfdHlwZRgGIAEoCRItCgxpbnB1dF9zY2hlbWEYByABKAsyFy5nb29nbGUucHJvdG9idWYuU3RydWN0EiwKBGNyb24YCCADKAsyHi5oYXRjaC5wbGF0Zm9ybS52MS5BcHBUYXNrQ3JvbhIPCgd3ZWJob29rGAkgASgIEhkKDHdlYmhvb2tfcGF0aBgKIAEoCUgDiAEBEg4KBnF1ZXVlZBgLIAEoDRIPCgdydW5uaW5nGAwgASgNEjkKCmxhdGVzdF9ydW4YDSABKAsyIC5oYXRjaC5wbGF0Zm9ybS52MS5BcHBUYXNrUnVuUmVmSASIAQFCCAoGX3RpdGxlQg4KDF9kZXNjcmlwdGlvbkIOCgxfY29uY3VycmVuY3lCDwoNX3dlYmhvb2tfcGF0aEINCgtfbGF0ZXN0X3J1biItChNMaXN0QXBwVGFza3NSZXF1ZXN0EhYKAmlkGAEgASgJQgq6SAdyBRABGL8BIpoBChRMaXN0QXBwVGFza3NSZXNwb25zZRIOCgZhcHBfaWQYASABKAkSEQoJYXZhaWxhYmxlGAIgASgIEhMKC2NvbmN1cnJlbmN5GAMgASgNEg4KBnF1ZXVlZBgEIAEoDRIPCgdydW5uaW5nGAUgASgNEikKBXRhc2tzGAYgAygLMhouaGF0Y2gucGxhdGZvcm0udjEuQXBwVGFzayJ7ChFSdW5BcHBUYXNrUmVxdWVzdBIWCgJpZBgBIAEoCUIKukgHcgUQARi/ARIXCgR0YXNrGAIgASgJQgm6SAZyBBABGEASKwoFaW5wdXQYAyABKAsyFy5nb29nbGUucHJvdG9idWYuU3RydWN0SACIAQFCCAoGX2lucHV0IjQKElJ1bkFwcFRhc2tSZXNwb25zZRIOCgZydW5faWQYASABKAkSDgoGc3RhdHVzGAIgASgJItgCChFBcHBUYXNrUnVuU3VtbWFyeRIKCgJpZBgBIAEoCRIMCgR0YXNrGAIgASgJEg8KB3RyaWdnZXIYAyABKAkSFgoJY3Jvbl9uYW1lGAQgASgJSACIAQESDgoGc3RhdHVzGAUgASgJEhQKB3ZlcnNpb24YBiABKA1IAYgBARISCgVlcnJvchgHIAEoCUgCiAEBEhIKCmNyZWF0ZWRfYXQYCCABKAkSFwoKc3RhcnRlZF9hdBgJIAEoCUgDiAEBEhgKC2ZpbmlzaGVkX2F0GAogASgJSASIAQESGAoLZHVyYXRpb25fbXMYCyABKARIBYgBARISCgpzdGVwX2NvdW50GAwgASgNQgwKCl9jcm9uX25hbWVCCgoIX3ZlcnNpb25CCAoGX2Vycm9yQg0KC19zdGFydGVkX2F0Qg4KDF9maW5pc2hlZF9hdEIOCgxfZHVyYXRpb25fbXMiggIKFkxpc3RBcHBUYXNrUnVuc1JlcXVlc3QSFgoCaWQYASABKAlCCrpIB3IFEAEYvwESHAoEdGFzaxgCIAEoCUIJukgGcgQQARhASACIAQESSAoGc3RhdHVzGAMgASgJQjO6SDByLlIGcXVldWVkUgdydW5uaW5nUglzdWNjZWVkZWRSBmZhaWxlZFIIY2FuY2VsZWRIAYgBARIeCgVsaW1pdBgEIAEoDUIKukgHKgUYyAEoAUgCiAEBEh8KBmN1cnNvchgFIAEoCUIKukgHcgUQARi/AUgDiAEBQgcKBV90YXNrQgkKB19zdGF0dXNCCAoGX2xpbWl0QgkKB19jdXJzb3IidwoXTGlzdEFwcFRhc2tSdW5zUmVzcG9uc2USMgoEcnVucxgBIAMoCzIkLmhhdGNoLnBsYXRmb3JtLnYxLkFwcFRhc2tSdW5TdW1tYXJ5EhgKC25leHRfY3Vyc29yGAIgASgJSACIAQFCDgoMX25leHRfY3Vyc29yIp4CCg5BcHBUYXNrUnVuU3RlcBILCgNzZXEYASABKA0SDAoEbmFtZRgCIAEoCRIOCgZzdGF0dXMYAyABKAkSDwoHYXR0ZW1wdBgEIAEoDRIrCgZvdXRwdXQYBSABKAsyFi5nb29nbGUucHJvdG9idWYuVmFsdWVIAIgBARISCgVlcnJvchgGIAEoCUgBiAEBEhcKCnN0YXJ0ZWRfYXQYByABKAlIAogBARIYCgtmaW5pc2hlZF9hdBgIIAEoCUgDiAEBEhgKC2R1cmF0aW9uX21zGAkgASgESASIAQFCCQoHX291dHB1dEIICgZfZXJyb3JCDQoLX3N0YXJ0ZWRfYXRCDgoMX2ZpbmlzaGVkX2F0Qg4KDF9kdXJhdGlvbl9tcyL5AgoKQXBwVGFza1J1bhI1CgdzdW1tYXJ5GAEgASgLMiQuaGF0Y2gucGxhdGZvcm0udjEuQXBwVGFza1J1blN1bW1hcnkSEgoFYWN0b3IYAiABKAlIAIgBARIaCg1kZXBsb3ltZW50X2lkGAMgASgJSAGIAQESKgoFaW5wdXQYBCABKAsyFi5nb29nbGUucHJvdG9idWYuVmFsdWVIAogBARIrCgZvdXRwdXQYBSABKAsyFi5nb29nbGUucHJvdG9idWYuVmFsdWVIA4gBARIQCgNsb2cYBiABKAlIBIgBARIbCg5xdWV1ZV9wb3NpdGlvbhgHIAEoDUgFiAEBEjAKBXN0ZXBzGAggAygLMiEuaGF0Y2gucGxhdGZvcm0udjEuQXBwVGFza1J1blN0ZXBCCAoGX2FjdG9yQhAKDl9kZXBsb3ltZW50X2lkQggKBl9pbnB1dEIJCgdfb3V0cHV0QgYKBF9sb2dCEQoPX3F1ZXVlX3Bvc2l0aW9uIkoKFEdldEFwcFRhc2tSdW5SZXF1ZXN0EhYKAmlkGAEgASgJQgq6SAdyBRABGL8BEhoKBnJ1bl9pZBgCIAEoCUIKukgHcgUQARi/ASJDChVHZXRBcHBUYXNrUnVuUmVzcG9uc2USKgoDcnVuGAEgASgLMh0uaGF0Y2gucGxhdGZvcm0udjEuQXBwVGFza1J1biJNChdDYW5jZWxBcHBUYXNrUnVuUmVxdWVzdBIWCgJpZBgBIAEoCUIKukgHcgUQARi/ARIaCgZydW5faWQYAiABKAlCCrpIB3IFEAEYvwEiPAoYQ2FuY2VsQXBwVGFza1J1blJlc3BvbnNlEhAKCGNhbmNlbGVkGAEgASgIEg4KBnN0YXR1cxgCIAEoCSI3Ch1Sb3RhdGVBcHBXZWJob29rU2VjcmV0UmVxdWVzdBIWCgJpZBgBIAEoCUIKukgHcgUQARi/ASJACh5Sb3RhdGVBcHBXZWJob29rU2VjcmV0UmVzcG9uc2USDgoGc2VjcmV0GAEgASgJEg4KBmFwcF9pZBgCIAEoCSJ6CgZBcHBEb2MSCgoCaWQYASABKAkSDQoFdGl0bGUYAiABKAkSGAoLZGVzY3JpcHRpb24YAyABKAlIAIgBARIMCgRwYXRoGAQgASgJEg0KBWJ5dGVzGAUgASgNEg4KBnNoYTI1NhgGIAEoCUIOCgxfZGVzY3JpcHRpb24i7AEKD0FwcERvY0VuZHBvaW50cxJACgd3ZWJob29rGAEgASgLMiouaGF0Y2gucGxhdGZvcm0udjEuQXBwRG9jRW5kcG9pbnRzLldlYmhvb2tIAIgBARI4CgNycGMYAiABKAsyJi5oYXRjaC5wbGF0Zm9ybS52MS5BcHBEb2NFbmRwb2ludHMuUnBjSAGIAQEaJAoHV2ViaG9vaxILCgN1cmwYASABKAkSDAoEYXV0aBgCIAEoCRojCgNScGMSCwoDdXJsGAEgASgJEg8KB3NlcnZpY2UYAiABKAlCCgoIX3dlYmhvb2tCBgoEX3JwYyKKAQoSTGlzdEFwcERvY3NSZXF1ZXN0EhYKAmlkGAEgASgJQgq6SAdyBRABGL8BEh0KBWxpbWl0GAIgASgNQgm6SAYqBBhkKAFIAIgBARIoCgZjdXJzb3IYAyABKAlCE7pIEHIOMgxeWzAtOV17MSw5fSRIAYgBAUIICgZfbGltaXRCCQoHX2N1cnNvciLXAQoTTGlzdEFwcERvY3NSZXNwb25zZRIOCgZhcHBfaWQYASABKAkSDwoHdmVyc2lvbhgCIAEoDRIVCg1kZXBsb3ltZW50X2lkGAMgASgJEicKBGRvY3MYBCADKAsyGS5oYXRjaC5wbGF0Zm9ybS52MS5BcHBEb2MSNQoJZW5kcG9pbnRzGAUgASgLMiIuaGF0Y2gucGxhdGZvcm0udjEuQXBwRG9jRW5kcG9pbnRzEhgKC25leHRfY3Vyc29yGAYgASgJSACIAQFCDgoMX25leHRfY3Vyc29yIlwKEEdldEFwcERvY1JlcXVlc3QSFgoCaWQYASABKAlCCrpIB3IFEAEYvwESMAoGZG9jX2lkGAIgASgJQiC6SB1yGzIZXlthLXowLTldW2EtejAtOS1dezAsNjN9JCKEAQoRR2V0QXBwRG9jUmVzcG9uc2USDgoGYXBwX2lkGAEgASgJEg8KB3ZlcnNpb24YAiABKA0SFQoNZGVwbG95bWVudF9pZBgDIAEoCRImCgNkb2MYBCABKAsyGS5oYXRjaC5wbGF0Zm9ybS52MS5BcHBEb2MSDwoHY29udGVudBgFIAEoCTKsEwoKQXBwU2VydmljZRJTCghMaXN0QXBwcxIiLmhhdGNoLnBsYXRmb3JtLnYxLkxpc3RBcHBzUmVxdWVzdBojLmhhdGNoLnBsYXRmb3JtLnYxLkxpc3RBcHBzUmVzcG9uc2USVgoJQ3JlYXRlQXBwEiMuaGF0Y2gucGxhdGZvcm0udjEuQ3JlYXRlQXBwUmVxdWVzdBokLmhhdGNoLnBsYXRmb3JtLnYxLkNyZWF0ZUFwcFJlc3BvbnNlEk0KBkdldEFwcBIgLmhhdGNoLnBsYXRmb3JtLnYxLkdldEFwcFJlcXVlc3QaIS5oYXRjaC5wbGF0Zm9ybS52MS5HZXRBcHBSZXNwb25zZRJWCglEZXBsb3lBcHASIy5oYXRjaC5wbGF0Zm9ybS52MS5EZXBsb3lBcHBSZXF1ZXN0GiQuaGF0Y2gucGxhdGZvcm0udjEuRGVwbG95QXBwUmVzcG9uc2USXAoLUm9sbGJhY2tBcHASJS5oYXRjaC5wbGF0Zm9ybS52MS5Sb2xsYmFja0FwcFJlcXVlc3QaJi5oYXRjaC5wbGF0Zm9ybS52MS5Sb2xsYmFja0FwcFJlc3BvbnNlElkKClF1ZXJ5QXBwS3YSJC5oYXRjaC5wbGF0Zm9ybS52MS5RdWVyeUFwcEt2UmVxdWVzdBolLmhhdGNoLnBsYXRmb3JtLnYxLlF1ZXJ5QXBwS3ZSZXNwb25zZRJuChFRdWVyeUFwcERhdGFUYWJsZRIrLmhhdGNoLnBsYXRmb3JtLnYxLlF1ZXJ5QXBwRGF0YVRhYmxlUmVxdWVzdBosLmhhdGNoLnBsYXRmb3JtLnYxLlF1ZXJ5QXBwRGF0YVRhYmxlUmVzcG9uc2USWQoKUXVlcnlBcHBEYhIkLmhhdGNoLnBsYXRmb3JtLnYxLlF1ZXJ5QXBwRGJSZXF1ZXN0GiUuaGF0Y2gucGxhdGZvcm0udjEuUXVlcnlBcHBEYlJlc3BvbnNlEnQKE0Fzc29jaWF0ZUFwcFNlc3Npb24SLS5oYXRjaC5wbGF0Zm9ybS52MS5Bc3NvY2lhdGVBcHBTZXNzaW9uUmVxdWVzdBouLmhhdGNoLnBsYXRmb3JtLnYxLkFzc29jaWF0ZUFwcFNlc3Npb25SZXNwb25zZRJoCg9MaXN0QXBwQmFja2VuZHMSKS5oYXRjaC5wbGF0Zm9ybS52MS5MaXN0QXBwQmFja2VuZHNSZXF1ZXN0GiouaGF0Y2gucGxhdGZvcm0udjEuTGlzdEFwcEJhY2tlbmRzUmVzcG9uc2USYgoNR2V0QXBwQmFja2VuZBInLmhhdGNoLnBsYXRmb3JtLnYxLkdldEFwcEJhY2tlbmRSZXF1ZXN0GiguaGF0Y2gucGxhdGZvcm0udjEuR2V0QXBwQmFja2VuZFJlc3BvbnNlEmgKD1N0YXJ0QXBwQmFja2VuZBIpLmhhdGNoLnBsYXRmb3JtLnYxLlN0YXJ0QXBwQmFja2VuZFJlcXVlc3QaKi5oYXRjaC5wbGF0Zm9ybS52MS5TdGFydEFwcEJhY2tlbmRSZXNwb25zZRJlCg5TdG9wQXBwQmFja2VuZBIoLmhhdGNoLnBsYXRmb3JtLnYxLlN0b3BBcHBCYWNrZW5kUmVxdWVzdBopLmhhdGNoLnBsYXRmb3JtLnYxLlN0b3BBcHBCYWNrZW5kUmVzcG9uc2USbgoRUmVzdGFydEFwcEJhY2tlbmQSKy5oYXRjaC5wbGF0Zm9ybS52MS5SZXN0YXJ0QXBwQmFja2VuZFJlcXVlc3QaLC5oYXRjaC5wbGF0Zm9ybS52MS5SZXN0YXJ0QXBwQmFja2VuZFJlc3BvbnNlElkKCkdldEFwcEljb24SJC5oYXRjaC5wbGF0Zm9ybS52MS5HZXRBcHBJY29uUmVxdWVzdBolLmhhdGNoLnBsYXRmb3JtLnYxLkdldEFwcEljb25SZXNwb25zZRJZCgpTZXRBcHBJY29uEiQuaGF0Y2gucGxhdGZvcm0udjEuU2V0QXBwSWNvblJlcXVlc3QaJS5oYXRjaC5wbGF0Zm9ybS52MS5TZXRBcHBJY29uUmVzcG9uc2USXwoMQ2xlYXJBcHBJY29uEiYuaGF0Y2gucGxhdGZvcm0udjEuQ2xlYXJBcHBJY29uUmVxdWVzdBonLmhhdGNoLnBsYXRmb3JtLnYxLkNsZWFyQXBwSWNvblJlc3BvbnNlEl8KDExpc3RBcHBUYXNrcxImLmhhdGNoLnBsYXRmb3JtLnYxLkxpc3RBcHBUYXNrc1JlcXVlc3QaJy5oYXRjaC5wbGF0Zm9ybS52MS5MaXN0QXBwVGFza3NSZXNwb25zZRJZCgpSdW5BcHBUYXNrEiQuaGF0Y2gucGxhdGZvcm0udjEuUnVuQXBwVGFza1JlcXVlc3QaJS5oYXRjaC5wbGF0Zm9ybS52MS5SdW5BcHBUYXNrUmVzcG9uc2USaAoPTGlzdEFwcFRhc2tSdW5zEikuaGF0Y2gucGxhdGZvcm0udjEuTGlzdEFwcFRhc2tSdW5zUmVxdWVzdBoqLmhhdGNoLnBsYXRmb3JtLnYxLkxpc3RBcHBUYXNrUnVuc1Jlc3BvbnNlEmIKDUdldEFwcFRhc2tSdW4SJy5oYXRjaC5wbGF0Zm9ybS52MS5HZXRBcHBUYXNrUnVuUmVxdWVzdBooLmhhdGNoLnBsYXRmb3JtLnYxLkdldEFwcFRhc2tSdW5SZXNwb25zZRJrChBDYW5jZWxBcHBUYXNrUnVuEiouaGF0Y2gucGxhdGZvcm0udjEuQ2FuY2VsQXBwVGFza1J1blJlcXVlc3QaKy5oYXRjaC5wbGF0Zm9ybS52MS5DYW5jZWxBcHBUYXNrUnVuUmVzcG9uc2USfQoWUm90YXRlQXBwV2ViaG9va1NlY3JldBIwLmhhdGNoLnBsYXRmb3JtLnYxLlJvdGF0ZUFwcFdlYmhvb2tTZWNyZXRSZXF1ZXN0GjEuaGF0Y2gucGxhdGZvcm0udjEuUm90YXRlQXBwV2ViaG9va1NlY3JldFJlc3BvbnNlElwKC0xpc3RBcHBEb2NzEiUuaGF0Y2gucGxhdGZvcm0udjEuTGlzdEFwcERvY3NSZXF1ZXN0GiYuaGF0Y2gucGxhdGZvcm0udjEuTGlzdEFwcERvY3NSZXNwb25zZRJWCglHZXRBcHBEb2MSIy5oYXRjaC5wbGF0Zm9ybS52MS5HZXRBcHBEb2NSZXF1ZXN0GiQuaGF0Y2gucGxhdGZvcm0udjEuR2V0QXBwRG9jUmVzcG9uc2ViBnByb3RvMw',
+    'ChtoYXRjaC9wbGF0Zm9ybS92MS9hcHAucHJvdG8SEWhhdGNoLnBsYXRmb3JtLnYxIhEKD0xpc3RBcHBzUmVxdWVzdCJCChBMaXN0QXBwc1Jlc3BvbnNlEi4KCXJlc291cmNlcxgBIAMoCzIbLmhhdGNoLnBsYXRmb3JtLnYxLlJlc291cmNlIp4BChBDcmVhdGVBcHBSZXF1ZXN0Ei0KBHNsdWcYASABKAlCH7pIHHIaEAEYQDIUXlthLXowLTldW2EtejAtOS1dKiQSFwoEbmFtZRgCIAEoCUIJukgGcgQQARhAEhgKC2Rlc2NyaXB0aW9uGAMgASgJSACIAQESEAoDcGluGAQgASgISAGIAQFCDgoMX2Rlc2NyaXB0aW9uQgYKBF9waW4iYwoRQ3JlYXRlQXBwUmVzcG9uc2USCgoCaWQYASABKAkSDAoEc2x1ZxgCIAEoCRIMCgRuYW1lGAMgASgJEiYKBWZpbGVzGAQgAygLMhcuaGF0Y2gucGxhdGZvcm0udjEuRmlsZSInCg1HZXRBcHBSZXF1ZXN0EhYKAmlkGAEgASgJQgq6SAdyBRABGL8BIj8KDkdldEFwcFJlc3BvbnNlEi0KCHJlc291cmNlGAEgASgLMhsuaGF0Y2gucGxhdGZvcm0udjEuUmVzb3VyY2Ui4wIKEERlcGxveUFwcFJlcXVlc3QSFgoCaWQYASABKAlCCrpIB3IFEAEYvwESGAoHbWVzc2FnZRgCIAEoCUIHukgEcgIQARIbCgpnZW5lcmF0aW9uGAMgASgJQge6SARyAhABEhMKBmJ1bmRsZRgEIAEoDEgAiAEBEi0KIGFsbG93X2Rlc3RydWN0aXZlX2RhdGFfbWlncmF0aW9uGAUgASgISAGIAQESMwodZGF0YV9taWdyYXRpb25fYXBwcm92YWxfdG9rZW4YBiABKAlCB7pIBHICEAFIAogBARIqCgZjb21taXQYByABKAlCFbpIEnIQMg5eWzAtOWEtZl17NDB9JEgDiAEBQgkKB19idW5kbGVCIwohX2FsbG93X2Rlc3RydWN0aXZlX2RhdGFfbWlncmF0aW9uQiAKHl9kYXRhX21pZ3JhdGlvbl9hcHByb3ZhbF90b2tlbkIJCgdfY29tbWl0IkYKEURlcGxveUFwcFJlc3BvbnNlEjEKCmRlcGxveW1lbnQYASABKAsyHS5oYXRjaC5wbGF0Zm9ybS52MS5EZXBsb3ltZW50IkYKElJvbGxiYWNrQXBwUmVxdWVzdBIWCgJpZBgBIAEoCUIKukgHcgUQARi/ARIYCgd2ZXJzaW9uGAIgASgNQge6SAQqAiAAIksKE1JvbGxiYWNrQXBwUmVzcG9uc2USNAoIcmVzdG9yZWQYASABKAsyIi5oYXRjaC5wbGF0Zm9ybS52MS5SZXN0b3JlZFZlcnNpb24iWgoRUXVlcnlBcHBLdlJlcXVlc3QSFgoCaWQYASABKAlCCrpIB3IFEAEYvwESLQoFaW5wdXQYAiABKAsyFi5nb29nbGUucHJvdG9idWYuVmFsdWVCBrpIA8gBASI8ChJRdWVyeUFwcEt2UmVzcG9uc2USJgoGcmVzdWx0GAEgASgLMhYuZ29vZ2xlLnByb3RvYnVmLlZhbHVlImEKGFF1ZXJ5QXBwRGF0YVRhYmxlUmVxdWVzdBIWCgJpZBgBIAEoCUIKukgHcgUQARi/ARItCgVpbnB1dBgCIAEoCzIWLmdvb2dsZS5wcm90b2J1Zi5WYWx1ZUIGukgDyAEBIkMKGVF1ZXJ5QXBwRGF0YVRhYmxlUmVzcG9uc2USJgoGcmVzdWx0GAEgASgLMhYuZ29vZ2xlLnByb3RvYnVmLlZhbHVlIkEKEVF1ZXJ5QXBwRGJSZXF1ZXN0EhYKAmlkGAEgASgJQgq6SAdyBRABGL8BEhQKA3NxbBgCIAEoCUIHukgEcgIQASI1ChJRdWVyeUFwcERiUmVzcG9uc2USDAoEdGV4dBgBIAEoCRIRCglyb3dfY291bnQYAiABKA0iNAoaQXNzb2NpYXRlQXBwU2Vzc2lvblJlcXVlc3QSFgoCaWQYASABKAlCCrpIB3IFEAEYvwEiQgobQXNzb2NpYXRlQXBwU2Vzc2lvblJlc3BvbnNlEg4KBmFwcF9pZBgBIAEoCRITCgthc3NvY2lhdGlvbhgCIAEoCSL7AgoRQXBwQmFja2VuZFJ1bnRpbWUSDQoFc3RhdGUYASABKAkSEAoDcGlkGAIgASgNSACIAQESEQoEcG9ydBgDIAEoDUgBiAEBEhcKCnN0YXJ0ZWRfYXQYBCABKAlIAogBARIXCgpzdG9wcGVkX2F0GAUgASgJSAOIAQESGwoObGFzdF9leGl0X2NvZGUYBiABKAVIBIgBARIdChBsYXN0X2V4aXRfc2lnbmFsGAcgASgJSAWIAQESFwoKbGFzdF9lcnJvchgIIAEoCUgGiAEBEhUKDXJlc3RhcnRfY291bnQYCSABKA0SEgoKa2VlcF9hbGl2ZRgKIAEoCBIaChJkcmFpbmluZ19pbnN0YW5jZXMYCyABKA1CBgoEX3BpZEIHCgVfcG9ydEINCgtfc3RhcnRlZF9hdEINCgtfc3RvcHBlZF9hdEIRCg9fbGFzdF9leGl0X2NvZGVCEwoRX2xhc3RfZXhpdF9zaWduYWxCDQoLX2xhc3RfZXJyb3IilAEKCkFwcEJhY2tlbmQSCgoCaWQYASABKAkSDAoEc2x1ZxgCIAEoCRIMCgRuYW1lGAMgASgJEgwKBG1vZGUYBCABKAkSGQoRcnVudGltZV9zdXBwb3J0ZWQYBSABKAgSNQoHcnVudGltZRgGIAEoCzIkLmhhdGNoLnBsYXRmb3JtLnYxLkFwcEJhY2tlbmRSdW50aW1lIm0KFkxpc3RBcHBCYWNrZW5kc1JlcXVlc3QSHQoFbGltaXQYASABKA1CCbpIBioEGGQoAUgAiAEBEh8KBmN1cnNvchgCIAEoCUIKukgHcgUQARi/AUgBiAEBQggKBl9saW1pdEIJCgdfY3Vyc29yInQKF0xpc3RBcHBCYWNrZW5kc1Jlc3BvbnNlEi8KCGJhY2tlbmRzGAEgAygLMh0uaGF0Y2gucGxhdGZvcm0udjEuQXBwQmFja2VuZBIYCgtuZXh0X2N1cnNvchgCIAEoCUgAiAEBQg4KDF9uZXh0X2N1cnNvciIuChRHZXRBcHBCYWNrZW5kUmVxdWVzdBIWCgJpZBgBIAEoCUIKukgHcgUQARi/ASJHChVHZXRBcHBCYWNrZW5kUmVzcG9uc2USLgoHYmFja2VuZBgBIAEoCzIdLmhhdGNoLnBsYXRmb3JtLnYxLkFwcEJhY2tlbmQiMAoWU3RhcnRBcHBCYWNrZW5kUmVxdWVzdBIWCgJpZBgBIAEoCUIKukgHcgUQARi/ASJJChdTdGFydEFwcEJhY2tlbmRSZXNwb25zZRIuCgdiYWNrZW5kGAEgASgLMh0uaGF0Y2gucGxhdGZvcm0udjEuQXBwQmFja2VuZCI+ChVTdG9wQXBwQmFja2VuZFJlcXVlc3QSFgoCaWQYASABKAlCCrpIB3IFEAEYvwESDQoFZm9yY2UYAiABKAgiSAoWU3RvcEFwcEJhY2tlbmRSZXNwb25zZRIuCgdiYWNrZW5kGAEgASgLMh0uaGF0Y2gucGxhdGZvcm0udjEuQXBwQmFja2VuZCJBChhSZXN0YXJ0QXBwQmFja2VuZFJlcXVlc3QSFgoCaWQYASABKAlCCrpIB3IFEAEYvwESDQoFZm9yY2UYAiABKAgiSwoZUmVzdGFydEFwcEJhY2tlbmRSZXNwb25zZRIuCgdiYWNrZW5kGAEgASgLMh0uaGF0Y2gucGxhdGZvcm0udjEuQXBwQmFja2VuZCJOCgdBcHBJY29uEhAKA2tleRgBIAEoCUgAiAEBEhEKBHBhdGgYAiABKAlIAYgBARINCgVzaXplcxgDIAMoDUIGCgRfa2V5QgcKBV9wYXRoIisKEUdldEFwcEljb25SZXF1ZXN0EhYKAmlkGAEgASgJQgq6SAdyBRABGL8BIj4KEkdldEFwcEljb25SZXNwb25zZRIoCgRpY29uGAEgASgLMhouaGF0Y2gucGxhdGZvcm0udjEuQXBwSWNvbiKKAQoRU2V0QXBwSWNvblJlcXVlc3QSFgoCaWQYASABKAlCCrpIB3IFEAEYvwESHQoFaW1hZ2UYAiABKAxCDLpICXoHEAEYgICAAkgAEi0KDGNhbmRpZGF0ZV9pZBgDIAEoCUIVukgSchAyDl5bYS1mMC05XXszMn0kSABCDwoGc291cmNlEgW6SAIIASI+ChJTZXRBcHBJY29uUmVzcG9uc2USKAoEaWNvbhgBIAEoCzIaLmhhdGNoLnBsYXRmb3JtLnYxLkFwcEljb24iLQoTQ2xlYXJBcHBJY29uUmVxdWVzdBIWCgJpZBgBIAEoCUIKukgHcgUQARi/ASJAChRDbGVhckFwcEljb25SZXNwb25zZRIoCgRpY29uGAEgASgLMhouaGF0Y2gucGxhdGZvcm0udjEuQXBwSWNvbiJ4CgtBcHBUYXNrQ3JvbhIMCgRuYW1lGAEgASgJEhAKCHNjaGVkdWxlGAIgASgJEiUKBWlucHV0GAMgASgLMhYuZ29vZ2xlLnByb3RvYnVmLlZhbHVlEhUKCG5leHRfcnVuGAQgASgJSACIAQFCCwoJX25leHRfcnVuIj8KDUFwcFRhc2tSdW5SZWYSCgoCaWQYASABKAkSDgoGc3RhdHVzGAIgASgJEhIKCmNyZWF0ZWRfYXQYAyABKAkisgMKB0FwcFRhc2sSDAoEbmFtZRgBIAEoCRIOCgZtZXRob2QYAiABKAkSEgoFdGl0bGUYAyABKAlIAIgBARIYCgtkZXNjcmlwdGlvbhgEIAEoCUgBiAEBEhgKC2NvbmN1cnJlbmN5GAUgASgNSAKIAQESEgoKaW5wdXRfdHlwZRgGIAEoCRItCgxpbnB1dF9zY2hlbWEYByABKAsyFy5nb29nbGUucHJvdG9idWYuU3RydWN0EiwKBGNyb24YCCADKAsyHi5oYXRjaC5wbGF0Zm9ybS52MS5BcHBUYXNrQ3JvbhIPCgd3ZWJob29rGAkgASgIEhkKDHdlYmhvb2tfcGF0aBgKIAEoCUgDiAEBEg4KBnF1ZXVlZBgLIAEoDRIPCgdydW5uaW5nGAwgASgNEjkKCmxhdGVzdF9ydW4YDSABKAsyIC5oYXRjaC5wbGF0Zm9ybS52MS5BcHBUYXNrUnVuUmVmSASIAQFCCAoGX3RpdGxlQg4KDF9kZXNjcmlwdGlvbkIOCgxfY29uY3VycmVuY3lCDwoNX3dlYmhvb2tfcGF0aEINCgtfbGF0ZXN0X3J1biItChNMaXN0QXBwVGFza3NSZXF1ZXN0EhYKAmlkGAEgASgJQgq6SAdyBRABGL8BIpoBChRMaXN0QXBwVGFza3NSZXNwb25zZRIOCgZhcHBfaWQYASABKAkSEQoJYXZhaWxhYmxlGAIgASgIEhMKC2NvbmN1cnJlbmN5GAMgASgNEg4KBnF1ZXVlZBgEIAEoDRIPCgdydW5uaW5nGAUgASgNEikKBXRhc2tzGAYgAygLMhouaGF0Y2gucGxhdGZvcm0udjEuQXBwVGFzayJ7ChFSdW5BcHBUYXNrUmVxdWVzdBIWCgJpZBgBIAEoCUIKukgHcgUQARi/ARIXCgR0YXNrGAIgASgJQgm6SAZyBBABGEASKwoFaW5wdXQYAyABKAsyFy5nb29nbGUucHJvdG9idWYuU3RydWN0SACIAQFCCAoGX2lucHV0IjQKElJ1bkFwcFRhc2tSZXNwb25zZRIOCgZydW5faWQYASABKAkSDgoGc3RhdHVzGAIgASgJItgCChFBcHBUYXNrUnVuU3VtbWFyeRIKCgJpZBgBIAEoCRIMCgR0YXNrGAIgASgJEg8KB3RyaWdnZXIYAyABKAkSFgoJY3Jvbl9uYW1lGAQgASgJSACIAQESDgoGc3RhdHVzGAUgASgJEhQKB3ZlcnNpb24YBiABKA1IAYgBARISCgVlcnJvchgHIAEoCUgCiAEBEhIKCmNyZWF0ZWRfYXQYCCABKAkSFwoKc3RhcnRlZF9hdBgJIAEoCUgDiAEBEhgKC2ZpbmlzaGVkX2F0GAogASgJSASIAQESGAoLZHVyYXRpb25fbXMYCyABKARIBYgBARISCgpzdGVwX2NvdW50GAwgASgNQgwKCl9jcm9uX25hbWVCCgoIX3ZlcnNpb25CCAoGX2Vycm9yQg0KC19zdGFydGVkX2F0Qg4KDF9maW5pc2hlZF9hdEIOCgxfZHVyYXRpb25fbXMiggIKFkxpc3RBcHBUYXNrUnVuc1JlcXVlc3QSFgoCaWQYASABKAlCCrpIB3IFEAEYvwESHAoEdGFzaxgCIAEoCUIJukgGcgQQARhASACIAQESSAoGc3RhdHVzGAMgASgJQjO6SDByLlIGcXVldWVkUgdydW5uaW5nUglzdWNjZWVkZWRSBmZhaWxlZFIIY2FuY2VsZWRIAYgBARIeCgVsaW1pdBgEIAEoDUIKukgHKgUYyAEoAUgCiAEBEh8KBmN1cnNvchgFIAEoCUIKukgHcgUQARi/AUgDiAEBQgcKBV90YXNrQgkKB19zdGF0dXNCCAoGX2xpbWl0QgkKB19jdXJzb3IidwoXTGlzdEFwcFRhc2tSdW5zUmVzcG9uc2USMgoEcnVucxgBIAMoCzIkLmhhdGNoLnBsYXRmb3JtLnYxLkFwcFRhc2tSdW5TdW1tYXJ5EhgKC25leHRfY3Vyc29yGAIgASgJSACIAQFCDgoMX25leHRfY3Vyc29yIp4CCg5BcHBUYXNrUnVuU3RlcBILCgNzZXEYASABKA0SDAoEbmFtZRgCIAEoCRIOCgZzdGF0dXMYAyABKAkSDwoHYXR0ZW1wdBgEIAEoDRIrCgZvdXRwdXQYBSABKAsyFi5nb29nbGUucHJvdG9idWYuVmFsdWVIAIgBARISCgVlcnJvchgGIAEoCUgBiAEBEhcKCnN0YXJ0ZWRfYXQYByABKAlIAogBARIYCgtmaW5pc2hlZF9hdBgIIAEoCUgDiAEBEhgKC2R1cmF0aW9uX21zGAkgASgESASIAQFCCQoHX291dHB1dEIICgZfZXJyb3JCDQoLX3N0YXJ0ZWRfYXRCDgoMX2ZpbmlzaGVkX2F0Qg4KDF9kdXJhdGlvbl9tcyL5AgoKQXBwVGFza1J1bhI1CgdzdW1tYXJ5GAEgASgLMiQuaGF0Y2gucGxhdGZvcm0udjEuQXBwVGFza1J1blN1bW1hcnkSEgoFYWN0b3IYAiABKAlIAIgBARIaCg1kZXBsb3ltZW50X2lkGAMgASgJSAGIAQESKgoFaW5wdXQYBCABKAsyFi5nb29nbGUucHJvdG9idWYuVmFsdWVIAogBARIrCgZvdXRwdXQYBSABKAsyFi5nb29nbGUucHJvdG9idWYuVmFsdWVIA4gBARIQCgNsb2cYBiABKAlIBIgBARIbCg5xdWV1ZV9wb3NpdGlvbhgHIAEoDUgFiAEBEjAKBXN0ZXBzGAggAygLMiEuaGF0Y2gucGxhdGZvcm0udjEuQXBwVGFza1J1blN0ZXBCCAoGX2FjdG9yQhAKDl9kZXBsb3ltZW50X2lkQggKBl9pbnB1dEIJCgdfb3V0cHV0QgYKBF9sb2dCEQoPX3F1ZXVlX3Bvc2l0aW9uIkoKFEdldEFwcFRhc2tSdW5SZXF1ZXN0EhYKAmlkGAEgASgJQgq6SAdyBRABGL8BEhoKBnJ1bl9pZBgCIAEoCUIKukgHcgUQARi/ASJDChVHZXRBcHBUYXNrUnVuUmVzcG9uc2USKgoDcnVuGAEgASgLMh0uaGF0Y2gucGxhdGZvcm0udjEuQXBwVGFza1J1biJNChdDYW5jZWxBcHBUYXNrUnVuUmVxdWVzdBIWCgJpZBgBIAEoCUIKukgHcgUQARi/ARIaCgZydW5faWQYAiABKAlCCrpIB3IFEAEYvwEiPAoYQ2FuY2VsQXBwVGFza1J1blJlc3BvbnNlEhAKCGNhbmNlbGVkGAEgASgIEg4KBnN0YXR1cxgCIAEoCSI3Ch1Sb3RhdGVBcHBXZWJob29rU2VjcmV0UmVxdWVzdBIWCgJpZBgBIAEoCUIKukgHcgUQARi/ASJACh5Sb3RhdGVBcHBXZWJob29rU2VjcmV0UmVzcG9uc2USDgoGc2VjcmV0GAEgASgJEg4KBmFwcF9pZBgCIAEoCSJ6CgZBcHBEb2MSCgoCaWQYASABKAkSDQoFdGl0bGUYAiABKAkSGAoLZGVzY3JpcHRpb24YAyABKAlIAIgBARIMCgRwYXRoGAQgASgJEg0KBWJ5dGVzGAUgASgNEg4KBnNoYTI1NhgGIAEoCUIOCgxfZGVzY3JpcHRpb24i7AEKD0FwcERvY0VuZHBvaW50cxJACgd3ZWJob29rGAEgASgLMiouaGF0Y2gucGxhdGZvcm0udjEuQXBwRG9jRW5kcG9pbnRzLldlYmhvb2tIAIgBARI4CgNycGMYAiABKAsyJi5oYXRjaC5wbGF0Zm9ybS52MS5BcHBEb2NFbmRwb2ludHMuUnBjSAGIAQEaJAoHV2ViaG9vaxILCgN1cmwYASABKAkSDAoEYXV0aBgCIAEoCRojCgNScGMSCwoDdXJsGAEgASgJEg8KB3NlcnZpY2UYAiABKAlCCgoIX3dlYmhvb2tCBgoEX3JwYyKKAQoSTGlzdEFwcERvY3NSZXF1ZXN0EhYKAmlkGAEgASgJQgq6SAdyBRABGL8BEh0KBWxpbWl0GAIgASgNQgm6SAYqBBhkKAFIAIgBARIoCgZjdXJzb3IYAyABKAlCE7pIEHIOMgxeWzAtOV17MSw5fSRIAYgBAUIICgZfbGltaXRCCQoHX2N1cnNvciLXAQoTTGlzdEFwcERvY3NSZXNwb25zZRIOCgZhcHBfaWQYASABKAkSDwoHdmVyc2lvbhgCIAEoDRIVCg1kZXBsb3ltZW50X2lkGAMgASgJEicKBGRvY3MYBCADKAsyGS5oYXRjaC5wbGF0Zm9ybS52MS5BcHBEb2MSNQoJZW5kcG9pbnRzGAUgASgLMiIuaGF0Y2gucGxhdGZvcm0udjEuQXBwRG9jRW5kcG9pbnRzEhgKC25leHRfY3Vyc29yGAYgASgJSACIAQFCDgoMX25leHRfY3Vyc29yIlwKEEdldEFwcERvY1JlcXVlc3QSFgoCaWQYASABKAlCCrpIB3IFEAEYvwESMAoGZG9jX2lkGAIgASgJQiC6SB1yGzIZXlthLXowLTldW2EtejAtOS1dezAsNjN9JCKEAQoRR2V0QXBwRG9jUmVzcG9uc2USDgoGYXBwX2lkGAEgASgJEg8KB3ZlcnNpb24YAiABKA0SFQoNZGVwbG95bWVudF9pZBgDIAEoCRImCgNkb2MYBCABKAsyGS5oYXRjaC5wbGF0Zm9ybS52MS5BcHBEb2MSDwoHY29udGVudBgFIAEoCSJvCgpBcHBBaU1vZGVsEgoKAmlkGAEgASgJEhUKDXByb3ZpZGVyX25hbWUYAiABKAkSEAoIbW9kZWxfaWQYAyABKAkSDAoEbmFtZRgEIAEoCRILCgNyZWYYBSABKAkSEQoJcmVhc29uaW5nGAYgASgIIsMBCglBcHBBaVJvbGUSDAoEbmFtZRgBIAEoCRIMCgRraW5kGAIgASgJEhMKC2Rlc2NyaXB0aW9uGAMgASgJEg0KBW5lZWRzGAQgAygJEjEKBW1vZGVsGAUgASgLMh0uaGF0Y2gucGxhdGZvcm0udjEuQXBwQWlNb2RlbEgAiAEBEg0KBWJvdW5kGAYgASgIEhMKC3VuYXZhaWxhYmxlGAcgASgIEhUKDW1pc3NpbmdfbmVlZHMYCCADKAlCCAoGX21vZGVsIrQCCgVBcHBBaRIOCgZhcHBfaWQYASABKAkSEQoJYXZhaWxhYmxlGAIgASgIEisKBXJvbGVzGAMgAygLMhwuaGF0Y2gucGxhdGZvcm0udjEuQXBwQWlSb2xlEhcKCmJ1ZGdldF91c2QYBCABKAFIAIgBARIXCg9tb250aF9zcGVuZF91c2QYBSABKAESHAoUbW9udGhfdW5wcmljZWRfY2FsbHMYBiABKA0SEwoLbW9udGhfc3RhcnQYByABKAkSMgoLY2hhdF9tb2RlbHMYCCADKAsyHS5oYXRjaC5wbGF0Zm9ybS52MS5BcHBBaU1vZGVsEjMKDGltYWdlX21vZGVscxgJIAMoCzIdLmhhdGNoLnBsYXRmb3JtLnYxLkFwcEFpTW9kZWxCDQoLX2J1ZGdldF91c2QiKQoPR2V0QXBwQWlSZXF1ZXN0EhYKAmlkGAEgASgJQgq6SAdyBRABGL8BIjgKEEdldEFwcEFpUmVzcG9uc2USJAoCYWkYASABKAsyGC5oYXRjaC5wbGF0Zm9ybS52MS5BcHBBaSJ1ChhTZXRBcHBBaVJvbGVNb2RlbFJlcXVlc3QSFgoCaWQYASABKAlCCrpIB3IFEAEYvwESFwoEcm9sZRgCIAEoCUIJukgGcgQQARhAEh4KBW1vZGVsGAMgASgJQgq6SAdyBRABGJADSACIAQFCCAoGX21vZGVsIkEKGVNldEFwcEFpUm9sZU1vZGVsUmVzcG9uc2USJAoCYWkYASABKAsyGC5oYXRjaC5wbGF0Zm9ybS52MS5BcHBBaSJwChVTZXRBcHBBaUJ1ZGdldFJlcXVlc3QSFgoCaWQYASABKAlCCrpIB3IFEAEYvwESMAoKYnVkZ2V0X3VzZBgCIAEoAUIXukgUEhIZAAAAAICELkEpAAAAAAAAAABIAIgBAUINCgtfYnVkZ2V0X3VzZCI+ChZTZXRBcHBBaUJ1ZGdldFJlc3BvbnNlEiQKAmFpGAEgASgLMhguaGF0Y2gucGxhdGZvcm0udjEuQXBwQWkicwoVTGlzdEFwcEFpVXNhZ2VSZXF1ZXN0EhYKAmlkGAEgASgJQgq6SAdyBRABGL8BEhcKBWxpbWl0GAIgASgNQgi6SAUqAxjIARIeCgZjdXJzb3IYAyABKAlCCbpIBnIEEAEYQEgAiAEBQgkKB19jdXJzb3Ii1QIKCUFwcEFpQ2FsbBIKCgJpZBgBIAEoCRISCgpjcmVhdGVkX2F0GAIgASgJEgwKBHJvbGUYAyABKAkSDAoEa2luZBgEIAEoCRIVCg1wcm92aWRlcl9uYW1lGAUgASgJEhAKCG1vZGVsX2lkGAYgASgJEg4KBnN0YXR1cxgHIAEoCRIXCgplcnJvcl9jb2RlGAggASgJSACIAQESFAoMaW5wdXRfdG9rZW5zGAkgASgNEhUKDW91dHB1dF90b2tlbnMYCiABKA0SGQoRY2FjaGVfcmVhZF90b2tlbnMYCyABKA0SGgoSY2FjaGVfd3JpdGVfdG9rZW5zGAwgASgNEg4KBmltYWdlcxgNIAEoDRIVCghjb3N0X3VzZBgOIAEoAUgBiAEBEhMKC2R1cmF0aW9uX21zGA8gASgNQg0KC19lcnJvcl9jb2RlQgsKCV9jb3N0X3VzZCK+AQoPQXBwQWlVc2FnZVRvdGFsEgwKBHJvbGUYASABKAkSFQoNcHJvdmlkZXJfbmFtZRgCIAEoCRIQCghtb2RlbF9pZBgDIAEoCRINCgVjYWxscxgEIAEoDRIUCgxpbnB1dF90b2tlbnMYBSABKAQSFQoNb3V0cHV0X3Rva2VucxgGIAEoBBIOCgZpbWFnZXMYByABKA0SEAoIY29zdF91c2QYCCABKAESFgoOdW5wcmljZWRfY2FsbHMYCSABKA0izgEKFkxpc3RBcHBBaVVzYWdlUmVzcG9uc2USDgoGYXBwX2lkGAEgASgJEisKBWNhbGxzGAIgAygLMhwuaGF0Y2gucGxhdGZvcm0udjEuQXBwQWlDYWxsEhgKC25leHRfY3Vyc29yGAMgASgJSACIAQESOAoMbW9udGhfdG90YWxzGAQgAygLMiIuaGF0Y2gucGxhdGZvcm0udjEuQXBwQWlVc2FnZVRvdGFsEhMKC21vbnRoX3N0YXJ0GAUgASgJQg4KDF9uZXh0X2N1cnNvcjK/FgoKQXBwU2VydmljZRJTCghMaXN0QXBwcxIiLmhhdGNoLnBsYXRmb3JtLnYxLkxpc3RBcHBzUmVxdWVzdBojLmhhdGNoLnBsYXRmb3JtLnYxLkxpc3RBcHBzUmVzcG9uc2USVgoJQ3JlYXRlQXBwEiMuaGF0Y2gucGxhdGZvcm0udjEuQ3JlYXRlQXBwUmVxdWVzdBokLmhhdGNoLnBsYXRmb3JtLnYxLkNyZWF0ZUFwcFJlc3BvbnNlEk0KBkdldEFwcBIgLmhhdGNoLnBsYXRmb3JtLnYxLkdldEFwcFJlcXVlc3QaIS5oYXRjaC5wbGF0Zm9ybS52MS5HZXRBcHBSZXNwb25zZRJWCglEZXBsb3lBcHASIy5oYXRjaC5wbGF0Zm9ybS52MS5EZXBsb3lBcHBSZXF1ZXN0GiQuaGF0Y2gucGxhdGZvcm0udjEuRGVwbG95QXBwUmVzcG9uc2USXAoLUm9sbGJhY2tBcHASJS5oYXRjaC5wbGF0Zm9ybS52MS5Sb2xsYmFja0FwcFJlcXVlc3QaJi5oYXRjaC5wbGF0Zm9ybS52MS5Sb2xsYmFja0FwcFJlc3BvbnNlElkKClF1ZXJ5QXBwS3YSJC5oYXRjaC5wbGF0Zm9ybS52MS5RdWVyeUFwcEt2UmVxdWVzdBolLmhhdGNoLnBsYXRmb3JtLnYxLlF1ZXJ5QXBwS3ZSZXNwb25zZRJuChFRdWVyeUFwcERhdGFUYWJsZRIrLmhhdGNoLnBsYXRmb3JtLnYxLlF1ZXJ5QXBwRGF0YVRhYmxlUmVxdWVzdBosLmhhdGNoLnBsYXRmb3JtLnYxLlF1ZXJ5QXBwRGF0YVRhYmxlUmVzcG9uc2USWQoKUXVlcnlBcHBEYhIkLmhhdGNoLnBsYXRmb3JtLnYxLlF1ZXJ5QXBwRGJSZXF1ZXN0GiUuaGF0Y2gucGxhdGZvcm0udjEuUXVlcnlBcHBEYlJlc3BvbnNlEnQKE0Fzc29jaWF0ZUFwcFNlc3Npb24SLS5oYXRjaC5wbGF0Zm9ybS52MS5Bc3NvY2lhdGVBcHBTZXNzaW9uUmVxdWVzdBouLmhhdGNoLnBsYXRmb3JtLnYxLkFzc29jaWF0ZUFwcFNlc3Npb25SZXNwb25zZRJoCg9MaXN0QXBwQmFja2VuZHMSKS5oYXRjaC5wbGF0Zm9ybS52MS5MaXN0QXBwQmFja2VuZHNSZXF1ZXN0GiouaGF0Y2gucGxhdGZvcm0udjEuTGlzdEFwcEJhY2tlbmRzUmVzcG9uc2USYgoNR2V0QXBwQmFja2VuZBInLmhhdGNoLnBsYXRmb3JtLnYxLkdldEFwcEJhY2tlbmRSZXF1ZXN0GiguaGF0Y2gucGxhdGZvcm0udjEuR2V0QXBwQmFja2VuZFJlc3BvbnNlEmgKD1N0YXJ0QXBwQmFja2VuZBIpLmhhdGNoLnBsYXRmb3JtLnYxLlN0YXJ0QXBwQmFja2VuZFJlcXVlc3QaKi5oYXRjaC5wbGF0Zm9ybS52MS5TdGFydEFwcEJhY2tlbmRSZXNwb25zZRJlCg5TdG9wQXBwQmFja2VuZBIoLmhhdGNoLnBsYXRmb3JtLnYxLlN0b3BBcHBCYWNrZW5kUmVxdWVzdBopLmhhdGNoLnBsYXRmb3JtLnYxLlN0b3BBcHBCYWNrZW5kUmVzcG9uc2USbgoRUmVzdGFydEFwcEJhY2tlbmQSKy5oYXRjaC5wbGF0Zm9ybS52MS5SZXN0YXJ0QXBwQmFja2VuZFJlcXVlc3QaLC5oYXRjaC5wbGF0Zm9ybS52MS5SZXN0YXJ0QXBwQmFja2VuZFJlc3BvbnNlElkKCkdldEFwcEljb24SJC5oYXRjaC5wbGF0Zm9ybS52MS5HZXRBcHBJY29uUmVxdWVzdBolLmhhdGNoLnBsYXRmb3JtLnYxLkdldEFwcEljb25SZXNwb25zZRJZCgpTZXRBcHBJY29uEiQuaGF0Y2gucGxhdGZvcm0udjEuU2V0QXBwSWNvblJlcXVlc3QaJS5oYXRjaC5wbGF0Zm9ybS52MS5TZXRBcHBJY29uUmVzcG9uc2USXwoMQ2xlYXJBcHBJY29uEiYuaGF0Y2gucGxhdGZvcm0udjEuQ2xlYXJBcHBJY29uUmVxdWVzdBonLmhhdGNoLnBsYXRmb3JtLnYxLkNsZWFyQXBwSWNvblJlc3BvbnNlEl8KDExpc3RBcHBUYXNrcxImLmhhdGNoLnBsYXRmb3JtLnYxLkxpc3RBcHBUYXNrc1JlcXVlc3QaJy5oYXRjaC5wbGF0Zm9ybS52MS5MaXN0QXBwVGFza3NSZXNwb25zZRJZCgpSdW5BcHBUYXNrEiQuaGF0Y2gucGxhdGZvcm0udjEuUnVuQXBwVGFza1JlcXVlc3QaJS5oYXRjaC5wbGF0Zm9ybS52MS5SdW5BcHBUYXNrUmVzcG9uc2USaAoPTGlzdEFwcFRhc2tSdW5zEikuaGF0Y2gucGxhdGZvcm0udjEuTGlzdEFwcFRhc2tSdW5zUmVxdWVzdBoqLmhhdGNoLnBsYXRmb3JtLnYxLkxpc3RBcHBUYXNrUnVuc1Jlc3BvbnNlEmIKDUdldEFwcFRhc2tSdW4SJy5oYXRjaC5wbGF0Zm9ybS52MS5HZXRBcHBUYXNrUnVuUmVxdWVzdBooLmhhdGNoLnBsYXRmb3JtLnYxLkdldEFwcFRhc2tSdW5SZXNwb25zZRJrChBDYW5jZWxBcHBUYXNrUnVuEiouaGF0Y2gucGxhdGZvcm0udjEuQ2FuY2VsQXBwVGFza1J1blJlcXVlc3QaKy5oYXRjaC5wbGF0Zm9ybS52MS5DYW5jZWxBcHBUYXNrUnVuUmVzcG9uc2USfQoWUm90YXRlQXBwV2ViaG9va1NlY3JldBIwLmhhdGNoLnBsYXRmb3JtLnYxLlJvdGF0ZUFwcFdlYmhvb2tTZWNyZXRSZXF1ZXN0GjEuaGF0Y2gucGxhdGZvcm0udjEuUm90YXRlQXBwV2ViaG9va1NlY3JldFJlc3BvbnNlElwKC0xpc3RBcHBEb2NzEiUuaGF0Y2gucGxhdGZvcm0udjEuTGlzdEFwcERvY3NSZXF1ZXN0GiYuaGF0Y2gucGxhdGZvcm0udjEuTGlzdEFwcERvY3NSZXNwb25zZRJWCglHZXRBcHBEb2MSIy5oYXRjaC5wbGF0Zm9ybS52MS5HZXRBcHBEb2NSZXF1ZXN0GiQuaGF0Y2gucGxhdGZvcm0udjEuR2V0QXBwRG9jUmVzcG9uc2USUwoIR2V0QXBwQWkSIi5oYXRjaC5wbGF0Zm9ybS52MS5HZXRBcHBBaVJlcXVlc3QaIy5oYXRjaC5wbGF0Zm9ybS52MS5HZXRBcHBBaVJlc3BvbnNlEm4KEVNldEFwcEFpUm9sZU1vZGVsEisuaGF0Y2gucGxhdGZvcm0udjEuU2V0QXBwQWlSb2xlTW9kZWxSZXF1ZXN0GiwuaGF0Y2gucGxhdGZvcm0udjEuU2V0QXBwQWlSb2xlTW9kZWxSZXNwb25zZRJlCg5TZXRBcHBBaUJ1ZGdldBIoLmhhdGNoLnBsYXRmb3JtLnYxLlNldEFwcEFpQnVkZ2V0UmVxdWVzdBopLmhhdGNoLnBsYXRmb3JtLnYxLlNldEFwcEFpQnVkZ2V0UmVzcG9uc2USZQoOTGlzdEFwcEFpVXNhZ2USKC5oYXRjaC5wbGF0Zm9ybS52MS5MaXN0QXBwQWlVc2FnZVJlcXVlc3QaKS5oYXRjaC5wbGF0Zm9ybS52MS5MaXN0QXBwQWlVc2FnZVJlc3BvbnNlYgZwcm90bzM',
     [
       file_buf_validate_validate,
       file_google_protobuf_struct,
@@ -1954,6 +1954,553 @@ export const GetAppDocResponseSchema: GenMessage<GetAppDocResponse> =
   messageDesc(file_hatch_platform_v1_app, 60);
 
 /**
+ * A configured model an AI role may use. Never a key.
+ *
+ * @generated from message hatch.platform.v1.AppAiModel
+ */
+export type AppAiModel = Message<'hatch.platform.v1.AppAiModel'> & {
+  /**
+   * Model id; SetAppAiRoleModel takes it or ref.
+   *
+   * @generated from field: string id = 1;
+   */
+  id: string;
+
+  /**
+   * @generated from field: string provider_name = 2;
+   */
+  providerName: string;
+
+  /**
+   * Model id sent to the provider.
+   *
+   * @generated from field: string model_id = 3;
+   */
+  modelId: string;
+
+  /**
+   * @generated from field: string name = 4;
+   */
+  name: string;
+
+  /**
+   * "<provider name>/<model id>".
+   *
+   * @generated from field: string ref = 5;
+   */
+  ref: string;
+
+  /**
+   * @generated from field: bool reasoning = 6;
+   */
+  reasoning: boolean;
+};
+
+/**
+ * Describes the message hatch.platform.v1.AppAiModel.
+ * Use `create(AppAiModelSchema)` to create a new message.
+ */
+export const AppAiModelSchema: GenMessage<AppAiModel> =
+  /*@__PURE__*/
+  messageDesc(file_hatch_platform_v1_app, 61);
+
+/**
+ * @generated from message hatch.platform.v1.AppAiRole
+ */
+export type AppAiRole = Message<'hatch.platform.v1.AppAiRole'> & {
+  /**
+   * @generated from field: string name = 1;
+   */
+  name: string;
+
+  /**
+   * "chat" or "image".
+   *
+   * @generated from field: string kind = 2;
+   */
+  kind: string;
+
+  /**
+   * @generated from field: string description = 3;
+   */
+  description: string;
+
+  /**
+   * "tools", "vision" or "reasoning".
+   *
+   * @generated from field: repeated string needs = 4;
+   */
+  needs: string[];
+
+  /**
+   * The model calls use now; unset when none of this kind is configured.
+   *
+   * @generated from field: optional hatch.platform.v1.AppAiModel model = 5;
+   */
+  model?: AppAiModel | undefined;
+
+  /**
+   * True when the owner picked the model; false when it is the default.
+   *
+   * @generated from field: bool bound = 6;
+   */
+  bound: boolean;
+
+  /**
+   * True when the picked model is disabled; calls fail until it is changed.
+   *
+   * @generated from field: bool unavailable = 7;
+   */
+  unavailable: boolean;
+
+  /**
+   * Declared needs the model does not offer (only "reasoning" is known).
+   *
+   * @generated from field: repeated string missing_needs = 8;
+   */
+  missingNeeds: string[];
+};
+
+/**
+ * Describes the message hatch.platform.v1.AppAiRole.
+ * Use `create(AppAiRoleSchema)` to create a new message.
+ */
+export const AppAiRoleSchema: GenMessage<AppAiRole> =
+  /*@__PURE__*/
+  messageDesc(file_hatch_platform_v1_app, 62);
+
+/**
+ * @generated from message hatch.platform.v1.AppAi
+ */
+export type AppAi = Message<'hatch.platform.v1.AppAi'> & {
+  /**
+   * @generated from field: string app_id = 1;
+   */
+  appId: string;
+
+  /**
+   * False when the live deployment declares no AI roles.
+   *
+   * @generated from field: bool available = 2;
+   */
+  available: boolean;
+
+  /**
+   * @generated from field: repeated hatch.platform.v1.AppAiRole roles = 3;
+   */
+  roles: AppAiRole[];
+
+  /**
+   * Monthly cap in US dollars; unset means no cap.
+   *
+   * @generated from field: optional double budget_usd = 4;
+   */
+  budgetUsd?: number | undefined;
+
+  /**
+   * Estimated spend since month_start (UTC calendar month).
+   *
+   * @generated from field: double month_spend_usd = 5;
+   */
+  monthSpendUsd: number;
+
+  /**
+   * Calls this month whose model has no price; the spend is then a floor.
+   *
+   * @generated from field: uint32 month_unpriced_calls = 6;
+   */
+  monthUnpricedCalls: number;
+
+  /**
+   * @generated from field: string month_start = 7;
+   */
+  monthStart: string;
+
+  /**
+   * Models chat roles may be set to.
+   *
+   * @generated from field: repeated hatch.platform.v1.AppAiModel chat_models = 8;
+   */
+  chatModels: AppAiModel[];
+
+  /**
+   * Models image roles may be set to.
+   *
+   * @generated from field: repeated hatch.platform.v1.AppAiModel image_models = 9;
+   */
+  imageModels: AppAiModel[];
+};
+
+/**
+ * Describes the message hatch.platform.v1.AppAi.
+ * Use `create(AppAiSchema)` to create a new message.
+ */
+export const AppAiSchema: GenMessage<AppAi> =
+  /*@__PURE__*/
+  messageDesc(file_hatch_platform_v1_app, 63);
+
+/**
+ * @generated from message hatch.platform.v1.GetAppAiRequest
+ */
+export type GetAppAiRequest = Message<'hatch.platform.v1.GetAppAiRequest'> & {
+  /**
+   * @generated from field: string id = 1;
+   */
+  id: string;
+};
+
+/**
+ * Describes the message hatch.platform.v1.GetAppAiRequest.
+ * Use `create(GetAppAiRequestSchema)` to create a new message.
+ */
+export const GetAppAiRequestSchema: GenMessage<GetAppAiRequest> =
+  /*@__PURE__*/
+  messageDesc(file_hatch_platform_v1_app, 64);
+
+/**
+ * @generated from message hatch.platform.v1.GetAppAiResponse
+ */
+export type GetAppAiResponse = Message<'hatch.platform.v1.GetAppAiResponse'> & {
+  /**
+   * @generated from field: hatch.platform.v1.AppAi ai = 1;
+   */
+  ai?: AppAi | undefined;
+};
+
+/**
+ * Describes the message hatch.platform.v1.GetAppAiResponse.
+ * Use `create(GetAppAiResponseSchema)` to create a new message.
+ */
+export const GetAppAiResponseSchema: GenMessage<GetAppAiResponse> =
+  /*@__PURE__*/
+  messageDesc(file_hatch_platform_v1_app, 65);
+
+/**
+ * @generated from message hatch.platform.v1.SetAppAiRoleModelRequest
+ */
+export type SetAppAiRoleModelRequest =
+  Message<'hatch.platform.v1.SetAppAiRoleModelRequest'> & {
+    /**
+     * @generated from field: string id = 1;
+     */
+    id: string;
+
+    /**
+     * @generated from field: string role = 2;
+     */
+    role: string;
+
+    /**
+     * Model id or "<provider name>/<model id>"; unset clears the pick.
+     *
+     * @generated from field: optional string model = 3;
+     */
+    model?: string | undefined;
+  };
+
+/**
+ * Describes the message hatch.platform.v1.SetAppAiRoleModelRequest.
+ * Use `create(SetAppAiRoleModelRequestSchema)` to create a new message.
+ */
+export const SetAppAiRoleModelRequestSchema: GenMessage<SetAppAiRoleModelRequest> =
+  /*@__PURE__*/
+  messageDesc(file_hatch_platform_v1_app, 66);
+
+/**
+ * @generated from message hatch.platform.v1.SetAppAiRoleModelResponse
+ */
+export type SetAppAiRoleModelResponse =
+  Message<'hatch.platform.v1.SetAppAiRoleModelResponse'> & {
+    /**
+     * @generated from field: hatch.platform.v1.AppAi ai = 1;
+     */
+    ai?: AppAi | undefined;
+  };
+
+/**
+ * Describes the message hatch.platform.v1.SetAppAiRoleModelResponse.
+ * Use `create(SetAppAiRoleModelResponseSchema)` to create a new message.
+ */
+export const SetAppAiRoleModelResponseSchema: GenMessage<SetAppAiRoleModelResponse> =
+  /*@__PURE__*/
+  messageDesc(file_hatch_platform_v1_app, 67);
+
+/**
+ * @generated from message hatch.platform.v1.SetAppAiBudgetRequest
+ */
+export type SetAppAiBudgetRequest =
+  Message<'hatch.platform.v1.SetAppAiBudgetRequest'> & {
+    /**
+     * @generated from field: string id = 1;
+     */
+    id: string;
+
+    /**
+     * Monthly cap in US dollars; unset removes the cap.
+     *
+     * @generated from field: optional double budget_usd = 2;
+     */
+    budgetUsd?: number | undefined;
+  };
+
+/**
+ * Describes the message hatch.platform.v1.SetAppAiBudgetRequest.
+ * Use `create(SetAppAiBudgetRequestSchema)` to create a new message.
+ */
+export const SetAppAiBudgetRequestSchema: GenMessage<SetAppAiBudgetRequest> =
+  /*@__PURE__*/
+  messageDesc(file_hatch_platform_v1_app, 68);
+
+/**
+ * @generated from message hatch.platform.v1.SetAppAiBudgetResponse
+ */
+export type SetAppAiBudgetResponse =
+  Message<'hatch.platform.v1.SetAppAiBudgetResponse'> & {
+    /**
+     * @generated from field: hatch.platform.v1.AppAi ai = 1;
+     */
+    ai?: AppAi | undefined;
+  };
+
+/**
+ * Describes the message hatch.platform.v1.SetAppAiBudgetResponse.
+ * Use `create(SetAppAiBudgetResponseSchema)` to create a new message.
+ */
+export const SetAppAiBudgetResponseSchema: GenMessage<SetAppAiBudgetResponse> =
+  /*@__PURE__*/
+  messageDesc(file_hatch_platform_v1_app, 69);
+
+/**
+ * @generated from message hatch.platform.v1.ListAppAiUsageRequest
+ */
+export type ListAppAiUsageRequest =
+  Message<'hatch.platform.v1.ListAppAiUsageRequest'> & {
+    /**
+     * @generated from field: string id = 1;
+     */
+    id: string;
+
+    /**
+     * Calls per page, 1 to 200; 0 means 50.
+     *
+     * @generated from field: uint32 limit = 2;
+     */
+    limit: number;
+
+    /**
+     * The next_cursor of the previous page.
+     *
+     * @generated from field: optional string cursor = 3;
+     */
+    cursor?: string | undefined;
+  };
+
+/**
+ * Describes the message hatch.platform.v1.ListAppAiUsageRequest.
+ * Use `create(ListAppAiUsageRequestSchema)` to create a new message.
+ */
+export const ListAppAiUsageRequestSchema: GenMessage<ListAppAiUsageRequest> =
+  /*@__PURE__*/
+  messageDesc(file_hatch_platform_v1_app, 70);
+
+/**
+ * @generated from message hatch.platform.v1.AppAiCall
+ */
+export type AppAiCall = Message<'hatch.platform.v1.AppAiCall'> & {
+  /**
+   * @generated from field: string id = 1;
+   */
+  id: string;
+
+  /**
+   * @generated from field: string created_at = 2;
+   */
+  createdAt: string;
+
+  /**
+   * @generated from field: string role = 3;
+   */
+  role: string;
+
+  /**
+   * "chat" or "image".
+   *
+   * @generated from field: string kind = 4;
+   */
+  kind: string;
+
+  /**
+   * @generated from field: string provider_name = 5;
+   */
+  providerName: string;
+
+  /**
+   * @generated from field: string model_id = 6;
+   */
+  modelId: string;
+
+  /**
+   * "ok", "error" or "aborted".
+   *
+   * @generated from field: string status = 7;
+   */
+  status: string;
+
+  /**
+   * @generated from field: optional string error_code = 8;
+   */
+  errorCode?: string | undefined;
+
+  /**
+   * @generated from field: uint32 input_tokens = 9;
+   */
+  inputTokens: number;
+
+  /**
+   * @generated from field: uint32 output_tokens = 10;
+   */
+  outputTokens: number;
+
+  /**
+   * @generated from field: uint32 cache_read_tokens = 11;
+   */
+  cacheReadTokens: number;
+
+  /**
+   * @generated from field: uint32 cache_write_tokens = 12;
+   */
+  cacheWriteTokens: number;
+
+  /**
+   * @generated from field: uint32 images = 13;
+   */
+  images: number;
+
+  /**
+   * Estimated cost; unset when the model has no price.
+   *
+   * @generated from field: optional double cost_usd = 14;
+   */
+  costUsd?: number | undefined;
+
+  /**
+   * @generated from field: uint32 duration_ms = 15;
+   */
+  durationMs: number;
+};
+
+/**
+ * Describes the message hatch.platform.v1.AppAiCall.
+ * Use `create(AppAiCallSchema)` to create a new message.
+ */
+export const AppAiCallSchema: GenMessage<AppAiCall> =
+  /*@__PURE__*/
+  messageDesc(file_hatch_platform_v1_app, 71);
+
+/**
+ * This month's calls of one role on one model.
+ *
+ * @generated from message hatch.platform.v1.AppAiUsageTotal
+ */
+export type AppAiUsageTotal = Message<'hatch.platform.v1.AppAiUsageTotal'> & {
+  /**
+   * @generated from field: string role = 1;
+   */
+  role: string;
+
+  /**
+   * @generated from field: string provider_name = 2;
+   */
+  providerName: string;
+
+  /**
+   * @generated from field: string model_id = 3;
+   */
+  modelId: string;
+
+  /**
+   * @generated from field: uint32 calls = 4;
+   */
+  calls: number;
+
+  /**
+   * @generated from field: uint64 input_tokens = 5;
+   */
+  inputTokens: bigint;
+
+  /**
+   * @generated from field: uint64 output_tokens = 6;
+   */
+  outputTokens: bigint;
+
+  /**
+   * @generated from field: uint32 images = 7;
+   */
+  images: number;
+
+  /**
+   * @generated from field: double cost_usd = 8;
+   */
+  costUsd: number;
+
+  /**
+   * @generated from field: uint32 unpriced_calls = 9;
+   */
+  unpricedCalls: number;
+};
+
+/**
+ * Describes the message hatch.platform.v1.AppAiUsageTotal.
+ * Use `create(AppAiUsageTotalSchema)` to create a new message.
+ */
+export const AppAiUsageTotalSchema: GenMessage<AppAiUsageTotal> =
+  /*@__PURE__*/
+  messageDesc(file_hatch_platform_v1_app, 72);
+
+/**
+ * @generated from message hatch.platform.v1.ListAppAiUsageResponse
+ */
+export type ListAppAiUsageResponse =
+  Message<'hatch.platform.v1.ListAppAiUsageResponse'> & {
+    /**
+     * @generated from field: string app_id = 1;
+     */
+    appId: string;
+
+    /**
+     * @generated from field: repeated hatch.platform.v1.AppAiCall calls = 2;
+     */
+    calls: AppAiCall[];
+
+    /**
+     * Set when more calls follow this page.
+     *
+     * @generated from field: optional string next_cursor = 3;
+     */
+    nextCursor?: string | undefined;
+
+    /**
+     * This month's totals; the same on every page.
+     *
+     * @generated from field: repeated hatch.platform.v1.AppAiUsageTotal month_totals = 4;
+     */
+    monthTotals: AppAiUsageTotal[];
+
+    /**
+     * @generated from field: string month_start = 5;
+     */
+    monthStart: string;
+  };
+
+/**
+ * Describes the message hatch.platform.v1.ListAppAiUsageResponse.
+ * Use `create(ListAppAiUsageResponseSchema)` to create a new message.
+ */
+export const ListAppAiUsageResponseSchema: GenMessage<ListAppAiUsageResponse> =
+  /*@__PURE__*/
+  messageDesc(file_hatch_platform_v1_app, 73);
+
+/**
  * Public API for CLI and native clients. Platform Web UI uses Server Functions.
  *
  * @generated from service hatch.platform.v1.AppService
@@ -2174,5 +2721,48 @@ export const AppService: GenService<{
     methodKind: 'unary';
     input: typeof GetAppDocRequestSchema;
     output: typeof GetAppDocResponseSchema;
+  };
+  /**
+   * AI roles the live deployment declares, the model each uses, the monthly
+   * budget and this month's estimated spend.
+   *
+   * @generated from rpc hatch.platform.v1.AppService.GetAppAi
+   */
+  getAppAi: {
+    methodKind: 'unary';
+    input: typeof GetAppAiRequestSchema;
+    output: typeof GetAppAiResponseSchema;
+  };
+  /**
+   * Pick the model for one declared AI role, or clear the pick so the role
+   * uses the default model of its kind.
+   *
+   * @generated from rpc hatch.platform.v1.AppService.SetAppAiRoleModel
+   */
+  setAppAiRoleModel: {
+    methodKind: 'unary';
+    input: typeof SetAppAiRoleModelRequestSchema;
+    output: typeof SetAppAiRoleModelResponseSchema;
+  };
+  /**
+   * Set or remove the App's monthly AI budget.
+   *
+   * @generated from rpc hatch.platform.v1.AppService.SetAppAiBudget
+   */
+  setAppAiBudget: {
+    methodKind: 'unary';
+    input: typeof SetAppAiBudgetRequestSchema;
+    output: typeof SetAppAiBudgetResponseSchema;
+  };
+  /**
+   * The App's AI calls, newest first, and this month's totals per role and
+   * model. Prompts and replies are never stored.
+   *
+   * @generated from rpc hatch.platform.v1.AppService.ListAppAiUsage
+   */
+  listAppAiUsage: {
+    methodKind: 'unary';
+    input: typeof ListAppAiUsageRequestSchema;
+    output: typeof ListAppAiUsageResponseSchema;
   };
 }> = /*@__PURE__*/ serviceDesc(file_hatch_platform_v1_app, 0);
