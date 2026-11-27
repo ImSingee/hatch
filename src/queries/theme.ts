@@ -1,3 +1,4 @@
+import { AccountChangedError, retryUnlessAccountChanged } from './account';
 import { queryOptions, type QueryFilters } from '@tanstack/react-query';
 import { getThemeFn, listThemesFn } from '~server/theme';
 
@@ -8,10 +9,10 @@ import { getThemeFn, listThemesFn } from '~server/theme';
 export const themeQueryOptions = (userId: string) =>
   queryOptions({
     queryKey: ['account', userId, 'theme'],
+    retry: retryUnlessAccountChanged,
     queryFn: async () => {
       const theme = await getThemeFn();
-      if (theme.userId !== userId)
-        throw new Error('Your account changed. Reload the page to continue.');
+      if (theme.userId !== userId) throw new AccountChangedError();
       return theme;
     },
   });
