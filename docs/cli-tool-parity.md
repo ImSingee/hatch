@@ -389,6 +389,22 @@ Sessions, API keys and Run JWTs have the same authority, and no operation is
 bound to a device or browser. `app get` also lists the doc index under
 `manifest.docs`. No Agent Tool is added.
 
+## Native App packages and runtime trust: CLI only, no Agent Tool
+
+`hatch app package <app> --out <path>` calls `AppService/GetAppPackage` and
+writes the signed `.nshpkg` of the App's live native frontend, the file native
+shells load; `hatch app runtime-trust [--out-dir <dir>]` calls
+`AppService/GetAppRuntimeTrust` and prints (or writes, for `nsh verify`) the
+instance's root public keys, release key certificates and revocation list.
+Both use the same `src/server/apps/native/` services the native shells will
+call, and are read-only (getting a package signs it if it was not signed
+yet). There is no Web UI for either: the web player runs the deployment's
+own linked module, not the package. Sessions, API keys and Run JWTs have the
+same authority, and no operation is bound to a device or browser. `app get`
+shows the live frontend's `frontend.runtime`, `frontend.nshVersion` and
+`frontend.packageBuild`. Rotating the release key has neither a Web UI nor a
+command yet. No Agent Tool is added.
+
 ## Reserved keyboard shortcuts: manifest only
 
 An App reserves platform shortcut chords with `keyboard.reserve` in its source

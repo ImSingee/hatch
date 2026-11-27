@@ -66,6 +66,11 @@ instructions as preloaded platform Agent skills.
 
 Use pnpm for everything. `pnpm dev` starts the Vite dev server on port 3000 with hot reload. `pnpm build` emits the optimized bundle into `.output/`, while `pnpm preview` runs the Nitro server from `.output/` to sanity-check the production SPA shell and server endpoints. `pnpm check:types` runs the translation check (`pnpm i18n:check`) and `tsc --noEmit`; `pnpm i18n:types` regenerates the translation key types. `pnpm lint` runs Oxlint, and `pnpm format` runs Oxfmt then auto-fixes lint errors with Oxlint.
 
+Native App deploys need the package signing tool: `pnpm nshpkg:build` builds
+`packages/hatch-nshpkg` (Rust 1.97 or newer) into `bin/hatch-nshpkg`, where
+the platform finds it (or set `HATCH_NSHPKG_BIN`). CI and the Dockerfile build
+it the same way.
+
 Dependency upgrade policy:
 
 - Keep `@types/node` on major version 26. Routine 26.x updates are allowed,

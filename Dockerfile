@@ -45,6 +45,17 @@ RUN set -eu; \
   /opt/nsh/bin/nsh --version | grep -q "^nsh ${NSH_VERSION} "; \
   rm -f /tmp/nsh.tar.gz /tmp/nsh-web.tar.gz
 
+# --- Package signing tool (hatch-nshpkg) --------------------------------------
+# Built from the repository's source with its committed Cargo.lock, which pins
+# `nsh-package` =0.7.0 (the NSH release above) and every dependency by
+# checksum. It repacks native App packages with an activation's build number.
+FROM rust:1.97.1-slim-trixie AS nshpkg
+WORKDIR /build
+COPY packages/hatch-nshpkg/Cargo.toml packages/hatch-nshpkg/Cargo.lock ./
+COPY packages/hatch-nshpkg/src ./src
+RUN cargo build --locked --release \
+  && ./target/release/hatch-nshpkg version | grep -q '"nshPackage":"0.7.0"'
+
 # --- Base image with pnpm ----------------------------------------------------
 # pnpm installs the platform itself and, at deploy time, the dependencies of
 # pnpm-lockfile Apps. The version matches `packageManager`.
@@ -125,6 +136,10 @@ ENV HATCH_NSH_BIN=/opt/nsh/bin/nsh
 # downloading them.
 ENV HATCH_BUILD_TOOLCHAIN_DIR=/app
 COPY --from=tailscale /hatch-tailscale /app/bin/hatch-tailscale
+# Signs native App packages (src/server/apps/native/nshpkg.ts finds it here).
+COPY --from=nshpkg /build/target/release/hatch-nshpkg /app/bin/hatch-nshpkg
+# It must run on this image's libc, not only where it was built.
+RUN /app/bin/hatch-nshpkg version | grep -q '"nshPackage":"0.7.0"'
 
 # Runtime needs: the built server, the full dependency tree (esbuild bundling,
 # tsc type checks and buf/protoc-gen-es codegen happen on every deploy, and

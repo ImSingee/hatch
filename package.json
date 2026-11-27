@@ -8,6 +8,7 @@
   "packageManager": "pnpm@12.22.0",
   "scripts": {
     "tailscale:build": "cd packages/tailscale && go build -trimpath -o ../../bin/hatch-tailscale .",
+    "nshpkg:build": "cargo build --locked --release --manifest-path packages/hatch-nshpkg/Cargo.toml --target-dir packages/hatch-nshpkg/target && mkdir -p bin && cp packages/hatch-nshpkg/target/release/hatch-nshpkg bin/hatch-nshpkg",
     "tailscale:test": "cd packages/tailscale && go test ./...",
     "dev": "pnpm hatch-sdk:build && pnpm build:cli && concurrently --kill-others --names platform,runner --prefix-colors blue,magenta \"pnpm dev:platform:watch\" \"pnpm dev:runner:watch\"",
     "dev:platform": "pnpm hatch-sdk:build && pnpm dev:platform:watch",

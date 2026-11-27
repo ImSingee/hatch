@@ -75,6 +75,13 @@ service AppService {
   // Set or clear the default chat and image models for Apps. An unset field
   // leaves that default unchanged.
   rpc SetAppAiDefaults(SetAppAiDefaultsRequest) returns (SetAppAiDefaultsResponse);
+  // The signed package (`.nshpkg`) of the live deployment's native
+  // frontend, made now if it is missing. The first message describes it;
+  // every message after it carries the next chunk of its bytes.
+  rpc GetAppPackage(GetAppPackageRequest) returns (stream GetAppPackageResponse);
+  // What native shells verify packages with: the root public keys, the
+  // release key certificates and the revocation list. Public material only.
+  rpc GetAppRuntimeTrust(GetAppRuntimeTrustRequest) returns (GetAppRuntimeTrustResponse);
 }
 
 message ListAppsRequest {}
@@ -963,4 +970,92 @@ message SetAppAiDefaultsRequest {
 
 message SetAppAiDefaultsResponse {
   AppAiDefaults defaults = 1;
+}
+
+message GetAppPackageRequest {
+  string id = 1 [(buf.validate.field).string = {
+    min_len: 1
+    max_len: 191
+  }];
+}
+
+// A signed native App package.
+message AppPackage {
+  string app_id = 1;
+  string deployment_id = 2;
+  // The live deployment's version.
+  uint32 version = 3;
+  // The package's build number. It grows with every activation (deploy or
+  // rollback), so a rolled-back version is a newer build of older code.
+  uint32 build = 4;
+  // The NSH app id the package is signed for.
+  string nsh_app_id = 5;
+  // The NSH release the frontend was built with.
+  optional string nsh_version = 6;
+  // SHA-256 (hex) of the whole package: its identity for revocation.
+  string sha256 = 7;
+  uint32 size = 8;
+  // The release key that signed it.
+  string key_id = 9;
+  // Whether it carries bytecode (only packages of a Builder's build do).
+  bool bytecode = 10;
+}
+
+// The first message carries `package`, the others `chunk`s of its bytes in
+// order; their SHA-256 is `package.sha256`.
+message GetAppPackageResponse {
+  oneof part {
+    AppPackage package = 1;
+    bytes chunk = 2;
+  }
+}
+
+message GetAppRuntimeTrustRequest {}
+
+message RuntimeTrustRoot {
+  string key_id = 1;
+  // Ed25519 public key, base64.
+  string public_key = 2;
+}
+
+message RuntimeReleaseKey {
+  string key_id = 1;
+  // Ed25519 public key, base64.
+  string public_key = 2;
+  // The root's certificate of the key, as nsh-package writes it (JSON).
+  string certificate = 3;
+  // App ids it may sign for (`dev.hatch.app.*`).
+  repeated string apps = 4;
+  // It signs packages between these times (RFC 3339).
+  string not_before = 5;
+  string not_after = 6;
+  // The key new packages are signed with.
+  bool active = 7;
+  // Listed in the revocation list: packages it signed no longer load.
+  bool revoked = 8;
+}
+
+message RuntimeRevocations {
+  // Grows with every list; a shell keeps the newest it has seen.
+  uint32 sequence = 1;
+  string issued_at = 2;
+  repeated string key_ids = 3;
+  repeated string package_sha256s = 4;
+  // The signed list, as nsh-package writes it (JSON).
+  string signed = 5;
+}
+
+message AppRuntimeTrust {
+  // False until the first native deployment goes live, which creates the
+  // instance's keys; the other fields are empty until then.
+  bool initialized = 1;
+  // App ids of this instance's native packages.
+  string app_id_pattern = 2;
+  repeated RuntimeTrustRoot roots = 3;
+  repeated RuntimeReleaseKey release_keys = 4;
+  optional RuntimeRevocations revocations = 5;
+}
+
+message GetAppRuntimeTrustResponse {
+  AppRuntimeTrust trust = 1;
 }

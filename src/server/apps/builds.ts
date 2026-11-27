@@ -33,6 +33,7 @@ import { BuildArchiveError, unpackBuildArchive } from '../../app-build/archive';
 import { platformSdkDigest } from '../platform-api/sdk';
 import { asBuildError } from './build';
 import { platformBuildHost } from './build-host';
+import { NshpkgUnavailableError } from './native/nshpkg';
 import { DataMigrationApprovalRequired } from './data-table/migrate';
 import { builderConfigured, builderOnline } from './builders';
 import { tryWithAppDataCutoverLock } from './data-table/provision';
@@ -830,6 +831,9 @@ function failureCode(error: unknown): string {
   if (error instanceof ReleaseGenerationConflict)
     return 'resource_generation_conflict';
   if (error instanceof BuildArchiveError) return 'app_build_invalid';
+  // The platform cannot sign native packages: its fault, not the source's.
+  if (error instanceof NshpkgUnavailableError)
+    return 'platform_toolchain_unavailable';
   // The commit left master (a restore) after the deployment was created:
   // the same stable code a create of that commit gets.
   if (error instanceof AppError && error.code === COMMIT_NOT_ON_MASTER_ERROR)
@@ -846,6 +850,14 @@ function failureMessage(error: unknown): string {
       `Approval token: ${error.plan.approvalToken}\n` +
       'Inspect schema changes before retrying with ' +
       '--allow-destructive-data-migration and --data-migration-approval-token.'
+    );
+  }
+  if (error instanceof NshpkgUnavailableError) {
+    // The tool's own message names server paths; this one does not.
+    return (
+      'This platform cannot sign native App packages: its hatch-nshpkg tool ' +
+      'is missing. The operator builds it with `pnpm nshpkg:build` (or uses ' +
+      'the published Docker image, which ships it), then deploys again.'
     );
   }
   const reported = asBuildError(error);
@@ -958,6 +970,8 @@ export async function acceptArtifact(
           deploymentId: row.id,
           commit: row.commit,
           tooling: platformBuildHost({ sdkDigest }).tooling,
+          // Bytecode is trusted input to native shells: only the Builder's.
+          trustBytecode: row.mode === 'builder',
           // The privilege the release gets comes from the commit, never from
           // the package: the platform evaluates the manifest itself.
           committedManifest: async () => {

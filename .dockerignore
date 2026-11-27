@@ -10,6 +10,7 @@ dist-ssr
 sdk-internal/.build-*
 sdk-internal/*/dist
 packages/*/dist
+packages/hatch-nshpkg/target
 /bin
 
 # Platform runtime data (provided by a volume at runtime; never baked into the image)

@@ -268,6 +268,13 @@ export const apps = snakeCase.table(
      */
     icon: text(),
     currentDeploymentId: ulid(),
+    /**
+     * Grows by one in every transaction that makes a deployment live
+     * (deploy or rollback). A native App's signed package carries it as its
+     * build number, so a rollback ships older code under a newer build,
+     * which native shells accept. Read only for native deployments.
+     */
+    activationSeq: integer().notNull().default(0),
     createdAt,
     updatedAt,
   },

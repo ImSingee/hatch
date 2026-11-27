@@ -12,7 +12,8 @@
  *   proto/**              the authored proto sources (Apps with `rpc`)
  *   docs/**               the authored doc files the manifest declares
  *   app/**                SPA: index.html (bundle inlined) and app.js;
- *                         native: bundle.js, native/*, web/**, nsh-runtime/**
+ *                         native: bundle.js, native/package.nshpkg and
+ *                         native/package-root.pub, web/**, nsh-runtime/**
  *   widgets/<id>.js
  *   backend/**            the bundled entry and backend/assets/**
  */
@@ -27,6 +28,18 @@ export const BUILD_PACKAGE_DOCS_DIR = 'docs';
 export const BUILD_PACKAGE_NATIVE_DESCRIPTION = 'app/native-package.json';
 /** NSH runtime files the platform publishes once it has checked them. */
 export const BUILD_PACKAGE_NSH_RUNTIME_DIR = 'app/nsh-runtime';
+/**
+ * A native frontend's `nsh publish` package, signed with a key the build
+ * made for itself, and that key's root. The platform trusts neither: it
+ * takes the package's files as the input of the packages it signs.
+ */
+export const BUILD_PACKAGE_NATIVE_PACKAGE = 'app/native/package.nshpkg';
+export const BUILD_PACKAGE_NATIVE_PACKAGE_ROOT = 'app/native/package-root.pub';
+/**
+ * The NSH app version every native package carries; the deployment version
+ * is the platform's, and the build number is the activation's.
+ */
+export const NATIVE_PACKAGE_APP_VERSION = '1.0.0';
 
 /** Every top-level entry a package may contain. */
 export const BUILD_PACKAGE_ROOT_ENTRIES = [

@@ -73,7 +73,14 @@ input and runs none of it:
   that contains them is refused;
 - a native frontend's NSH runtime is published as its own content-addressed
   set, and its player page is the platform's (see
-  [Native App runtime](app-native-runtime.md)).
+  [Native App runtime](app-native-runtime.md));
+- a native frontend's `nsh publish` package must declare exactly the
+  capabilities the platform derives from the committed manifest
+  (`app_build_invalid` otherwise); its files are kept as the input of the
+  packages the platform signs, with the platform's capabilities, and its
+  bytecode only from the Builder (see
+  [Signed packages](app-native-runtime.md#signed-packages)). A package
+  without one was built by an older CLI or Builder (`toolchain_mismatch`).
 
 What only a build can check (type checks, manifest and schema evaluation,
 bundle imports, the NSH start-up check) is the builder's responsibility. The

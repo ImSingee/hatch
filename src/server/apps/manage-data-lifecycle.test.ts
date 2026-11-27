@@ -64,6 +64,12 @@ vi.mock('drizzle-orm', () => ({
     (strings) => strings.join(''),
   ),
 }));
+// Native packages are signed after activation; not under test here.
+vi.mock('./native/packages', () => ({
+  appNativePackagesDir: (id: string) => `/workspace/native-packages/${id}`,
+  signActivatedPackage: async () => {},
+}));
+
 vi.mock('~agent/paths', () => ({
   appArtifactsDir: (id: string) => `/workspace/artifacts/${id}`,
   appBuildDir: (id: string) => `/workspace/build/${id}`,

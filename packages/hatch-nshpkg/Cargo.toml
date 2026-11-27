@@ -1,0 +1,19 @@
+[package]
+name = "hatch-nshpkg"
+version = "0.1.0"
+edition = "2024"
+rust-version = "1.97"
+description = "Signs Hatch native App packages (.nshpkg) with the platform's release key: extracts a build's package input and repacks it with an activation's build number."
+license = "UNLICENSED"
+publish = false
+
+[dependencies]
+# Exactly the NSH release the platform pins (src/server/apps/native/nsh-toolchain.ts).
+# `^0.7.0` would resolve to 0.7.1.
+nsh-package = "=0.7.0"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+sha2 = "0.10"
+
+[profile.release]
+strip = true

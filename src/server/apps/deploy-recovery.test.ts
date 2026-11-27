@@ -70,6 +70,12 @@ vi.mock('drizzle-orm', () => ({
   sql: (strings: TemplateStringsArray) => strings.join(''),
 }));
 
+// Native packages are signed after activation; not under test here.
+vi.mock('./native/packages', () => ({
+  appNativePackagesDir: (id: string) => `${mocks.root}/native-packages/${id}`,
+  signActivatedPackage: async () => {},
+}));
+
 vi.mock('~agent/paths', () => ({
   BUILD_WORK_DIR: `${mocks.root}/work`,
   appBuildDir: (id: string) => `${mocks.root}/live/${id}`,

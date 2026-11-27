@@ -85,38 +85,50 @@ describe.skipIf(!adminUrl)('Dashboard order on PostgreSQL', () => {
     ]);
   });
 
-  it('pins the next dashboard on a first visit that races the oldest one being deleted', async () => {
+  // Only the order where the delete is still in flight is checked. A first
+  // visit that pins the oldest dashboard before the delete reaches it holds
+  // the delete back until it commits, and the delete then removes that pin
+  // with the dashboard, like any later delete of a pinned dashboard.
+  it('pins the next dashboard on a first visit while the oldest one is being deleted', async () => {
     const { db, schema } = platform;
-    for (let round = 0; round < 12; round++) {
-      const userId = `first-${round}`;
-      await db
-        .insert(schema.user)
-        .values({ id: userId, name: userId, email: `${userId}@pins.test` });
-      await db.insert(schema.dashboards).values([
-        { id: `old-${round}`, name: 'Old', createdAt: new Date('2000-01-01') },
-        {
-          id: `next-${round}`,
-          name: 'Next',
-          createdAt: new Date('2000-01-02'),
-        },
-      ]);
-      const [visit] = await Promise.allSettled([
+    const userId = 'first-visit';
+    await db
+      .insert(schema.user)
+      .values({ id: userId, name: userId, email: `${userId}@pins.test` });
+    await db.insert(schema.dashboards).values([
+      { id: 'old', name: 'Old', createdAt: new Date('2000-01-01') },
+      { id: 'next', name: 'Next', createdAt: new Date('2000-01-02') },
+    ]);
+    let deleted!: () => void;
+    const deleting = new Promise<void>((resolve) => (deleted = resolve));
+    let commit!: () => void;
+    const committing = new Promise<void>((resolve) => (commit = resolve));
+    // Holds the deleted row's lock, uncommitted, until the visit is done.
+    const deletion = db.transaction(async (tx) => {
+      await tx.delete(schema.dashboards).where(eq(schema.dashboards.id, 'old'));
+      deleted();
+      await committing;
+    });
+    try {
+      await deleting;
+      // The visit neither waits for the delete nor fails over it.
+      const visit = await Promise.race([
         read.readDashboards(userId),
-        db
-          .delete(schema.dashboards)
-          .where(eq(schema.dashboards.id, `old-${round}`)),
+        new Promise<'blocked'>((resolve) =>
+          setTimeout(() => resolve('blocked'), 2000),
+        ),
       ]);
-      // The first visit never fails over the deleted dashboard, and the user
-      // ends with exactly one pinned dashboard.
-      expect(visit.status).toBe('fulfilled');
-      const pinned = (await read.readDashboards(userId)).filter(
-        (dashboard) => dashboard.pinned,
-      );
-      expect(pinned).toHaveLength(1);
-      await db
-        .delete(schema.dashboards)
-        .where(eq(schema.dashboards.id, `next-${round}`));
+      expect(visit).not.toBe('blocked');
+    } finally {
+      commit();
+      await deletion;
     }
+    expect(
+      (await read.readDashboards(userId))
+        .filter((dashboard) => dashboard.pinned)
+        .map((dashboard) => dashboard.id),
+    ).toEqual(['next']);
+    await db.delete(schema.dashboards).where(eq(schema.dashboards.id, 'next'));
   });
 
   it('reports a pin as not found when the dashboard is deleted at the same moment', async () => {

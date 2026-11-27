@@ -205,9 +205,6 @@ export async function assembleNativePlayer(
     path.join(appIn, 'bundle.js'),
     path.join(appOut, 'bundle.js'),
   );
-  await fs.cp(path.join(appIn, 'native'), path.join(appOut, 'native'), {
-    recursive: true,
-  });
   // Only files the packaged App references (and NSH's facades) are served.
   const appRefs = nativeAppRefs(packaged).map((file) =>
     safeRef(file, 'App file'),

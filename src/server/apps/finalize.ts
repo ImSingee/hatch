@@ -14,8 +14,12 @@
  *    migration SQL from it;
  *  - docs are read and limited here;
  *  - a native frontend's runtime is published as its own content-addressed
- *    set, and its player page is the platform's.
+ *    set, and its player page is the platform's;
+ *  - a native frontend's package is opened and kept as the unsigned input of
+ *    the packages the platform signs, with the capabilities the platform
+ *    derives from the manifest (the package must declare exactly those).
  */
+import { randomUUID } from 'node:crypto';
 import { promises as fs } from 'node:fs';
 import path from 'node:path';
 import type { FileDescriptorSet } from '@bufbuild/protobuf/wkt';
@@ -26,7 +30,10 @@ import {
   BUILD_PACKAGE_MANIFEST,
   BUILD_PACKAGE_MAX_EXPANDED_BYTES,
   BUILD_PACKAGE_MAX_FILES,
+  BUILD_PACKAGE_NATIVE_PACKAGE,
+  BUILD_PACKAGE_NATIVE_PACKAGE_ROOT,
   BUILD_PACKAGE_ROOT_ENTRIES,
+  NATIVE_PACKAGE_APP_VERSION,
   buildPackageManifestSchema,
   type BuildPackageManifest,
   type BuildTooling,
@@ -51,6 +58,13 @@ import {
   AppManifestValidationError,
   manifestInvalid,
 } from './manifest-validation';
+import { nativePackageCapabilities, nshAppId } from './native/nsh-config';
+import { NSH_VERSION } from './native/nsh-toolchain';
+import {
+  NATIVE_PACKAGE_INPUT_DIR,
+  NshpkgRefusedError,
+  runNshpkg,
+} from './native/nshpkg';
 import { assembleNativePlayer } from './native/player';
 import {
   TaskInputSchemaError,
@@ -95,6 +109,13 @@ export type FinalizeBuildOptions = {
    * capabilities). Omitted only for a build the platform made itself.
    */
   committedManifest?: () => Promise<SourceManifest>;
+  /**
+   * Whether a native package's bytecode is kept. Shells load bytecode as
+   * trusted input (crafted bytecode corrupts memory), so only a build the
+   * platform trusts like itself supplies it: its Builder, or the platform.
+   * Packages of other builds (`--local`) ship their source only.
+   */
+  trustBytecode: boolean;
 };
 
 /** Stable JSON: the same value always prints the same text. */
@@ -284,6 +305,81 @@ async function copyFile(from: string, to: string): Promise<void> {
   await fs.copyFile(from, to);
 }
 
+/**
+ * Keep a native frontend's package as the unsigned input of the packages the
+ * platform signs (`<out>/native-package/`). The build signed it with a key
+ * of its own; that only proves the files arrived as the build wrote them.
+ */
+async function extractNativePackageInput(options: {
+  root: string;
+  out: string;
+  appId: string;
+  manifest: SourceManifest;
+  trustBytecode: boolean;
+}): Promise<{ bytecode: boolean; files: number }> {
+  const packageFile = path.join(options.root, BUILD_PACKAGE_NATIVE_PACKAGE);
+  const packageRoot = path.join(
+    options.root,
+    BUILD_PACKAGE_NATIVE_PACKAGE_ROOT,
+  );
+  if (!(await pathIsFile(packageFile)) || !(await pathIsFile(packageRoot))) {
+    // Builds before signed packages did not write one.
+    throw new BuildPackageError(
+      `The build package has no ${BUILD_PACKAGE_NATIVE_PACKAGE}: it was ` +
+        'built by an older hatch CLI or Builder. Upgrade it and build again.',
+      'toolchain_mismatch',
+    );
+  }
+  const capabilities = path.join(
+    path.dirname(options.out),
+    `.capabilities-${randomUUID()}.json`,
+  );
+  await fs.writeFile(
+    capabilities,
+    JSON.stringify(nativePackageCapabilities(options.manifest)),
+    'utf8',
+  );
+  try {
+    const input = await runNshpkg<{
+      bytecodeVersion: string | null;
+      files: unknown[];
+    }>([
+      'extract',
+      '--package',
+      packageFile,
+      '--root',
+      packageRoot,
+      '--out',
+      path.join(options.out, NATIVE_PACKAGE_INPUT_DIR),
+      '--id',
+      nshAppId(options.appId),
+      '--name',
+      options.manifest.name,
+      '--app-version',
+      NATIVE_PACKAGE_APP_VERSION,
+      '--min-runtime',
+      NSH_VERSION,
+      '--capabilities',
+      capabilities,
+      ...(options.trustBytecode ? [] : ['--drop-bytecode']),
+    ]);
+    return {
+      bytecode: Boolean(input.bytecodeVersion),
+      files: input.files.length,
+    };
+  } catch (error) {
+    if (error instanceof NshpkgRefusedError) {
+      throw new BuildPackageError(
+        `The native package is not the one the platform expects: ${error.message}`,
+        'app_build_invalid',
+      );
+    }
+    throw error;
+  } finally {
+    await fs.rm(capabilities, { force: true });
+  }
+}
+
 /** Accept `packageDir` for one deployment and write its artifact. */
 export async function finalizeBuild(
   options: FinalizeBuildOptions,
@@ -416,6 +512,21 @@ export async function finalizeBuild(
         logs,
       });
       if (normalized.app) normalized.app = { ...normalized.app, nshVersion };
+      const input = await extractNativePackageInput({
+        root,
+        out,
+        appId: id,
+        manifest,
+        trustBytecode: options.trustBytecode,
+      });
+      logs.push(
+        `kept the native package input: ${input.files} file(s), ` +
+          (input.bytecode
+            ? 'with bytecode'
+            : options.trustBytecode
+              ? 'without bytecode'
+              : 'source only (bytecode is kept only from a Builder)'),
+      );
     } else if (manifest.capabilities.frontend && manifest.app) {
       const html = path.join(root, 'app', 'index.html');
       if (!(await pathIsFile(html))) {

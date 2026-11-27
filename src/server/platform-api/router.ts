@@ -54,6 +54,7 @@ import { db } from '~/db';
 import { builderConfigured, builderStatus } from '~server/apps/builders';
 import { NSH_VERSION } from '~server/apps/native/nsh-toolchain';
 import { registerAppDeploymentApi } from './app-deployments';
+import { registerAppPackageApi } from './app-packages';
 import { rollbackAppToVersion } from '~server/apps/manage';
 import {
   type AppBackendView,
@@ -1175,6 +1176,7 @@ export function registerPlatformApi(
   router.rpc(AppService.method.getApp, apps.get);
   router.rpc(AppService.method.rollbackApp, apps.rollback);
   registerAppDeploymentApi(router, deployBodyLimit);
+  registerAppPackageApi(router);
   router.rpc(AuthService.method.getStatus, (_input, context) => {
     const status = context.values.get(publicApiContext).status;
     if (!status) throw publicApiError('UNAUTHORIZED');

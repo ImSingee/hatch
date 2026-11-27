@@ -642,6 +642,103 @@ function appAiDefaultsView(value: AppAiDefaults | undefined) {
   };
 }
 export type AppAiDefaultsView = ReturnType<typeof appAiDefaultsView>;
+export type AppPackageView = {
+  appId: string;
+  deploymentId: string;
+  version: number;
+  build: number;
+  nshAppId: string;
+  nshVersion: string | null;
+  sha256: string;
+  size: number;
+  keyId: string;
+  bytecode: boolean;
+};
+
+function appPackageView(value: {
+  appId: string;
+  deploymentId: string;
+  version: number;
+  build: number;
+  nshAppId: string;
+  nshVersion?: string;
+  sha256: string;
+  size: number;
+  keyId: string;
+  bytecode: boolean;
+}): AppPackageView {
+  return {
+    appId: value.appId,
+    deploymentId: value.deploymentId,
+    version: value.version,
+    build: value.build,
+    nshAppId: value.nshAppId,
+    nshVersion: value.nshVersion ?? null,
+    sha256: value.sha256,
+    size: value.size,
+    keyId: value.keyId,
+    bytecode: value.bytecode,
+  };
+}
+
+export type RuntimeTrustView = {
+  initialized: boolean;
+  appIdPattern: string;
+  roots: { keyId: string; publicKey: string }[];
+  releaseKeys: {
+    keyId: string;
+    publicKey: string;
+    certificate: string;
+    apps: string[];
+    notBefore: string;
+    notAfter: string;
+    active: boolean;
+    revoked: boolean;
+  }[];
+  revocations: {
+    sequence: number;
+    issuedAt: string;
+    keyIds: string[];
+    packageSha256s: string[];
+    signed: string;
+  } | null;
+};
+
+function runtimeTrustView(value: {
+  initialized: boolean;
+  appIdPattern: string;
+  roots: { keyId: string; publicKey: string }[];
+  releaseKeys: RuntimeTrustView['releaseKeys'];
+  revocations?: NonNullable<RuntimeTrustView['revocations']>;
+}): RuntimeTrustView {
+  return {
+    initialized: value.initialized,
+    appIdPattern: value.appIdPattern,
+    roots: value.roots.map((root) => ({
+      keyId: root.keyId,
+      publicKey: root.publicKey,
+    })),
+    releaseKeys: value.releaseKeys.map((key) => ({
+      keyId: key.keyId,
+      publicKey: key.publicKey,
+      certificate: key.certificate,
+      apps: [...key.apps],
+      notBefore: key.notBefore,
+      notAfter: key.notAfter,
+      active: key.active,
+      revoked: key.revoked,
+    })),
+    revocations: value.revocations
+      ? {
+          sequence: value.revocations.sequence,
+          issuedAt: value.revocations.issuedAt,
+          keyIds: [...value.revocations.keyIds],
+          packageSha256s: [...value.revocations.packageSha256s],
+          signed: value.revocations.signed,
+        }
+      : null,
+  };
+}
 
 export function cliClient(transport: Transport) {
   const apps = createClient(AppService, transport);
@@ -1267,6 +1364,23 @@ export function cliClient(transport: Transport) {
       },
     },
     apps: {
+      nativePackage: {
+        /** The live signed package: its description and its bytes. */
+        get: async (input: { id: string }) => {
+          let description: AppPackageView | undefined;
+          const chunks: Uint8Array[] = [];
+          for await (const message of apps.getAppPackage(input)) {
+            if (message.part.case === 'package')
+              description = appPackageView(message.part.value);
+            else if (message.part.case === 'chunk')
+              chunks.push(message.part.value);
+          }
+          if (!description) throw invalidResponse();
+          return { package: description, bytes: Buffer.concat(chunks) };
+        },
+        trust: async () =>
+          runtimeTrustView(required((await apps.getAppRuntimeTrust({})).trust)),
+      },
       docs: {
         list: async (input: {
           id: string;

@@ -11,7 +11,10 @@
  *  4. `nsh test` headless start-up with canned host answers: App code runs
  *     here, under the sandbox identity, with no network or file grant and a
  *     time limit;
- * then `nsh package --target web` produces the linked module the player runs.
+ * then `nsh package --target web` produces the linked module the player runs,
+ * and `nsh publish` the package native shells load. The build signs that
+ * package with a key it makes for itself and throws away: the platform
+ * trusts neither, and signs the packages shells load with its own key.
  */
 import { randomUUID } from 'node:crypto';
 import { promises as fs } from 'node:fs';
@@ -31,7 +34,10 @@ import {
 } from '../server/apps/native/source-rules';
 import {
   BUILD_PACKAGE_NATIVE_DESCRIPTION,
+  BUILD_PACKAGE_NATIVE_PACKAGE,
+  BUILD_PACKAGE_NATIVE_PACKAGE_ROOT,
   BUILD_PACKAGE_NSH_RUNTIME_DIR,
+  NATIVE_PACKAGE_APP_VERSION,
   type NativePackage,
 } from './format';
 import type { BuildNshHost } from './host';
@@ -255,6 +261,10 @@ export async function buildNativeFrontend(
 
     const bundleDir = path.join(work, 'bundle');
     const packageDir = path.join(work, 'web');
+    const publishedPackage = path.join(work, 'app.nshpkg');
+    // Created before the sandbox identity takes the scratch directory over.
+    const keys = path.join(work, 'package-keys');
+    await fs.mkdir(keys, { recursive: true });
     // Every nsh step runs while the sandbox identity owns the build copy and
     // this scratch directory: the start-up check runs App code as that
     // identity, and a host that runs every tool sandboxed (the Builder) can
@@ -331,9 +341,44 @@ export async function buildNativeFrontend(
         '--id',
         nshAppId(app.id),
         '--app-version',
-        '1.0.0',
+        NATIVE_PACKAGE_APP_VERSION,
         '--build',
         '1',
+        app.entry,
+      ]);
+
+      // 6) The package native shells load, signed with a throwaway key: the
+      // platform repacks its files with an activation's build number and
+      // signs them itself. Id, version and build are always explicit.
+      await nshRun('nsh keygen', ['keygen', path.join(keys, 'root')]);
+      await nshRun('nsh keygen', ['keygen', path.join(keys, 'release')]);
+      await nshRun('nsh certify', [
+        'certify',
+        '--root',
+        path.join(keys, 'root.secret'),
+        '--key',
+        path.join(keys, 'release.pub'),
+        '--apps',
+        nshAppId(app.id),
+        '--days',
+        '1',
+        '-o',
+        path.join(keys, 'release.cert'),
+      ]);
+      await nshRun('nsh publish', [
+        'publish',
+        '--key',
+        path.join(keys, 'release.secret'),
+        '--cert',
+        path.join(keys, 'release.cert'),
+        '--id',
+        nshAppId(app.id),
+        '--app-version',
+        NATIVE_PACKAGE_APP_VERSION,
+        '--build',
+        '1',
+        '-o',
+        publishedPackage,
         app.entry,
       ]);
     });
@@ -356,18 +401,16 @@ export async function buildNativeFrontend(
       path.join(bundleDir, 'bundle.js'),
       path.join(appOut, 'bundle.js'),
     );
-    // What native shells will load later (phase 4 packages it).
+    // What native shells load, once the platform has repacked and signed it.
     await fs.mkdir(path.join(appOut, 'native'), { recursive: true });
-    for (const extra of ['bundle.js.map', 'bundle.nshc', 'capabilities.json']) {
-      await fs
-        .copyFile(
-          path.join(bundleDir, extra),
-          path.join(appOut, 'native', extra),
-        )
-        .catch((error: NodeJS.ErrnoException) => {
-          if (error.code !== 'ENOENT') throw error;
-        });
-    }
+    await fs.copyFile(
+      publishedPackage,
+      path.join(out, BUILD_PACKAGE_NATIVE_PACKAGE),
+    );
+    await fs.copyFile(
+      path.join(keys, 'root.pub'),
+      path.join(out, BUILD_PACKAGE_NATIVE_PACKAGE_ROOT),
+    );
 
     const runtimeRefs = nativeRuntimeRefs(packaged);
     const appRefs = new Set(nativeAppRefs(packaged));
