@@ -102,7 +102,7 @@ export async function runLifecycle(
   )
     throw new CliError(
       'invalid_arguments',
-      '--build was removed: deploy builds on the platform Builder by default; add --local to build on this machine and upload the build package.',
+      '--build was removed. Leave it out to build on the platform Builder (the default), or pass --local to build on this machine and upload the build package.',
     );
   let parsed;
   try {
@@ -635,7 +635,7 @@ export async function runLifecycle(
       if (found && !found.finished)
         throw new CliError(
           'deployment_in_progress',
-          `Deployment ${found.deploymentId} of ${found.commit} is still ${found.status}. Follow it with hatch app deployments logs ${metadata.id} ${found.deploymentId} --follow, or cancel it with hatch app deployments cancel ${metadata.id} ${found.deploymentId}.`,
+          `Deployment ${found.deploymentId} of ${found.commit} is still ${found.status}. Follow it with hatch app deployments logs ${metadata.id} ${found.deploymentId} --follow, or cancel it with hatch app deployments cancel ${metadata.id} ${found.deploymentId} --yes.`,
           6,
           undefined,
           { deployment: found },
@@ -830,7 +830,7 @@ export async function runLifecycle(
           await saveWorkspace(root, metadata);
         } else {
           process.stderr.write(
-            `Deployment ${created.deploymentId} could not be canceled; cancel it with hatch app deployments cancel ${metadata.id} ${created.deploymentId}.\n`,
+            `Deployment ${created.deploymentId} could not be canceled; cancel it with hatch app deployments cancel ${metadata.id} ${created.deploymentId} --yes.\n`,
           );
         }
         throw error;

@@ -788,10 +788,13 @@ describe.runIf(Boolean(databaseUrl))(
             'hatch app create --file create.json --directory app --json > created.json',
             'cd app',
             'git -c user.name=Runner -c user.email=runner@example.test commit -q --allow-empty -m deploy',
+            // This platform has no Builder: a plain deploy is refused with
+            // the fallback the Agent is told to take.
+            'hatch app deploy --directory . --message "Runner Builder build" --json > ../refused.json 2>&1 || true',
             'start=$(date +%s)',
             'hatch app deploy --directory . --local --message "Runner local build" --json > ../deployed.json 2> ../deployed.err || true',
             'end=$(date +%s)',
-            `node -e 'const fs=require("fs"); fetch(process.argv[1], {method:"POST", body: JSON.stringify({seconds: Number(process.argv[2]), stdout: fs.readFileSync("../deployed.json","utf8"), stderr: fs.readFileSync("../deployed.err","utf8").slice(-4000)})})' "${report}" "$((end-start))"`,
+            `node -e 'const fs=require("fs"); fetch(process.argv[1], {method:"POST", body: JSON.stringify({seconds: Number(process.argv[2]), refused: fs.readFileSync("../refused.json","utf8"), stdout: fs.readFileSync("../deployed.json","utf8"), stderr: fs.readFileSync("../deployed.err","utf8").slice(-4000)})})' "${report}" "$((end-start))"`,
           ].join('\n'),
         },
       ]);
@@ -814,14 +817,28 @@ describe.runIf(Boolean(databaseUrl))(
         async () => results.get(label),
         'local deploy report',
         900_000,
-      )) as { seconds: number; stdout: string; stderr: string };
+      )) as {
+        seconds: number;
+        refused: string;
+        stdout: string;
+        stderr: string;
+      };
       await terminal(run.value.runId);
+      // Refused before creating a deployment, naming the way out.
+      expect(JSON.parse(reported.refused || '{}')).toMatchObject({
+        ok: false,
+        error: {
+          code: 'BUILDER_UNAVAILABLE',
+          message: expect.stringContaining('hatch app deploy --local'),
+        },
+      });
       const deployed = JSON.parse(reported.stdout || '{}');
       assert.equal(
         deployed.status,
         'ready',
         `${reported.stdout}\n${reported.stderr}\n${platformLog.slice(-4000)}`,
       );
+      // The refused deploy created nothing: the local one is version 1.
       expect(deployed).toMatchObject({ build: 'local', version: 1 });
       // The Run JWT the build started with had expired by the upload.
       expect(reported.seconds).toBeGreaterThan(5);

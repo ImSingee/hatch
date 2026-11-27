@@ -29,7 +29,7 @@ describe('app deployments arguments', () => {
       limit: 10,
       cursor: '01m8d5gqrf6qyexjz215hy4gbz',
     });
-    expect(parse('cancel', 'notes', 'dep-1')).toMatchObject({
+    expect(parse('cancel', 'notes', 'dep-1', '--yes')).toMatchObject({
       action: 'cancel',
       deploymentId: 'dep-1',
       timeoutMs: 30_000,
@@ -41,6 +41,9 @@ describe('app deployments arguments', () => {
     [['queue', 'notes'], /no positional arguments/],
     [['queue', '--cursor', '12'], /--cursor must be the nextCursor/],
     [['queue', '--after', '3'], /--after applies only/],
+    // Cancel cannot be undone: it needs --yes, and only it takes --yes.
+    [['cancel', 'notes', 'dep-1'], /pass --yes/],
+    [['get', 'notes', 'dep-1', '--yes'], /--yes applies only/],
     [['get', 'notes'], /deployment ID/],
     [['list', 'notes', 'dep-1'], /exactly one App/],
     [['list', 'notes', '--limit', '0'], /--limit/],

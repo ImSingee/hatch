@@ -140,7 +140,7 @@ hatch app deploy --directory ./notes-copy --local --json
 hatch app deployments list <id-or-slug> --json
 hatch app deployments queue --json
 hatch app deployments logs <id-or-slug> <deployment-id> --follow
-hatch app deployments cancel <id-or-slug> <deployment-id> --json
+hatch app deployments cancel <id-or-slug> <deployment-id> --yes --json
 hatch app rollback <id-or-slug> --version 1 --json
 ```
 
@@ -230,7 +230,7 @@ is rejected with `workspace_instance_mismatch`.
     deploy fails with `deployment_in_progress`. Inspect it with
     `hatch app deploy --reconcile` or
     `hatch app deployments get <id> <deployment-id>`, or cancel it with
-    `hatch app deployments cancel <id> <deployment-id>`.
+    `hatch app deployments cancel <id> <deployment-id> --yes`.
 
   The platform checks every package (its own App, deployment, commit and
   toolchain, the manifest, API, tasks, data schema and docs) and writes the
@@ -252,7 +252,8 @@ is rejected with `workspace_instance_mismatch`.
   take them, oldest first and one per App at a time; `null` unless
   `queued`), `builderId` (while `building`) and the `deployment`. Cancel any
   of them, including one in the middle of the queue, with
-  `app deployments cancel`. A newer deployment supersedes older ones still waiting for their
+  `app deployments cancel <id> <deployment-id> --yes`; cancel requires
+  `--yes` because it cannot be undone. A newer deployment supersedes older ones still waiting for their
   build, and an older build that finishes after a newer release is never
   released.
 - **Rollback:** synchronous API call with a real release version; display the

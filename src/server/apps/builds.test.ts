@@ -198,8 +198,10 @@ describe('creating deployments', () => {
   it('waits for a local build, or refuses the Builder when there is none', async () => {
     const local = await create();
     expect(local).toMatchObject({ mode: 'local', status: 'awaiting_artifact' });
+    // The Agent falls back to a local build from what the error says.
     await expect(create({ build: 'builder' })).rejects.toMatchObject({
       code: 'BUILDER_UNAVAILABLE',
+      message: expect.stringContaining('hatch app deploy --local'),
     });
     mocks.builderToken = 'token';
     expect((await create({ build: 'builder' })).mode).toBe('builder');
@@ -213,6 +215,7 @@ describe('creating deployments', () => {
       .set({ lastSeenAt: new Date(Date.now() - BUILDER_ONLINE_MS - 5_000) });
     await expect(create({ build: 'builder' })).rejects.toMatchObject({
       code: 'BUILDER_OFFLINE',
+      message: expect.stringContaining('hatch app deploy --local'),
     });
     expect(await db.query.appBuilds.findMany()).toEqual([]);
     // A local build does not need one.

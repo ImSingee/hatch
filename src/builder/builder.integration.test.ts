@@ -291,6 +291,7 @@ describe.runIf(Boolean(adminUrl))('the dedicated Builder', () => {
       'cancel',
       appId,
       queued.data.deploymentId,
+      '--yes',
     ]);
     expect(canceled.data.status).toBe('canceled');
     // A canceled deployment no longer blocks the checkout.

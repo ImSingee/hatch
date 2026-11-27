@@ -140,7 +140,7 @@ to wait for it (the id is in the error details and in
 the checkout's pending deployment. The next deploy from the checkout settles a
 finished one by itself; one still running blocks it with
 `deployment_in_progress` until it finishes or you cancel it with
-`hatch app deployments cancel <id> <deployment-id>`. Report success only for
+`hatch app deployments cancel <id> <deployment-id> --yes`. Report success only for
 a deployment whose status is `ready`.
 
 When no deployment id exists (the create request may never have reached the

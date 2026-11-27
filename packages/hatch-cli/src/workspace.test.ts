@@ -1195,7 +1195,9 @@ describe('CLI workspace safety', { timeout: 30_000 }, () => {
       ]).result;
       expect(result.code).toBe(2);
       expect(result.data.error.code).toBe('invalid_arguments');
+      // It names both ways forward.
       expect(result.data.error.message).toContain('--local');
+      expect(result.data.error.message).toContain('Leave it out');
     }
     expect(deploys).toBe(0);
     expect(

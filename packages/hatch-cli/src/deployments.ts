@@ -55,6 +55,7 @@ export function parseDeploymentsCommand(
         cursor: { type: 'string' },
         after: { type: 'string' },
         follow: { type: 'boolean' },
+        yes: { type: 'boolean' },
       },
       allowPositionals: true,
     });
@@ -81,6 +82,11 @@ export function parseDeploymentsCommand(
   };
   only(['limit', 'cursor'], ['list', 'queue']);
   only(['after', 'follow'], ['logs']);
+  only(['yes'], ['cancel']);
+  if (action === 'cancel' && v.yes !== true)
+    throw invalid(
+      'Canceling stops the deployment for good (deploy the commit again to retry); pass --yes.',
+    );
   const integer = (
     value: string | undefined,
     flag: string,
