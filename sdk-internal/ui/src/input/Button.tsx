@@ -13,6 +13,8 @@ import {
 } from '../core/overlay';
 import { Glyph } from '../icons/Icon';
 import type { GlyphColor, IconSize } from '../icons/Icon';
+import { SurfaceContext } from '../core/surface';
+import type { Surface } from '../core/surface';
 import { FormContext } from './form-context';
 
 /**
@@ -93,7 +95,9 @@ const BASE = `flex-row items-center justify-center rounded-(--radius-md) transit
  */
 const IOS_KIND: Record<ButtonKind, string> = {
   primary: 'bg-primary active:bg-primary-pressed',
-  default: 'bg-secondary active:opacity-60',
+  // The gray fill: the page's ground on a card, a card on the ground
+  // (`iosDefaultFill`); both are fills the theme validation checks.
+  default: 'active:opacity-60',
   tint: 'bg-primary-tint active:bg-primary-tint-hover',
   subtle: 'active:opacity-50',
   danger: 'bg-danger active:bg-danger-pressed',
@@ -288,10 +292,16 @@ function BarButton(props: ButtonProps): JSX.Element {
   );
 }
 
+/** iOS's gray button on the fill it sits on. */
+function iosDefaultFill(surface: Surface): string {
+  return surface === 'card' ? 'bg-background' : 'bg-card';
+}
+
 /** A button that runs an action of the App. */
 export function Button(props: ButtonProps): JSX.Element {
   if (BarActionsContext()) return <BarButton {...props} />;
   const form = FormContext();
+  const surface = SurfaceContext();
   const stacked = StackedActionsContext();
   const kind = () =>
     props.kind ?? (props.type === 'submit' ? 'primary' : 'default');
@@ -316,7 +326,9 @@ export function Button(props: ButtonProps): JSX.Element {
         accessibilityLabel={busy() ? `${props.label}, working` : props.label}
         class={[
           STYLE.base,
-          STYLE.kind[kind()],
+          look === 'ios' && kind() === 'default'
+            ? `${STYLE.kind[kind()]} ${iosDefaultFill(surface)}`
+            : STYLE.kind[kind()],
           STYLE.size[size()],
           fullWidth() ? 'flex-1' : '',
         ].join(' ')}
@@ -372,6 +384,7 @@ export type IconButtonProps = {
 /** A square button with an icon only. */
 export function IconButton(props: IconButtonProps): JSX.Element {
   const inOverlay = InOverlayContext();
+  const surface = SurfaceContext();
   const kind = () => props.kind ?? 'subtle';
   const size = () => props.size ?? 'md';
   return (
@@ -385,7 +398,11 @@ export function IconButton(props: IconButtonProps): JSX.Element {
       }
       class={[
         STYLE.base,
-        props.selected ? 'bg-primary-tint' : STYLE.iconKind[kind()],
+        props.selected
+          ? 'bg-primary-tint'
+          : look === 'ios' && kind() === 'default'
+            ? `${STYLE.iconKind[kind()]} ${iosDefaultFill(surface)}`
+            : STYLE.iconKind[kind()],
         STYLE.square[size()],
       ].join(' ')}
     >

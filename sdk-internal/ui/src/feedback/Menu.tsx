@@ -55,7 +55,7 @@ const TRIGGER = byLook({
   },
   ios: {
     icon: `size-11 items-center justify-center rounded-full active:opacity-50 ${FOCUS_RING}`,
-    button: `h-11 flex-row items-center gap-2 rounded-(--radius-md) bg-secondary px-4 active:opacity-60 ${FOCUS_RING}`,
+    button: `h-11 flex-row items-center gap-2 rounded-(--radius-md) bg-background px-4 active:opacity-60 ${FOCUS_RING}`,
     label: 'text-ios-body font-regular text-foreground',
     glyph: 'primary-strong' as GlyphColor,
     buttonGlyph: 'foreground' as GlyphColor,

@@ -3,7 +3,11 @@
  * rules of `src/core/platform.ts`; `fixtures/platform` checks them in NSH.
  */
 import { describe, expect, it } from 'vitest';
-import { resolvePreset } from '../../../packages/hatch-design-tokens/src/index.ts';
+import {
+  contrast,
+  mix,
+  resolvePreset,
+} from '../../../packages/hatch-design-tokens/src/index.ts';
 import { BUNDLED_FONTS } from '../../../packages/hatch-design-tokens/src/theme.ts';
 import { CONTRAST_PAIRS } from '../../../packages/hatch-design-tokens/src/validate.ts';
 import tokens from '../../../packages/hatch-design-tokens/tokens.json' with { type: 'json' };
@@ -120,7 +124,9 @@ const PLATFORM_TEXT_PAIRS: readonly (readonly [string, string])[] = [
   // Filled, tonal and gray buttons, the selected tab's pill.
   ['primary-foreground', 'primary'],
   ['primary-tint-foreground', 'primary-tint'],
-  ['foreground', 'secondary'],
+  // iOS's gray buttons: the ground on a card, a card on the ground.
+  ['foreground', 'background'],
+  ['foreground', 'card'],
   ['destructive-foreground', 'danger'],
   // Android's snackbar: inverse colours.
   ['background', 'foreground'],
@@ -160,5 +166,45 @@ describe('platform looks and the theme validation', () => {
       ([text, fill]) => `${role(text)} on ${role(fill)}`,
     ).filter((pair) => !checked.has(pair));
     expect(unchecked).toEqual([]);
+  });
+});
+
+/** `rgba(r, g, b, a)` composited over an opaque `backdrop`. */
+function over(fill: string, backdrop: string): string {
+  const match = /^rgba\((\d+),\s*(\d+),\s*(\d+),\s*([\d.]+)\)$/.exec(fill);
+  if (!match) return fill;
+  const [, r, g, b, a] = match;
+  const hex = `#${[r, g, b].map((n) => Number(n).toString(16).padStart(2, '0')).join('')}`;
+  return mix(backdrop, hex, Number(a));
+}
+
+describe('platform looks on the translucent and popup fills', () => {
+  const themes = (['desk', 'desk-dark'] as const).flatMap((preset) =>
+    Object.entries(tokens.accents).map(([accent, color]) => ({
+      name: `${preset}/${accent}`,
+      t: buildAppTheme({ theme: resolvePreset(preset, color) }).cssVars.light,
+    })),
+  );
+
+  it('draw popups (alerts, menus, toasts) on the card colour', () => {
+    for (const { name, t } of themes)
+      expect([name, t.popover]).toEqual([name, t.card]);
+  });
+
+  it('keep text at 4.5:1 on the iOS tab bar and segmented control', () => {
+    const failing = themes.flatMap(({ name, t }) =>
+      [t.background, t.card].flatMap((backdrop) => {
+        const bar = over(t['surface-dock'], backdrop);
+        const segment = over(t['surface-pressed'], backdrop);
+        return [
+          ['primary-strong on the tab bar', t['primary-strong'], bar],
+          ['muted-foreground on the tab bar', t['muted-foreground'], bar],
+          ['foreground on a segment', t.foreground, segment],
+        ]
+          .filter(([, text, fill]) => contrast(text, fill) < 4.5)
+          .map(([pair]) => `${name}: ${pair} over ${backdrop}`);
+      }),
+    );
+    expect(failing).toEqual([]);
   });
 });
