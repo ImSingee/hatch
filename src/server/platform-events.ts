@@ -17,10 +17,19 @@ export type PlatformEvent =
       notificationId: string;
       deliveryId: string;
     }
-  /** The instance theme changed; clients re-read it. */
-  | { type: 'theme.updated'; accent: string }
-  /** App or dashboard pins changed; clients re-read them. */
-  | { type: 'pins.updated' }
+  /** A user's theme changed; only that user's clients receive it. */
+  | { type: 'theme.updated'; userId: string; accent: string }
+  /**
+   * The shared theme library changed (a custom theme was created, edited or
+   * deleted); every client re-reads it and its own theme, which may be one
+   * of them.
+   */
+  | { type: 'themes.updated' }
+  /**
+   * A user's App pins, dashboard pins or dashboard order changed; only that
+   * user's clients receive it.
+   */
+  | { type: 'pins.updated'; userId: string }
   /**
    * A dashboard, its settings or its widgets changed; clients re-read it.
    * Without an id, every dashboard may have changed.

@@ -15,7 +15,7 @@ export const NATIVE_SURFACE_PROTOCOL = 'hatch.app-surface/1';
 export const NATIVE_RUNTIME_META = 'hatch-app-runtime';
 
 /**
- * Which instance theme the surface draws. A player that knows these reads
+ * Which theme the surface draws (the viewing user's). A player that knows these reads
  * that theme from the platform (`/api/theme/native`) and refetches when the
  * key changes; an older player follows `accent` alone.
  */

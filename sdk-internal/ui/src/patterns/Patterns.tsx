@@ -1,15 +1,16 @@
 import { Scroll, Text, View, signal, untracked } from 'nsh';
 import type { JSX } from 'nsh';
 import { Each, If } from '../core/control';
-import { WIDE_MIN, paneWidth } from '../core/env';
+import { WIDE_MIN, byLook, look, paneWidth } from '../core/env';
+import { SurfaceContext } from '../core/surface';
 import { ShellScopeContext, claimTitle } from '../core/shell';
 import type { ShellScope } from '../core/shell';
 import { EmptyState, Stat } from '../display/Display';
 import type { EmptyStateProps, StatProps } from '../display/Display';
 import { List, ListItem } from '../display/List';
 import type { ListItemProps } from '../display/List';
-import { HeadingText } from '../display/Text';
-import { IconChevronLeft, IconSearch } from '../icons/icons.gen';
+import { BODY, HeadingText, TITLE } from '../display/Text';
+import { IconArrowLeft, IconChevronLeft, IconSearch } from '../icons/icons.gen';
 import { Button, IconButton } from '../input/Button';
 import { Form } from '../input/Form';
 import type { FormValues } from '../input/Form';
@@ -50,6 +51,13 @@ export type ListDetailPageProps<T> = {
   loading?: boolean;
 };
 
+/** A list page's two columns on a wide pane: on iOS and Android on the
+ * page's ground, as their `Page`s are. */
+const WIDE_FRAME = byLook({
+  web: 'flex-1 flex-row',
+  ios: 'flex-1 flex-row bg-background',
+  android: 'flex-1 flex-row bg-background',
+});
 /**
  * A list of records and the detail of the chosen one: side by side in a
  * wide pane, one after the other with a back button in a narrow one.
@@ -156,7 +164,11 @@ export function ListDetailPage<T>(props: ListDetailPageProps<T>): JSX.Element {
             }
           >
             <PageNavContext.Provider
-              value={{ canGoBack: () => true, back: () => select(null) }}
+              value={{
+                canGoBack: () => true,
+                back: () => select(null),
+                backLabel: () => props.title,
+              }}
             >
               {detail()}
             </PageNavContext.Provider>
@@ -164,7 +176,7 @@ export function ListDetailPage<T>(props: ListDetailPageProps<T>): JSX.Element {
         }
       >
         <ShellScopeContext.Provider value={column}>
-          <View class="flex-1 flex-row">
+          <View class={WIDE_FRAME}>
             <View class="w-90 border-r border-hairline">
               <Scroll
                 class="flex-1"
@@ -175,7 +187,9 @@ export function ListDetailPage<T>(props: ListDetailPageProps<T>): JSX.Element {
                     {nav?.canGoBack() ? (
                       <View class="-ml-2">
                         <IconButton
-                          icon={IconChevronLeft}
+                          icon={
+                            look === 'android' ? IconArrowLeft : IconChevronLeft
+                          }
                           label="Back"
                           onPress={nav.back}
                         />
@@ -184,19 +198,23 @@ export function ListDetailPage<T>(props: ListDetailPageProps<T>): JSX.Element {
                     <View class="flex-1 gap-1 pt-1">
                       <HeadingText
                         level={1}
-                        class="text-section text-foreground"
+                        class={`${TITLE.section} text-foreground`}
                       >
                         {props.title}
                       </HeadingText>
                       {props.description ? (
-                        <Text class="text-body text-muted-foreground">
+                        <Text class={`${BODY.body} text-muted-foreground`}>
                           {props.description}
                         </Text>
                       ) : null}
                     </View>
                     {props.actions ?? null}
                   </Row>
-                  {list(true)}
+                  <SurfaceContext.Provider
+                    value={look === 'web' ? 'window' : 'background'}
+                  >
+                    {list(true)}
+                  </SurfaceContext.Provider>
                 </View>
               </Scroll>
             </View>

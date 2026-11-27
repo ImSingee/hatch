@@ -46,7 +46,7 @@ pub mod keychain {
 pub struct Settings {
     /// Canonical origin of the instance this app shows.
     pub instance: Option<String>,
-    /// The instance's accent as `#RRGGBB`, last read from ThemeService.
+    /// The signed-in user's accent as `#RRGGBB`, last read from ThemeService.
     pub accent: Option<String>,
 }
 

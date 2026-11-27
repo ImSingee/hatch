@@ -8,10 +8,11 @@ import {
   Switch as BaseSwitch,
 } from 'nsh/base';
 import { Each } from '../core/control';
+import { byLook } from '../core/env';
 import { FOCUS_RING } from '../core/styles';
 import { Glyph } from '../icons/Icon';
 import { IconCheck, IconMinus } from '../icons/icons.gen';
-import { Field, FieldErrorLine, fieldError } from './Field';
+import { FieldErrorLine, PlainField, fieldError } from './Field';
 import type { FieldProps } from './Field';
 import { FormContext, bindField } from './form-context';
 
@@ -22,11 +23,9 @@ function ChoiceLabel(props: {
 }): JSX.Element {
   return (
     <View class="flex-1 gap-0.5">
-      <Text class="text-body font-label text-foreground">{props.label}</Text>
+      <Text class={STYLE.label}>{props.label}</Text>
       {props.description ? (
-        <Text class="text-caption text-muted-foreground text-pretty">
-          {props.description}
-        </Text>
+        <Text class={STYLE.description}>{props.description}</Text>
       ) : null}
     </View>
   );
@@ -34,6 +33,80 @@ function ChoiceLabel(props: {
 
 const CHOICE_ROW =
   'group flex-row items-start gap-2.5 self-stretch rounded-(--radius-sm) py-0.5 disabled:opacity-50 pointer-coarse:min-h-11 pointer-coarse:items-center';
+
+/**
+ * The controls' classes on each look. iOS: a round check, the 51 by 31
+ * switch, a white slider knob; rows 44 points. Android (Material 3): the
+ * 18-point box and the radio in a 40-point circle that a press tints, the
+ * 52 by 32 switch whose thumb grows when on; rows 48 points.
+ */
+const STYLE = byLook({
+  web: {
+    row: CHOICE_ROW,
+    label: 'text-body font-label text-foreground',
+    description: 'text-caption text-muted-foreground text-pretty',
+    value: 'text-body font-label text-foreground',
+    checkbox:
+      'mt-0.5 size-5 items-center justify-center rounded-(--radius-xs) border-2 border-control-border bg-card transition-colors checked:border-primary checked:bg-primary indeterminate:border-primary indeterminate:bg-primary pointer-coarse:mt-0',
+    checkboxBox: '',
+    radio:
+      'mt-0.5 size-5 items-center justify-center rounded-full border-2 border-control-border bg-card group-checked:border-primary pointer-coarse:mt-0',
+    radioDot: 'size-2.5 rounded-full group-checked:bg-primary',
+    radioRing: '',
+    track:
+      'mt-0.5 h-5.5 w-9.5 justify-center rounded-full bg-track p-0.5 transition-colors checked:bg-primary pointer-coarse:mt-0',
+    thumb:
+      'size-4.5 rounded-full bg-card shadow-card transition-transform checked:translate-x-4',
+    slider: 'h-6 self-stretch justify-center pointer-coarse:h-11',
+    sliderTrack: 'h-1.5 self-stretch rounded-full bg-track disabled:opacity-50',
+    sliderThumb: `size-4.5 rounded-full border-2 border-primary bg-card shadow-card transition-transform active:scale-110 motion-reduce:transition-none ${FOCUS_RING}`,
+  },
+  ios: {
+    row: 'group flex-row items-center gap-3 self-stretch rounded-(--radius-sm) min-h-11 disabled:opacity-40',
+    label: 'text-ios-body font-regular text-foreground',
+    description:
+      'text-ios-footnote font-regular text-muted-foreground text-pretty',
+    value: 'text-ios-body font-regular text-muted-foreground',
+    checkbox:
+      'size-5.5 items-center justify-center rounded-full border-2 border-control-border bg-card transition-colors checked:border-primary checked:bg-primary indeterminate:border-primary indeterminate:bg-primary',
+    checkboxBox: '',
+    radio:
+      'size-5.5 items-center justify-center rounded-full border-2 border-control-border bg-card group-checked:border-primary',
+    radioDot: 'size-3 rounded-full group-checked:bg-primary',
+    radioRing: '',
+    track:
+      'h-7.75 w-12.75 justify-center rounded-full bg-track p-0.5 transition-colors checked:bg-primary',
+    thumb:
+      'size-6.75 rounded-full bg-card shadow-card transition-transform checked:translate-x-5',
+    slider: 'h-11 self-stretch justify-center',
+    sliderTrack: 'h-1 self-stretch rounded-full bg-track disabled:opacity-40',
+    sliderThumb: `size-7 rounded-full border border-hairline bg-card shadow-dock transition-transform motion-reduce:transition-none ${FOCUS_RING}`,
+  },
+  android: {
+    row: 'group flex-row items-center gap-3 self-stretch rounded-(--radius-sm) min-h-12 disabled:opacity-40',
+    label: 'text-m3-body-lg font-regular text-foreground',
+    description:
+      'text-m3-body-md font-regular text-muted-foreground text-pretty',
+    value: 'text-m3-body-lg font-regular text-muted-foreground',
+    checkbox:
+      'size-10 items-center justify-center rounded-full transition-colors group-active:bg-surface-pressed',
+    checkboxBox:
+      'size-4.5 items-center justify-center rounded-sm border-2 border-control-border group-checked:border-primary group-checked:bg-primary group-indeterminate:border-primary group-indeterminate:bg-primary',
+    radio:
+      'size-10 items-center justify-center rounded-full transition-colors group-active:bg-surface-pressed',
+    radioDot: 'size-2.5 rounded-full group-checked:bg-primary',
+    radioRing:
+      'size-5 items-center justify-center rounded-full border-2 border-control-border group-checked:border-primary',
+    track:
+      'h-8 w-13 justify-center rounded-full border-2 border-control-border bg-surface-sunken transition-colors checked:border-primary checked:bg-primary',
+    thumb:
+      'ml-1.5 size-4 rounded-full bg-control-border transition-all checked:ml-0 checked:size-6 checked:translate-x-5.5 checked:bg-primary-foreground',
+    slider: 'h-12 self-stretch justify-center',
+    sliderTrack:
+      'h-1 self-stretch rounded-full bg-primary-tint disabled:opacity-40',
+    sliderThumb: `size-5 rounded-full bg-primary transition-transform active:scale-110 motion-reduce:transition-none ${FOCUS_RING}`,
+  },
+});
 
 export type CheckboxProps = Omit<FieldProps, 'required'> & {
   /** Checked, when the App controls it. */
@@ -69,10 +142,20 @@ export function Checkbox(props: CheckboxProps): JSX.Element {
         disabled={props.disabled || form?.disabled()}
         onChange={(event) => field.set(event.checked)}
         accessibilityLabel={props.label}
-        class={`${CHOICE_ROW} ${FOCUS_RING}`}
-        indicatorClass="mt-0.5 size-5 items-center justify-center rounded-(--radius-xs) border-2 border-control-border bg-card transition-colors checked:border-primary checked:bg-primary indeterminate:border-primary indeterminate:bg-primary pointer-coarse:mt-0"
+        class={`${STYLE.row} ${FOCUS_RING}`}
+        indicatorClass={STYLE.checkbox}
         indicator={
-          marked() ? (
+          STYLE.checkboxBox ? (
+            <View class={STYLE.checkboxBox}>
+              {marked() ? (
+                <Glyph
+                  icon={props.indeterminate ? IconMinus : IconCheck}
+                  size="sm"
+                  color="primary-foreground"
+                />
+              ) : null}
+            </View>
+          ) : marked() ? (
             <Glyph
               icon={props.indeterminate ? IconMinus : IconCheck}
               size="sm"
@@ -120,9 +203,9 @@ export function Switch(props: SwitchProps): JSX.Element {
         disabled={props.disabled || form?.disabled()}
         onChange={(event) => field.set(event.checked)}
         accessibilityLabel={props.label}
-        class={`${CHOICE_ROW} flex-row-reverse gap-3 ${FOCUS_RING}`}
-        trackClass="mt-0.5 h-5.5 w-9.5 justify-center rounded-full bg-track p-0.5 transition-colors checked:bg-primary pointer-coarse:mt-0"
-        thumbClass="size-4.5 rounded-full bg-card shadow-card transition-transform checked:translate-x-4"
+        class={`${STYLE.row} flex-row-reverse gap-3 ${FOCUS_RING}`}
+        trackClass={STYLE.track}
+        thumbClass={STYLE.thumb}
       >
         {props.labelHidden ? null : (
           <ChoiceLabel label={props.label} description={props.description} />
@@ -173,7 +256,7 @@ export function RadioGroup(props: RadioGroupProps): JSX.Element {
   );
   const error = fieldError(props);
   return (
-    <Field
+    <PlainField
       label={props.label}
       description={props.description}
       error={error()}
@@ -194,10 +277,16 @@ export function RadioGroup(props: RadioGroupProps): JSX.Element {
               disabled={props.disabled || option().disabled || form?.disabled()}
               onChange={() => field.set(option().value)}
               accessibilityLabel={option().label}
-              class={`${CHOICE_ROW} ${props.direction === 'row' ? 'self-auto' : ''} ${FOCUS_RING}`}
+              class={`${STYLE.row} ${props.direction === 'row' ? 'self-auto' : ''} ${FOCUS_RING}`}
             >
-              <View class="mt-0.5 size-5 items-center justify-center rounded-full border-2 border-control-border bg-card group-checked:border-primary pointer-coarse:mt-0">
-                <View class="size-2.5 rounded-full group-checked:bg-primary" />
+              <View class={STYLE.radio}>
+                {STYLE.radioRing ? (
+                  <View class={STYLE.radioRing}>
+                    <View class={STYLE.radioDot} />
+                  </View>
+                ) : (
+                  <View class={STYLE.radioDot} />
+                )}
               </View>
               <ChoiceLabel
                 label={option().label}
@@ -207,7 +296,7 @@ export function RadioGroup(props: RadioGroupProps): JSX.Element {
           )}
         </Each>
       </BaseRadioGroup>
-    </Field>
+    </PlainField>
   );
 }
 
@@ -234,7 +323,7 @@ export function Slider(props: SliderProps): JSX.Element {
     <View class="self-stretch gap-2">
       <View class="flex-row items-end justify-between gap-3">
         <ChoiceLabel label={props.label} description={props.description} />
-        <Text class="text-body font-label text-foreground">{shown()}</Text>
+        <Text class={STYLE.value}>{shown()}</Text>
       </View>
       <BaseSlider
         value={field.get()}
@@ -244,11 +333,11 @@ export function Slider(props: SliderProps): JSX.Element {
         disabled={props.disabled || form?.disabled()}
         accessibilityLabel={props.label}
         onChange={(event) => field.set(event.value as number)}
-        class="h-6 self-stretch justify-center pointer-coarse:h-11"
-        trackClass="h-1.5 self-stretch rounded-full bg-track disabled:opacity-50"
+        class={STYLE.slider}
+        trackClass={STYLE.sliderTrack}
         indicatorClass="h-full"
         rangeClass="rounded-full bg-primary"
-        thumbClass={`size-4.5 rounded-full border-2 border-primary bg-card shadow-card transition-transform active:scale-110 motion-reduce:transition-none ${FOCUS_RING}`}
+        thumbClass={STYLE.sliderThumb}
       />
       <FieldErrorLine error={error()} />
     </View>

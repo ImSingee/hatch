@@ -267,7 +267,12 @@ the bridge to authorize what web App code can reach. The grant is exactly these 
   registers a listener for it, so one the shell sends while the App starts
   (an update notice, say) is delivered when the App subscribes; a navigation
   that arrives before the App starts becomes its start route instead.
-- Start parameters (`host.params`): `{ route }`.
+- Start parameters (`host.params`): `{ route, platform? }`. `platform` is
+  `ios` or `android` when the web player runs inside the Mobile app: its
+  WebView opens `/app/<slug>/embed/?platform=<os>` and the player passes the
+  value on (any other value is dropped). `@hatch/ui` takes that platform's
+  look from it; NSH's own `platform.os` wins in a native NSH host, and a
+  browser (phones included) keeps the web look.
 
 Apps do not call these names directly. `@hatch/app/native` wraps them:
 `followShellTheme`, `initialRoute`, `setRoute`, `onNavigate`, `setTitle`,
@@ -302,7 +307,7 @@ the one in the frame.
 ## Theme
 
 `nshThemeFor(resolved)` (`src/server/apps/native/nsh-theme.ts`) turns a
-resolved instance theme into the theme every shell applies: the UI library's
+user's resolved theme into the theme every shell applies: the UI library's
 own complete theme when a definition in `NATIVE_APP_SDK_DEFINITIONS` provides
 `nsh.resolvedTheme` (or, for the built-in `desk`, `nsh.theme(accent)`),
 otherwise the shadcn tokens filled from the resolved theme. NSH applies the
@@ -311,9 +316,11 @@ theme names the same tokens (`setTheme` replaces the whole theme).
 
 `nsh.json` and the player's built-in themes are `desk` with each accent, for
 the first frame and for a platform that does not answer. The player then
-reads the active instance theme from `GET /api/theme/native` (public, like
-the theme itself, with no parameters: the instance has one active theme and no
-client follows the device's light or dark setting). `init` and `theme`
+reads the viewing user's theme from `GET /api/theme/native`, with no
+parameters: the player runs on the platform's origin, so the request carries
+the user's session (on the phone, the surface handoff's), and without one the
+route answers the default `desk`. No client follows the device's light or
+dark setting. `init` and `theme`
 messages carry a `themeKey` that changes with the resolved theme. The player
 asks again when the surface reports a change and, when it runs alone (the
 mobile app's WebView), when the page returns to the foreground, and pushes

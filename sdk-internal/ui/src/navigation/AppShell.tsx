@@ -2,12 +2,13 @@ import { Scroll, Text, View, effect, untracked } from 'nsh';
 import type { JSX } from 'nsh';
 import { Tab, Tabs as BaseTabs } from 'nsh/base';
 import { Each, If } from '../core/control';
-import { SIDEBAR_MIN, paneWidth, touch } from '../core/env';
+import { SIDEBAR_MIN, look, paneWidth, touch } from '../core/env';
 import { ShellScopeContext, firstSegment } from '../core/shell';
 import type { RoutePath, ShellScope } from '../core/shell';
 import { FOCUS_RING, FOCUS_RING_INSET } from '../core/styles';
 import type { IconData } from '../core/types';
 import { Glyph } from '../icons/Icon';
+import { BottomChromeContext, bottomBarShown } from './nav-context';
 import { Panels, selection } from './Tabs';
 import type { TabItem } from './Tabs';
 
@@ -180,6 +181,94 @@ function BottomBar(props: AppShellProps & { selected: Selected }): JSX.Element {
   );
 }
 
+/**
+ * iOS's tab bar: a floating, blurred capsule over the bottom of the
+ * section, the selected tab on a tinted pill in the accent.
+ */
+function IosTabBar(props: AppShellProps & { selected: Selected }): JSX.Element {
+  return (
+    <View class="absolute inset-x-5 bottom-0 mb-2 pb-[env(safe-area-inset-bottom)]">
+      <View class="h-16 flex-row items-center rounded-full border border-hairline bg-surface-dock px-1.5 shadow-dock backdrop-blur-xl">
+        <BaseTabs
+          accessibilityLabel="Sections"
+          class="flex-1 flex-row"
+          indicatorClass="hidden"
+        >
+          <Each of={props.sections} key={(item) => item.id}>
+            {(item) => (
+              <Tab
+                selected={props.selected.get() === item().id}
+                disabled={item().disabled}
+                onPress={() => props.selected.set(item().id)}
+                accessibilityLabel={badgeLabel(item())}
+                class={`group h-13 flex-1 items-center justify-center gap-0.5 rounded-full px-1 active:opacity-60 disabled:opacity-40 selected:bg-surface-hover ${FOCUS_RING_INSET}`}
+              >
+                <Glyph
+                  icon={item().icon as IconData}
+                  size="2xl"
+                  color={
+                    props.selected.get() === item().id
+                      ? 'primary-strong'
+                      : 'muted-foreground'
+                  }
+                />
+                <Text class="text-ios-caption-2 font-semibold text-muted-foreground group-selected:text-primary-strong truncate">
+                  {item().label}
+                </Text>
+              </Tab>
+            )}
+          </Each>
+        </BaseTabs>
+      </View>
+    </View>
+  );
+}
+
+/**
+ * Material 3's navigation bar: 80 points, the selected destination's icon
+ * on a 64 by 32 tinted pill.
+ */
+function AndroidNavigationBar(
+  props: AppShellProps & { selected: Selected },
+): JSX.Element {
+  return (
+    <View class="bg-muted pb-[env(safe-area-inset-bottom)]">
+      <BaseTabs
+        accessibilityLabel="Sections"
+        class="h-20 flex-row"
+        indicatorClass="hidden"
+      >
+        <Each of={props.sections} key={(item) => item.id}>
+          {(item) => (
+            <Tab
+              selected={props.selected.get() === item().id}
+              disabled={item().disabled}
+              onPress={() => props.selected.set(item().id)}
+              accessibilityLabel={badgeLabel(item())}
+              class={`group flex-1 items-center gap-1 pb-4 pt-3 disabled:opacity-40 ${FOCUS_RING_INSET}`}
+            >
+              <View class="h-8 w-16 items-center justify-center rounded-full transition-colors group-active:bg-surface-pressed group-selected:bg-primary-tint">
+                <Glyph
+                  icon={item().icon as IconData}
+                  size="2xl"
+                  color={
+                    props.selected.get() === item().id
+                      ? 'primary-tint-foreground'
+                      : 'muted-foreground'
+                  }
+                />
+              </View>
+              <Text class="text-m3-label-md font-medium text-muted-foreground group-selected:font-bold group-selected:text-foreground truncate">
+                {item().label}
+              </Text>
+            </Tab>
+          )}
+        </Each>
+      </BaseTabs>
+    </View>
+  );
+}
+
 /** The section id an address names: its first segment, decoded. */
 function sectionOf(path: RoutePath): string {
   const [segment] = firstSegment(path);
@@ -264,6 +353,44 @@ export function AppShell(props: AppShellProps): JSX.Element {
     if (paneWidth() >= SIDEBAR_MIN) return 'sidebar';
     return touch ? 'bottom' : 'top';
   };
+  // Toasts rise above the bottom bar while it shows.
+  effect(() => {
+    const shown = layout() === 'bottom';
+    bottomBarShown.set(shown);
+    return () => bottomBarShown.set(false);
+  });
+  if (look === 'ios') {
+    // The tab bar floats over the section: pages scroll their content
+    // clear of it.
+    return (
+      <View
+        class={`flex-1 self-stretch bg-surface-window ${layout() === 'sidebar' ? 'flex-row' : 'flex-col'}`}
+      >
+        <If when={layout() === 'sidebar'}>
+          <Sidebar {...props} selected={selected} />
+        </If>
+        <If when={layout() === 'top'}>
+          <TopTabs {...props} selected={selected} />
+        </If>
+        <View class="flex-1 self-stretch">
+          {/* The panels are made here, inside the provider: their pages read
+              the context when they are created. */}
+          <BottomChromeContext.Provider
+            value={() => (layout() === 'bottom' ? 'h-20' : '')}
+          >
+            <Panels
+              items={props.sections}
+              selected={selected.get}
+              scope={sectionScope}
+            />
+          </BottomChromeContext.Provider>
+        </View>
+        <If when={layout() === 'bottom'}>
+          <IosTabBar {...props} selected={selected} />
+        </If>
+      </View>
+    );
+  }
   const panels = (
     <Panels
       items={props.sections}
@@ -286,7 +413,11 @@ export function AppShell(props: AppShellProps): JSX.Element {
       </If>
       <View class="flex-1 self-stretch">{panels}</View>
       <If when={layout() === 'bottom'}>
-        <BottomBar {...props} selected={selected} />
+        {look === 'android' ? (
+          <AndroidNavigationBar {...props} selected={selected} />
+        ) : (
+          <BottomBar {...props} selected={selected} />
+        )}
       </If>
     </View>
   );

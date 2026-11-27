@@ -9,6 +9,8 @@ import "buf/validate/validate.proto";
 service PreferenceService {
   rpc GetAgentPreferences(GetAgentPreferencesRequest) returns (GetAgentPreferencesResponse);
   rpc UpdateAgentPreferences(UpdateAgentPreferencesRequest) returns (UpdateAgentPreferencesResponse);
+  rpc GetInterfacePreferences(GetInterfacePreferencesRequest) returns (GetInterfacePreferencesResponse);
+  rpc UpdateInterfacePreferences(UpdateInterfacePreferencesRequest) returns (UpdateInterfacePreferencesResponse);
   rpc GetDeskPreferences(GetDeskPreferencesRequest) returns (GetDeskPreferencesResponse);
   rpc UpdateDeskPreferences(UpdateDeskPreferencesRequest) returns (UpdateDeskPreferencesResponse);
 }
@@ -38,6 +40,32 @@ message UpdateAgentPreferencesRequest {
 
 message UpdateAgentPreferencesResponse {
   AgentPreferences preferences = 1;
+}
+
+message InterfacePreferences {
+  // The Web UI language ("en" or "zh-CN"). Unset until the user picks one;
+  // each browser then follows its own language.
+  optional string language = 1;
+}
+
+message GetInterfacePreferencesRequest {}
+
+message GetInterfacePreferencesResponse {
+  InterfacePreferences preferences = 1;
+}
+
+message UpdateInterfacePreferencesRequest {
+  // Unset leaves the language unchanged.
+  optional string language = 1 [(buf.validate.field).string = {
+    in: [
+      "en",
+      "zh-CN"
+    ]
+  }];
+}
+
+message UpdateInterfacePreferencesResponse {
+  InterfacePreferences preferences = 1;
 }
 
 message DeskPreferences {

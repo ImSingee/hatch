@@ -1,16 +1,25 @@
 /**
- * The instance's active theme as native App players apply it (NSH
- * `cssVars`). Public, like the theme itself (the login page is drawn in it):
- * a player reads it on start, when its surface reports a theme change, and
- * when it returns to the foreground.
+ * The viewing user's theme as native App players apply it (NSH `cssVars`).
+ * The player runs on the platform's origin, so the request carries the
+ * user's session (on the phone, the surface handoff's); without one it
+ * answers the default theme. A player reads it on start, when its surface
+ * reports a theme change, and when it returns to the foreground.
  */
 import { createHash } from 'node:crypto';
 import { createFileRoute } from '@tanstack/react-router';
+import { auth } from '~auth/server';
 import { nshThemeFor } from '~server/apps/native/nsh-theme';
 import { getTheme } from '~server/theme-settings';
 
-export async function handle(): Promise<Response> {
-  const { theme: state, resolved } = await getTheme({ resolve: true });
+export async function handle({
+  request,
+}: {
+  request: Request;
+}): Promise<Response> {
+  const session = await auth.api.getSession({ headers: request.headers });
+  const { theme: state, resolved } = await getTheme(session?.user.id ?? null, {
+    resolve: true,
+  });
   const theme = nshThemeFor(resolved!);
   const body = JSON.stringify({
     appearance: state.theme.appearance,

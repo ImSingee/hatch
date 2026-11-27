@@ -22,16 +22,16 @@ const ACCENT_LABELS = {
 /** The radio value of "no accent": each theme shows its own primary. */
 const THEME_COLOUR = 'theme';
 
-/** Choose the instance accent; the theme follows once it is saved. */
-export function AccentPanel() {
+/** Choose the user's accent; their theme follows once it is saved. */
+export function AccentPanel({ userId }: { userId: string }) {
   const { t } = useI18n();
   const queryClient = useQueryClient();
-  const { data: theme } = useSuspenseQuery(themeQueryOptions);
+  const { data: theme } = useSuspenseQuery(themeQueryOptions(userId));
   const save = useMutation({
     mutationFn: (accent: AccentName | null) =>
       setThemeAccentFn({ data: accent }),
     onSuccess: (saved) =>
-      queryClient.setQueryData(themeQueryOptions.queryKey, saved),
+      queryClient.setQueryData(themeQueryOptions(saved.userId).queryKey, saved),
   });
   const selected = save.isPending ? save.variables : theme.accent;
   const ownPrimary = theme.theme.primary;

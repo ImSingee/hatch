@@ -31,7 +31,11 @@ import {
 } from '@tanstack/react-query';
 import { useId, useState } from 'react';
 import { type PlainTranslationKey, useErrorText, useI18n } from '~i18n';
-import { themeQueryOptions, themesQueryOptions } from '~queries/theme';
+import {
+  themeQueries,
+  themeQueryOptions,
+  themesQueryOptions,
+} from '~queries/theme';
 import {
   activateThemeFn,
   deleteThemeFn,
@@ -120,23 +124,24 @@ function ThemePreview({ document }: { document: ThemeDocument }) {
   );
 }
 
+/** Re-read the user's theme and the library after a library change. */
 function useInvalidateTheme() {
   const queryClient = useQueryClient();
-  return () =>
-    queryClient.invalidateQueries({ queryKey: themeQueryOptions.queryKey });
+  return () => queryClient.invalidateQueries(themeQueries);
 }
 
 /**
- * The theme library: presets and custom themes as cards. Choosing a card
- * makes it the theme every client draws; custom themes can be edited and
- * deleted, and any theme copied into a new custom one.
+ * The shared theme library: presets and custom themes as cards. Choosing a
+ * card makes it the theme the user's own clients draw; custom themes, which
+ * everyone shares, can be edited and deleted, and any theme copied into a
+ * new custom one.
  */
-export function ThemeLibraryPanel() {
+export function ThemeLibraryPanel({ userId }: { userId: string }) {
   const { t } = useI18n();
   const labelId = useId();
   const queryClient = useQueryClient();
   const invalidate = useInvalidateTheme();
-  const { data: state } = useSuspenseQuery(themeQueryOptions);
+  const { data: state } = useSuspenseQuery(themeQueryOptions(userId));
   const { data: themes } = useSuspenseQuery(themesQueryOptions);
   const [editing, setEditing] = useState<{
     id?: string;
@@ -145,7 +150,7 @@ export function ThemeLibraryPanel() {
   const activate = useMutation({
     mutationFn: (id: string) => activateThemeFn({ data: id }),
     onSuccess: (saved) =>
-      queryClient.setQueryData(themeQueryOptions.queryKey, saved),
+      queryClient.setQueryData(themeQueryOptions(saved.userId).queryKey, saved),
   });
   const remove = useMutation({
     mutationFn: (id: string) => deleteThemeFn({ data: id }),

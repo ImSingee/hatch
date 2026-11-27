@@ -64,6 +64,13 @@ describe('WebView destinations after a resource-free handoff', () => {
     expect(destinationUrl(origin, appDestination('notes', ''))).toBe(
       `${origin}/app/notes/embed/`,
     );
+    // The App's web player takes the platform's look from it.
+    expect(
+      destinationUrl(origin, appDestination('notes', '/today', 'ios')),
+    ).toBe(`${origin}/app/notes/embed/?platform=ios#/today`);
+    expect(destinationUrl(origin, appDestination('notes', '', 'android'))).toBe(
+      `${origin}/app/notes/embed/?platform=android`,
+    );
     for (const slug of ['', '../admin', 'notes/embed', '//evil.test', 'a b'])
       expect(() => appDestination(slug)).toThrow('Invalid App address');
     expect(() => dashboardDestination('')).toThrow('Invalid Dashboard');

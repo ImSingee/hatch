@@ -11,19 +11,19 @@ import { MantineProvider, mantineHtmlProps } from '@mantine/core';
 import { Toaster } from 'sonner';
 import { NavigationProgress } from '@mantine/nprogress';
 import { ModalsProvider } from '@mantine/modals';
-import { useQuery, type QueryClient } from '@tanstack/react-query';
+import type { QueryClient } from '@tanstack/react-query';
 import { useEffect } from 'react';
 import appCss from '~styles.css?url';
 // Starts the UI language (and <html lang>) before any route renders.
 import { useI18n } from '~i18n';
-import { themeQueryOptions } from '~queries/theme';
+import { ThemeSync } from '~components/system/theme-sync';
+import { LocaleSync } from '~components/system/locale-sync';
 import { DESKTOP_HOST_BOOT_SCRIPT } from '~components/desktop-host/host';
 import {
   NATIVE_HOST_BOOT_SCRIPT,
   THEME_BOOT_SCRIPT,
   appCssVariablesResolver,
   applyDocumentTheme,
-  applyThemeState,
   deskThemeFor,
   useActiveTheme,
 } from '~ui/theme';
@@ -88,18 +88,6 @@ export const Route = createRootRouteWithContext<{
   shellComponent: RootDocument,
 });
 
-/**
- * Keeps this browser on the instance theme: applies the stored setting as
- * soon as it is fetched, and again whenever the query is refreshed.
- */
-function ThemeSync() {
-  const { data } = useQuery(themeQueryOptions);
-  useEffect(() => {
-    if (data) applyThemeState({ accent: data.accent, theme: data.resolved });
-  }, [data]);
-  return null;
-}
-
 function RootDocument({ children }: { children: React.ReactNode }) {
   const { t } = useI18n();
   const theme = useActiveTheme();
@@ -121,6 +109,7 @@ function RootDocument({ children }: { children: React.ReactNode }) {
           forceColorScheme={theme.appearance}
         >
           <ThemeSync />
+          <LocaleSync />
           <ModalsProvider>{children}</ModalsProvider>
 
           {/* Client-only: the shell is prerendered in English, and hydration

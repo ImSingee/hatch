@@ -1,10 +1,13 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-type TestPlatformEvent = {
-  type: 'app.deployment.activated';
-  appId: string;
-  deploymentRevision: string;
-};
+type TestPlatformEvent =
+  | {
+      type: 'app.deployment.activated';
+      appId: string;
+      deploymentRevision: string;
+    }
+  | { type: 'pins.updated'; userId: string }
+  | { type: 'theme.updated'; userId: string; accent: string };
 
 const mocks = vi.hoisted(() => ({
   getSession: vi.fn<(options: unknown) => Promise<unknown>>(),
@@ -70,6 +73,26 @@ describe('Platform events API stream', () => {
     const platform = await reader.read();
     expect(decoder.decode(platform.value)).toBe(
       `event: platform\ndata: ${JSON.stringify(event)}\n\n`,
+    );
+    await reader.cancel();
+  });
+
+  it('sends a user only their own personal events', async () => {
+    const response = await handle({
+      request: new Request('https://hatch.test/api/events'),
+    });
+    const reader = response.body!.getReader();
+    await reader.read();
+    const subscriber = mocks.subscribePlatformEvents.mock.calls[0]![0];
+
+    subscriber({ type: 'pins.updated', userId: 'user-2' });
+    subscriber({ type: 'theme.updated', userId: 'user-2', accent: 'teal' });
+    const own: TestPlatformEvent = { type: 'pins.updated', userId: 'user-1' };
+    subscriber(own);
+
+    const next = await reader.read();
+    expect(decoder.decode(next.value)).toBe(
+      `event: platform\ndata: ${JSON.stringify(own)}\n\n`,
     );
     await reader.cancel();
   });

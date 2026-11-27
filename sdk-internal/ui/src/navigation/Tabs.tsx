@@ -2,11 +2,13 @@ import { Scroll, Text, View, computed, effect, signal, untracked } from 'nsh';
 import type { JSX } from 'nsh';
 import { Tab, Tabs as BaseTabs } from 'nsh/base';
 import { Each, If } from '../core/control';
+import { byLook } from '../core/env';
 import { ShellScopeContext } from '../core/shell';
 import type { ShellScope } from '../core/shell';
 import { FOCUS_RING } from '../core/styles';
 import type { IconData } from '../core/types';
 import { Glyph } from '../icons/Icon';
+import type { GlyphColor } from '../icons/Icon';
 
 /** One tab of `Tabs` or one section of `AppShell`. */
 export type TabItem = {
@@ -119,6 +121,35 @@ export function Panels(props: {
   );
 }
 
+/**
+ * The segmented control on each look: the Desk's; iOS's, a white segment
+ * sliding on a gray track; Material's segmented buttons, an outlined pill
+ * with the selected segment tinted.
+ */
+const SEGMENTED = byLook({
+  web: {
+    list: 'flex-row gap-0.5 rounded-(--radius-md) bg-surface-sunken p-0.5',
+    indicator: 'inset-y-0.5 rounded-(--radius-sm) bg-card shadow-card',
+    tab: 'group h-8 flex-row items-center justify-center gap-1.5 rounded-(--radius-sm) px-3 disabled:opacity-50 pointer-coarse:h-10',
+    text: 'text-body font-label text-muted-foreground group-selected:text-foreground',
+    selectedGlyph: 'foreground' as GlyphColor,
+  },
+  ios: {
+    list: 'flex-row gap-0.5 rounded-(--radius-sm) bg-surface-pressed p-0.5',
+    indicator: 'inset-y-0.5 rounded-(--radius-xs) bg-card shadow-card',
+    tab: 'group h-7 flex-row items-center justify-center gap-1.5 rounded-(--radius-xs) px-3 disabled:opacity-40',
+    text: 'text-ios-footnote font-medium text-foreground group-selected:font-semibold',
+    selectedGlyph: 'foreground' as GlyphColor,
+  },
+  android: {
+    list: 'flex-row overflow-hidden rounded-full border border-control-border',
+    indicator: 'inset-y-0 bg-primary-tint',
+    tab: 'group h-10 flex-row items-center justify-center gap-2 border-l border-control-border px-4 first:border-l-0 active:bg-surface-pressed disabled:opacity-40',
+    text: 'text-m3-label-lg font-medium text-foreground group-selected:text-primary-tint-foreground',
+    selectedGlyph: 'primary-tint-foreground' as GlyphColor,
+  },
+});
+
 export type TabsProps = {
   /** What the tabs choose between, for screen readers: "Views", "Period". */
   label: string;
@@ -141,8 +172,8 @@ export function Tabs(props: TabsProps): JSX.Element {
   const list = (
     <BaseTabs
       accessibilityLabel={props.label}
-      class={`flex-row gap-0.5 rounded-(--radius-md) bg-surface-sunken p-0.5 ${props.fullWidth ? 'self-stretch' : 'self-start'}`}
-      indicatorClass="inset-y-0.5 rounded-(--radius-sm) bg-card shadow-card"
+      class={`${SEGMENTED.list} ${props.fullWidth ? 'self-stretch' : 'self-start'}`}
+      indicatorClass={SEGMENTED.indicator}
     >
       <Each of={props.items} key={(item) => item.id}>
         {(item) => (
@@ -153,7 +184,7 @@ export function Tabs(props: TabsProps): JSX.Element {
             accessibilityLabel={
               item().badge ? `${item().label}, ${item().badge}` : item().label
             }
-            class={`group h-8 flex-row items-center justify-center gap-1.5 rounded-(--radius-sm) px-3 disabled:opacity-50 pointer-coarse:h-10 ${FOCUS_RING} ${props.fullWidth ? 'flex-1' : ''}`}
+            class={`${SEGMENTED.tab} ${FOCUS_RING} ${props.fullWidth ? 'flex-1' : ''}`}
           >
             {item().icon ? (
               <Glyph
@@ -161,14 +192,12 @@ export function Tabs(props: TabsProps): JSX.Element {
                 size="sm"
                 color={
                   selected.get() === item().id
-                    ? 'foreground'
+                    ? SEGMENTED.selectedGlyph
                     : 'muted-foreground'
                 }
               />
             ) : null}
-            <Text class="text-body font-label text-muted-foreground group-selected:text-foreground">
-              {item().label}
-            </Text>
+            <Text class={SEGMENTED.text}>{item().label}</Text>
             {item().badge ? (
               <Text class="rounded-full bg-surface-hover px-1.5 text-caption font-label text-neutral-strong">
                 {item().badge ?? ''}

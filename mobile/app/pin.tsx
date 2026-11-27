@@ -15,8 +15,8 @@ import {
 import { sizes } from '../src/ui/theme';
 
 /**
- * Picks an App to pin to the home screen. Pins are shared with every client
- * of the instance. Opened from the grid's "Add" tile.
+ * Picks an App to pin to the home screen. Pins belong to the signed-in user
+ * and follow them to every client. Opened from the grid's "Add" tile.
  */
 export default function PinPicker() {
   const { api, origin } = useSession();

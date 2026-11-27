@@ -1,4 +1,4 @@
-//! The window follows the instance theme's appearance.
+//! The window follows the signed-in user's theme's appearance.
 //!
 //! The web UI publishes the ground of the active theme as
 //! `<meta name="theme-color">` (see `src/ui/theme/theme-store.ts`); WebKit

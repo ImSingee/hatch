@@ -13,9 +13,11 @@ export const LANGUAGE_NAMES = {
 export const SOURCE_LOCALE: Locale = 'en';
 
 /**
- * The chosen language is a display preference of this browser, like the
- * colour scheme of an OS: it is kept in local storage and never sent to the
- * server.
+ * The language is a preference of the signed-in user, stored on the server.
+ * This browser caches the last language it showed under this key, so a reload
+ * and the sign-in page paint in it before the preference has been fetched.
+ * Before a user picks a language, the cache keeps whatever this browser
+ * showed, starting from its own preferred language.
  */
 export const LOCALE_STORAGE_KEY = 'hatch.locale';
 
@@ -24,7 +26,7 @@ export function isLocale(value: unknown): value is Locale {
 }
 
 /**
- * The saved choice wins; otherwise the browser's first preferred language
+ * The cached language wins; otherwise the browser's first preferred language
  * decides. Any Chinese preference selects Simplified Chinese, the only
  * Chinese catalog; everything else falls back to English.
  */
@@ -41,7 +43,7 @@ export function detectLocale(
   }
 }
 
-/** The language for this browser. Safe to call where no DOM exists. */
+/** The language to start with. Safe to call where no DOM exists. */
 export function readLocale(): Locale {
   let saved: string | null = null;
   try {
@@ -58,7 +60,7 @@ export function readLocale(): Locale {
   return detectLocale(saved, languages);
 }
 
-export function persistLocale(locale: Locale) {
+export function cacheLocale(locale: Locale) {
   try {
     globalThis.localStorage?.setItem(LOCALE_STORAGE_KEY, locale);
   } catch {

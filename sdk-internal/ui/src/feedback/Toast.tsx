@@ -7,7 +7,9 @@ import {
   type ToastEntry,
 } from 'nsh/base';
 import { Each } from '../core/control';
-import { paneSize } from '../core/env';
+import { byLook, look, paneSize } from '../core/env';
+import { FOCUS_RING } from '../core/styles';
+import { bottomBarShown } from '../navigation/nav-context';
 import type { Action } from '../core/types';
 import { Glyph } from '../icons/Icon';
 import type { GlyphColor } from '../icons/Icon';
@@ -18,6 +20,7 @@ import {
   IconCircleX,
   IconInfoCircle,
 } from '../icons/icons.gen';
+import { Button as BaseButton } from 'nsh/base';
 import { Button } from '../input/Button';
 
 /** `neutral` for confirmations ("Copied"), the others for outcomes. */
@@ -57,6 +60,28 @@ const TONE_COLOR: Record<ToastTone, GlyphColor> = {
   danger: 'danger-strong',
   info: 'info-strong',
 };
+
+/**
+ * A toast on each look: the Desk's card; on iOS a borderless card; on
+ * Android Material's snackbar, inverse colours and its action as text.
+ */
+const CARD = byLook({
+  web: {
+    card: 'flex-row items-start gap-3 rounded-(--radius-lg) border border-hairline bg-popover px-4 py-3 shadow-dock transition-all duration-200',
+    title: 'text-body font-label text-popover-foreground',
+    description: 'text-caption text-muted-foreground',
+  },
+  ios: {
+    card: 'flex-row items-center gap-3 rounded-(--radius-lg) bg-popover px-4 py-3 shadow-window transition-all duration-200',
+    title: 'text-ios-subhead font-semibold text-popover-foreground',
+    description: 'text-ios-footnote font-regular text-muted-foreground',
+  },
+  android: {
+    card: 'min-h-12 flex-row items-center gap-3 rounded-(--radius-xs) bg-foreground px-4 py-3 shadow-dock transition-all duration-200',
+    title: 'text-m3-body-md font-regular text-background',
+    description: 'text-m3-body-md font-regular text-background',
+  },
+});
 
 const VISIBLE = 3;
 const TICK_MS = 50;
@@ -144,7 +169,7 @@ function ToastCard(props: { entry: () => ToastEntry }): JSX.Element {
           : value().title
       }
       onDismissRequest={() => dismiss(props.entry().id)}
-      class="flex-row items-start gap-3 rounded-(--radius-lg) border border-hairline bg-popover px-4 py-3 shadow-dock transition-all duration-200"
+      class={CARD.card}
       startingClass="opacity-0 translate-y-4"
       endingClass="opacity-0 scale-95"
     >
@@ -153,21 +178,28 @@ function ToastCard(props: { entry: () => ToastEntry }): JSX.Element {
           <Glyph
             icon={icon() as IconData}
             size="md"
-            color={TONE_COLOR[value().tone]}
+            color={look === 'android' ? 'background' : TONE_COLOR[value().tone]}
           />
         </View>
       ) : null}
       <View class="flex-1 gap-0.5">
-        <Text class="text-body font-label text-popover-foreground">
-          {value().title}
-        </Text>
+        <Text class={CARD.title}>{value().title}</Text>
         {value().description ? (
-          <Text class="text-caption text-muted-foreground">
-            {value().description}
-          </Text>
+          <Text class={CARD.description}>{value().description}</Text>
         ) : null}
       </View>
-      {value().action ? (
+      {value().action && look === 'android' ? (
+        <BaseButton
+          onPress={() => runAction(props.entry().id)}
+          disabled={value().action?.disabled}
+          accessibilityLabel={value().action?.label ?? ''}
+          class={`h-10 -mr-2 items-center justify-center rounded-full px-3 active:opacity-70 disabled:opacity-40 ${FOCUS_RING}`}
+        >
+          <Text class="text-m3-label-lg font-bold text-background">
+            {value().action?.label ?? ''}
+          </Text>
+        </BaseButton>
+      ) : value().action ? (
         <Button
           label={value().action?.label ?? ''}
           kind="subtle"
@@ -183,9 +215,11 @@ function ToastCard(props: { entry: () => ToastEntry }): JSX.Element {
 /** Where toasts show. `mount` renders it; Apps do not. */
 export function ToastRegion(): JSX.Element {
   const compact = () => paneSize() === 'compact';
+  // On iOS and Android toasts rise above an `AppShell`'s bottom bar.
+  const clear = () => look !== 'web' && bottomBarShown();
   return (
     <Overlay
-      class={`pointer-events-none inset-x-0 bottom-0 p-4 pb-[env(safe-area-inset-bottom)] ${compact() ? 'items-center' : 'items-end'}`}
+      class={`pointer-events-none inset-x-0 bottom-0 p-4 pb-[env(safe-area-inset-bottom)] ${compact() ? 'items-center' : 'items-end'} ${clear() ? 'mb-20' : ''}`}
     >
       <ToastStack
         placement={compact() ? 'bottomCenter' : 'bottomRight'}

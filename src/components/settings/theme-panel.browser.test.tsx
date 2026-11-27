@@ -76,6 +76,7 @@ function state(): WebTheme {
     theme: fixture.themes.find((theme) => theme.id === fixture.active)!,
     accentOverridesPrimary: false,
     resolved: {} as WebTheme['resolved'],
+    userId: 'owner',
   } as WebTheme;
 }
 
@@ -99,7 +100,7 @@ async function renderPanel() {
     <QueryClientProvider client={queryClient}>
       <MantineProvider>
         <ModalsProvider>
-          <ThemeLibraryPanel />
+          <ThemeLibraryPanel userId="owner" />
         </ModalsProvider>
       </MantineProvider>
     </QueryClientProvider>,
@@ -242,7 +243,7 @@ test('keeps presets and the active theme from being deleted', async () => {
   await expect
     .element(
       screen.getByRole('menuitem', {
-        name: 'Delete (choose another theme first)',
+        name: 'Delete (choose another theme for yourself first)',
       }),
     )
     .toBeDisabled();

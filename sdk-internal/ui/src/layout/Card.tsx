@@ -1,8 +1,10 @@
 import { Text, View } from 'nsh';
 import type { JSX } from 'nsh';
 import { Button as BaseButton } from 'nsh/base';
+import { byLook } from '../core/env';
 import { FOCUS_RING, GAP } from '../core/styles';
-import { HeadingText } from '../display/Text';
+import { SurfaceContext } from '../core/surface';
+import { BODY, HeadingText, TITLE } from '../display/Text';
 import type { Space } from '../core/types';
 
 /** Title, description and actions above a card's or section's content. */
@@ -15,12 +17,12 @@ function Header(props: {
     <View class="flex-row items-start gap-3">
       <View class="flex-1 gap-0.5">
         {props.title ? (
-          <HeadingText level={2} class="text-subsection text-foreground">
+          <HeadingText level={2} class={`${TITLE.card} text-foreground`}>
             {props.title}
           </HeadingText>
         ) : null}
         {props.description ? (
-          <Text class="text-body text-muted-foreground text-pretty">
+          <Text class={`${BODY.body} text-muted-foreground text-pretty`}>
             {props.description}
           </Text>
         ) : null}
@@ -54,8 +56,19 @@ const PADDING: Record<NonNullable<CardProps['padding']>, string> = {
   lg: 'p-6',
 };
 
-const SURFACE =
-  'self-stretch rounded-(--radius-lg) border border-hairline bg-card overflow-hidden';
+/** On iOS and Android a card sits on the page's ground without an edge. */
+const SURFACE = byLook({
+  web: 'self-stretch rounded-(--radius-lg) border border-hairline bg-card overflow-hidden',
+  ios: 'self-stretch rounded-(--radius-lg) bg-card overflow-hidden',
+  android: 'self-stretch rounded-(--radius-lg) bg-card overflow-hidden',
+});
+
+/** How a pressable card answers a press. */
+const PRESS = byLook({
+  web: 'transition hover:shadow-dock hover:-translate-y-px active:translate-y-0',
+  ios: 'transition-opacity active:opacity-60',
+  android: 'transition-colors active:bg-muted',
+});
 
 /**
  * A white sheet that groups related content. Inside an App, cards sit flat
@@ -63,8 +76,9 @@ const SURFACE =
  * windows.
  */
 export function Card(props: CardProps): JSX.Element {
+  // The header's actions sit on the card too.
   const body = () => (
-    <>
+    <SurfaceContext.Provider value="card">
       {props.title || props.description || props.actions ? (
         <Header
           title={props.title}
@@ -73,7 +87,7 @@ export function Card(props: CardProps): JSX.Element {
         />
       ) : null}
       {props.children}
-    </>
+    </SurfaceContext.Provider>
   );
   const layout = () =>
     `${SURFACE} ${PADDING[props.padding ?? 'md']} flex-col ${GAP[props.gap ?? 'md']}`;
@@ -82,7 +96,7 @@ export function Card(props: CardProps): JSX.Element {
       <BaseButton
         onPress={props.onPress}
         accessibilityLabel={props.title}
-        class={`${layout()} items-stretch transition hover:shadow-dock hover:-translate-y-px active:translate-y-0 ${FOCUS_RING}`}
+        class={`${layout()} items-stretch ${PRESS} ${FOCUS_RING}`}
       >
         {body()}
       </BaseButton>

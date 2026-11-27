@@ -1,6 +1,6 @@
 # Desk theme
 
-The platform's Mantine theme, drawn from the instance theme at run time.
+The platform's Mantine theme, drawn from the signed-in user's theme at run time.
 Design rules, the theme document and the component specification are in
 [`DESIGN.md`](../../../DESIGN.md).
 
@@ -8,7 +8,7 @@ Design rules, the theme document and the component specification are in
   server, the CLI, the web, the mobile app and the native UI library:
   `tokens.json` (the `desk` values, the `desk-dark` document, weights, sizes,
   motion), and `src/` (`resolveTheme`, the presets, validation and colour
-  arithmetic). The server resolves the instance theme; clients do not derive
+  arithmetic). The server resolves each user's theme; clients do not derive
   tokens themselves.
 - `theme-store.ts` holds the theme this browser draws: the accent and the
   resolved active theme from `~queries/theme`, cached in `localStorage`

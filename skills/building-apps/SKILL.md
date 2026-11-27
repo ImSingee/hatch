@@ -49,7 +49,8 @@ Do not import generated files or execution modules from the manifest.
 
    The input also accepts an optional `description`. `pin` defaults to true:
    pin user-facing Apps and pass `"pin":false` for backend-only or
-   widget-only Apps. The result's `id` is the immutable App id and `path` is
+   widget-only Apps. Pins are personal: the App is pinned for the user who
+   asked for it, and other users pin it themselves. The result's `id` is the immutable App id and `path` is
    the checkout. Never repeat a create whose outcome is unknown; inspect
    `hatch app list` and the reported recovery workspace first.
 
@@ -275,7 +276,7 @@ Runtime selection is preserved in each deployment artifact and on rollback.
 
 - `native` (what `hatch app create` scaffolds): TypeScript JSX on Hatch's
   native runtime, with every screen built from `@hatch/ui`. It looks like the
-  Hatch platform, follows the instance's theme and accent, and the same source
+  Hatch platform, follows the viewer's theme and accent, and the same source
   runs in the Web Desk and Hatch's apps. Build new Apps this way. Read
   [Native frontend](references/frontend-native.md) and
   [Design system](references/design-system.md) before writing a screen.

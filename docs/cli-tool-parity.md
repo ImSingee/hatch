@@ -38,20 +38,20 @@ read `deploy_app` calls before.
 
 The capabilities below never had an Agent Tool.
 
-| Capability       | CLI                                                                                                 | Public API / shared behavior                                                                                                                                                                                            |
-| ---------------- | --------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| App docs         | app docs list / get                                                                                 | AppService/ListAppDocs, GetAppDoc; current deployment's external docs, webhook/RPC endpoints, raw Markdown                                                                                                              |
-| App icon         | app icon get / set / clear                                                                          | AppService/GetAppIcon, SetAppIcon (file bytes or candidate id), ClearAppIcon; validated and re-encoded                                                                                                                  |
-| Image models     | image-model list / add / update / remove                                                            | ImageService/ListImageModels, CreateImageModel, UpdateImageModel, DeleteImageModel; provider keys never exposed                                                                                                         |
-| Providers        | provider list / get / catalog / add / update / remove / test / fetch-models                         | ProviderService, CatalogService/ListCatalogProviders; presets, write-only API keys (`hasApiKey`), test prompt                                                                                                           |
-| Models           | model list / add / update / enable / disable / remove / set-kind                                    | ModelService; chat and image models, catalog link, chat metadata overrides and resets, kind like the Web field                                                                                                          |
-| Model catalog    | model catalog list / status / refresh / settings                                                    | CatalogService/ListCatalogModels, GetCatalogStatus, RefreshCatalog, UpdateCatalogSettings                                                                                                                               |
-| Image generation | image generate                                                                                      | ImageService/GenerateImages; 1 to 4 one-day candidates, optional subject/glyph tile composition, hourly cap                                                                                                             |
-| Instance theme   | theme get / set / list / create / update / delete / check / reset                                   | ThemeService/GetTheme, SetTheme, ListThemes, CreateTheme, UpdateTheme, DeleteTheme, ValidateTheme, ResetTheme; one active theme from the library (presets and custom themes), accent, dock labels; clients restyle live |
-| Navigation pins  | pin list / add / update / remove / reorder                                                          | PinService; App pins (several per App), dashboard pinned flags, App pin and dashboard order                                                                                                                             |
-| Dashboards       | dashboard list / get / create / update / delete, dashboard widget available / add / layout / remove | DashboardService; settings, auto-refresh, widget placement and per-breakpoint layout; `dashboards.updated` event                                                                                                        |
-| Preferences      | preferences get / set                                                                               | PreferenceService/Get/UpdateAgentPreferences, Get/UpdateDeskPreferences; queue/steer default, background time                                                                                                           |
-| Server info      | server info                                                                                         | ServerService/GetServerInfo; commit and commit time of the running server build, as on Settings → About                                                                                                                 |
+| Capability       | CLI                                                                                                 | Public API / shared behavior                                                                                                                                                                                                                    |
+| ---------------- | --------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| App docs         | app docs list / get                                                                                 | AppService/ListAppDocs, GetAppDoc; current deployment's external docs, webhook/RPC endpoints, raw Markdown                                                                                                                                      |
+| App icon         | app icon get / set / clear                                                                          | AppService/GetAppIcon, SetAppIcon (file bytes or candidate id), ClearAppIcon; validated and re-encoded                                                                                                                                          |
+| Image models     | image-model list / add / update / remove                                                            | ImageService/ListImageModels, CreateImageModel, UpdateImageModel, DeleteImageModel; provider keys never exposed                                                                                                                                 |
+| Providers        | provider list / get / catalog / add / update / remove / test / fetch-models                         | ProviderService, CatalogService/ListCatalogProviders; presets, write-only API keys (`hasApiKey`), test prompt                                                                                                                                   |
+| Models           | model list / add / update / enable / disable / remove / set-kind                                    | ModelService; chat and image models, catalog link, chat metadata overrides and resets, kind like the Web field                                                                                                                                  |
+| Model catalog    | model catalog list / status / refresh / settings                                                    | CatalogService/ListCatalogModels, GetCatalogStatus, RefreshCatalog, UpdateCatalogSettings                                                                                                                                                       |
+| Image generation | image generate                                                                                      | ImageService/GenerateImages; 1 to 4 one-day candidates, optional subject/glyph tile composition, hourly cap                                                                                                                                     |
+| Themes           | theme get / set / reset (personal), list / create / update / delete / check (shared library)        | ThemeService/GetTheme, SetTheme, ResetTheme for the caller's own active theme, accent and dock labels; ListThemes, CreateTheme, UpdateTheme, DeleteTheme, ValidateTheme on the shared library (presets and custom themes); clients restyle live |
+| Personal pins    | pin list / add / update / remove / reorder                                                          | PinService; the caller's App pins (several per App), dashboard pinned flags, App pin and dashboard order                                                                                                                                        |
+| Dashboards       | dashboard list / get / create / update / delete, dashboard widget available / add / layout / remove | DashboardService; settings, auto-refresh, widget placement and per-breakpoint layout; `dashboards.updated` event                                                                                                                                |
+| Preferences      | preferences get / set                                                                               | PreferenceService Agent, Desk and InterfacePreferences; queue/steer default, background time, UI language                                                                                                                                       |
+| Server info      | server info                                                                                         | ServerService/GetServerInfo; commit and commit time of the running server build, as on Settings → About                                                                                                                                         |
 
 `frontend` in `app get` reports how the live deployment's frontend runs:
 `runtime` is `web` (a React page) or `native` (NSH TSX in the platform's
@@ -73,9 +73,13 @@ its own commands (backed by `ImageService`), and `model add --kind image`,
 `model update` and `model remove` reach the same rows through `ModelService`.
 See [App icons](app-icons.md) and the section below.
 
-The Web UI language (Settings → Appearance → Language) is a display preference
-of one browser, kept in its local storage and never sent to the server. It is
-browser-bound, has no platform state, and therefore has no CLI command.
+The Web UI language (Settings → Appearance → Language) is a personal
+preference of the user, read and set with `preferences get` / `preferences set
+--language` through `PreferenceService/GetInterfacePreferences` and
+`UpdateInterfacePreferences`, which use the same
+`src/server/interface-preferences.ts` service as the Settings Server Functions
+(`src/server/interface-preference-settings.ts`). Each browser only caches the
+last language it showed.
 
 Source transfer and release are separate. `push` and the fetch behind `clone` /
 `update` / `adopt` speak Git smart HTTP at `/api/git/app/<id>.git`; `deploy`
@@ -202,15 +206,34 @@ domain service and `silent: true` option. No Agent Tool is added.
 
 ## Theme and pins: CLI only, no Agent Tool
 
+The active theme, accent, dock labels and pins are personal: each user has
+their own active theme (a preset or a custom theme), accent, dock labels, App
+pins, dashboard pinned flags and App pin and dashboard order. The theme library
+is shared, like dashboards: anyone can create, edit, duplicate and delete a
+custom theme. A new user starts from the built-in defaults: `desk` with no
+accent, no dock labels, no App pins, and one pinned dashboard, the default
+(oldest) one. The first read or change of their dashboards pins it, exactly
+once per user (`user_preferences.dashboard_defaults_applied` records that it
+happened), so unpinning it sticks, and deleting dashboards never pins another
+one. Users who existed before dashboards became personal count as past that
+first visit. Dashboards created later stay pinned for their creator only.
+
 `hatch theme get [--resolved]`,
 `hatch theme set [--theme <id>] [--accent <name> | --clear-accent] [--dock-labels | --no-dock-labels]`,
 `hatch theme list [--limit <n>] [--cursor <cursor>]`,
 `hatch theme create --file <path|->`, `hatch theme update <id> --file <path|->`,
 `hatch theme delete <id> --yes`, `hatch theme check --file <path|->` and
-`hatch theme reset` call `ThemeService`, which reads and writes the `ui.theme`
-platform setting and the `themes` table through
+`hatch theme reset` call `ThemeService`, which reads and writes the caller's
+`user_preferences` (`accent`, `dock_labels`, `theme_preset`,
+`custom_theme_id`) and the shared `themes` table through
 `src/server/theme-settings.ts`, the same service as the Appearance settings
-page. Web operation to command:
+page. `get`, `set` and `reset` act for the caller and give a Run no user
+prompted `CONFLICT`; the library commands work for every credential, and
+`check` there validates without an accent. Deleting a custom theme that other
+users have active is allowed: their `custom_theme_id` is cleared and they draw
+`desk`. The caller's own active theme cannot be deleted (`CONFLICT`). When a
+user's accent is unreadable on a custom theme someone else edited, that user
+draws the theme's own primary. Web operation to command:
 
 | Web UI (Settings · Appearance)                 | CLI                                           | RPC                  |
 | ---------------------------------------------- | --------------------------------------------- | -------------------- |
@@ -229,10 +252,13 @@ per-token editor; every other token is derived. `theme reset` (ResetTheme) has
 no button on the page. The accent list is
 `packages/hatch-design-tokens/tokens.json`; the CLI validates `--accent`
 against the copy it was built with and the platform validates again, as it
-does every document. A change is published as the
+does every document. A change to a user's theme is published as the
 `theme.updated` platform event. Every pin change, from
 the Web UI or the CLI, is published as `pins.updated`, so an open dock
-refetches without a reload.
+refetches without a reload. Both events name the user, and the event stream
+(`/api/events`) only delivers them to that user's clients. A library change
+(create, update, delete) is published to everyone as `themes.updated`, since
+any user's active theme may be the one that changed.
 
 `hatch pin ...` calls `PinService`, backed by `src/server/pins.ts`, which the
 Web UI Server Functions in `sidebar.ts` and `dashboards.ts`
@@ -250,9 +276,17 @@ also call. Web operation to command:
 | Pin or unpin a dashboard           | pin add / remove --dashboard                 | SetDashboardPinned |
 | Drag dashboards                    | pin reorder --dashboard                      | ReorderDashboards  |
 
-Both services accept sessions, API keys and Run JWTs alike; neither has a
-device- or browser-bound operation, so there is no CLI exception. Pins record
-no actor, so a Run needs no attribution. Reordering moves the listed ids to
+Both services accept sessions, API keys and Run JWTs alike and act for the
+caller's user: the session's or API key's user, or for a Run the user who sent
+the prompt it answers. A Run no user prompted gets `CONFLICT`, since there is
+nobody whose settings it could change. Neither has a device- or browser-bound
+operation, so there is no CLI exception. Another user's pin id is `NOT_FOUND`.
+`hatch app create` pins the new App for the same user (none for a Run no user
+prompted), and `hatch dashboard create` pins the new dashboard for them and
+for nobody else, so other users find it at the end of their order, unpinned
+unless their first visit pins it as the oldest dashboard. `dashboard list` and
+`get` report the caller's pinned flag and order (a Run no user prompted sees
+every dashboard unpinned, oldest first). Reordering moves the listed ids to
 the front and keeps the rest in their relative order; unknown or repeated ids
 are rejected, for the Web UI as well.
 

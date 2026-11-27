@@ -11,6 +11,7 @@ import {
 } from '~/app-identity';
 import { db, schema } from '~/db';
 import { AppError } from '~server/errors';
+import { lockUserPins, nextSidebarSortOrder, pinsChanged } from '~server/pins';
 import { appSlugExists } from './access';
 import { ensureAppRepo } from './git';
 import { isValidAppSlug } from './manifest';
@@ -86,9 +87,9 @@ export type CreateAppInput = {
   name: string;
   description?: string;
   /**
-   * Whether to pin the new app to the sidebar. Defaults to true. Pinning is a
-   * navigation preference, independent of the capabilities that become active
-   * only after a successful deployment.
+   * Whether to pin the new app to its creator's navigation. Defaults to true.
+   * Pinning is a navigation preference, independent of the capabilities that
+   * become active only after a successful deployment.
    */
   pin?: boolean;
 };
@@ -104,6 +105,11 @@ type CreateAppResult = {
 export type CreateAppContext = {
   /** Conversation that requested this App; omitted by non-Agent callers. */
   sessionId?: string;
+  /**
+   * The user the App is pinned for. Pins are personal, so without one (a Run
+   * no user prompted) the App is created unpinned.
+   */
+  creatorId?: string;
 };
 
 /**
@@ -169,6 +175,7 @@ export async function createApp(
     { exclude: ['.hatch', 'gen', 'node_modules'] },
   );
 
+  let pinned = false;
   await db.transaction(async (tx) => {
     const [created] = await tx
       .insert(schema.apps)
@@ -192,20 +199,19 @@ export async function createApp(
 
     // Pinning is independent of deploy-time capabilities. A draft has none
     // yet; deploy_app declares them from the source manifest after the build
-    // succeeds. Mirrors the insert in `setSidebarPin`.
-    const shouldPin = input.pin ?? true;
-    if (shouldPin) {
-      const pins = await tx.query.sidebarItems.findMany();
-      await tx
-        .insert(schema.sidebarItems)
-        .values({
-          appId: id,
-          label: name,
-          sortOrder: pins.length,
-        })
-        .onConflictDoNothing();
+    // succeeds. Mirrors the insert in `pinApp`.
+    if ((input.pin ?? true) && context.creatorId) {
+      await lockUserPins(tx, context.creatorId);
+      await tx.insert(schema.sidebarItems).values({
+        userId: context.creatorId,
+        appId: id,
+        label: name,
+        sortOrder: nextSidebarSortOrder(context.creatorId),
+      });
+      pinned = true;
     }
   });
+  if (pinned && context.creatorId) pinsChanged(context.creatorId);
 
   return {
     id,

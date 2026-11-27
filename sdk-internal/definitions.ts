@@ -56,7 +56,7 @@ export type SdkDefinition = {
     /** The complete theme for an accent name (`indigo`, `teal`, ...). */
     theme?: (accent: string) => SdkNshTheme;
     /**
-     * The complete theme for a resolved instance theme (a preset or a
+     * The complete theme for a user's resolved theme (a preset or a
      * custom theme, light or dark; `ResolvedTheme` in
      * `packages/hatch-design-tokens`).
      */

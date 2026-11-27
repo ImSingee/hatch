@@ -27,7 +27,7 @@ export const file_hatch_platform_v1_theme: GenFile =
   );
 
 /**
- * One accent the instance can choose.
+ * One accent that can be chosen.
  *
  * @generated from message hatch.platform.v1.Accent
  */
@@ -156,7 +156,7 @@ export type ThemeState = Message<'hatch.platform.v1.ThemeState'> & {
   dockLabels: boolean;
 
   /**
-   * The theme every client draws.
+   * The theme the caller's clients draw.
    *
    * @generated from field: hatch.platform.v1.ThemeEntry theme = 5;
    */
@@ -652,8 +652,9 @@ export type ValidateThemeRequest =
     document?: JsonObject | undefined;
 
     /**
-     * Also check the document with the instance's current accent, the way it
-     * would be drawn if activated now.
+     * Also check the document with the caller's current accent, the way it
+     * would be drawn if they activated it now; a Run no user prompted has no
+     * accent.
      *
      * @generated from field: bool with_current_accent = 2;
      */
@@ -700,15 +701,22 @@ export const ValidateThemeResponseSchema: GenMessage<ValidateThemeResponse> =
   messageDesc(file_hatch_platform_v1_theme, 21);
 
 /**
- * The instance-wide look that the web, mobile and desktop clients apply.
+ * Themes: the caller's own look, which their web, mobile and desktop
+ * clients apply, and the shared library it is picked from.
  *
- * The instance has one active theme, picked from a library: the presets
- * (`desk`, `desk-dark`) and custom themes. A theme is a theme document: a
- * small set of semantic values (name, appearance, nine colours, a base
- * radius and two bundled fonts) from which the platform derives every other
- * token. A dark theme is a theme like any other; clients draw the active
- * theme whatever their device prefers. An optional accent replaces the
- * active theme's primary. See DESIGN.md "Themes".
+ * The library is shared: the presets (`desk`, `desk-dark`) and custom themes
+ * anyone can create, edit and delete. A theme is a theme document: a small
+ * set of semantic values (name, appearance, nine colours, a base radius and
+ * two bundled fonts) from which the platform derives every other token. Each
+ * user has their own active theme, accent and dock labels; a new user draws
+ * `desk` with no accent. A dark theme is a theme like any other; clients
+ * draw the user's theme whatever their device prefers. An optional accent
+ * replaces the active theme's primary. See DESIGN.md "Themes".
+ *
+ * GetTheme, SetTheme and ResetTheme act for the caller: the user behind a
+ * session or API key, or for a Run the user who sent the prompt it answers;
+ * a Run no user prompted is rejected as a conflict (aborted). The library
+ * calls work for every credential.
  *
  * @generated from service hatch.platform.v1.ThemeService
  */
@@ -722,7 +730,7 @@ export const ThemeService: GenService<{
     output: typeof GetThemeResponseSchema;
   };
   /**
-   * Changes the accent, the dock labels or the active theme.
+   * Changes the caller's accent, dock labels or active theme.
    *
    * @generated from rpc hatch.platform.v1.ThemeService.SetTheme
    */
@@ -732,8 +740,8 @@ export const ThemeService: GenService<{
     output: typeof SetThemeResponseSchema;
   };
   /**
-   * Back to `desk` with no accent, in one change; dock labels and the
-   * library are kept.
+   * The caller back on `desk` with no accent, in one change; their dock
+   * labels and the library are kept.
    *
    * @generated from rpc hatch.platform.v1.ThemeService.ResetTheme
    */
@@ -753,7 +761,7 @@ export const ThemeService: GenService<{
     output: typeof ListThemesResponseSchema;
   };
   /**
-   * Saves a new custom theme; it is not activated.
+   * Saves a new custom theme to the shared library; it is not activated.
    *
    * @generated from rpc hatch.platform.v1.ThemeService.CreateTheme
    */
@@ -763,7 +771,7 @@ export const ThemeService: GenService<{
     output: typeof CreateThemeResponseSchema;
   };
   /**
-   * Replaces a custom theme's document whole.
+   * Replaces a custom theme's document whole, for everyone who uses it.
    *
    * @generated from rpc hatch.platform.v1.ThemeService.UpdateTheme
    */
@@ -773,7 +781,8 @@ export const ThemeService: GenService<{
     output: typeof UpdateThemeResponseSchema;
   };
   /**
-   * Deletes a custom theme. The active theme cannot be deleted.
+   * Deletes a custom theme. The caller's own active theme cannot be deleted;
+   * other users who have it active fall back to `desk`.
    *
    * @generated from rpc hatch.platform.v1.ThemeService.DeleteTheme
    */
