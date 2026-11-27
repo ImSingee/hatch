@@ -901,9 +901,12 @@ export const sidebarItems = snakeCase.table(
   'sidebar_items',
   {
     id: ulid().$defaultFn(genUlid).primaryKey(),
-    userId: text()
-      .notNull()
-      .references(() => user.id, { onDelete: 'cascade' }),
+    /**
+     * Always set by this release, which never reads or changes a row
+     * without it. Nullable for one release so a server still on the
+     * previous one can pin Apps; see docs/database-cleanups.md.
+     */
+    userId: text().references(() => user.id, { onDelete: 'cascade' }),
     appId: text()
       .notNull()
       .references(() => apps.id, { onDelete: 'cascade' }),

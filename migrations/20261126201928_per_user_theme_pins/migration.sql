@@ -53,7 +53,10 @@ ON CONFLICT ("user_id") DO UPDATE SET
   "theme_preset" = excluded."theme_preset",
   "custom_theme_id" = excluded."custom_theme_id";--> statement-breakpoint
 
--- 2. App pins: every user gets a copy of every pin, in the same order. Each
+-- 2. App pins: every user gets a copy of every pin, in the same order. `user_id`
+-- stays nullable for one release: a server still on the previous release
+-- inserts pins without it, and this release never sees such rows
+-- (docs/database-cleanups.md). Each
 -- copy needs its own id; a 26-character hex digest of the original id and the
 -- user is shaped like the lowercase ULIDs the app mints. Without users there
 -- is nobody to keep the pins for.
@@ -73,7 +76,6 @@ FROM "sidebar_items"
 CROSS JOIN "user"
 WHERE "sidebar_items"."user_id" IS NULL;--> statement-breakpoint
 DELETE FROM "sidebar_items" WHERE "user_id" IS NULL;--> statement-breakpoint
-ALTER TABLE "sidebar_items" ALTER COLUMN "user_id" SET NOT NULL;--> statement-breakpoint
 ALTER TABLE "sidebar_items" ADD CONSTRAINT "sidebar_items_user_id_user_id_fkey" FOREIGN KEY ("user_id") REFERENCES "user"("id") ON DELETE CASCADE;--> statement-breakpoint
 CREATE INDEX "sidebar_items_user_order_idx" ON "sidebar_items" ("user_id","sort_order");--> statement-breakpoint
 

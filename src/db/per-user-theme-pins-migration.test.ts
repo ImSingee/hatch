@@ -269,13 +269,12 @@ function scenarios(open: () => Database | Promise<Database>) {
           ),
         ).toEqual([{ key: 'ui.theme' }]);
 
-        // A pin now always belongs to a user.
-        await expect(
-          database.exec(
-            `INSERT INTO sidebar_items (id, app_id, label)
-             VALUES ('orphan', 'app-notes', 'Notes')`,
-          ),
-        ).rejects.toThrow(/user_id/);
+        // A server still on the previous release can still pin an App: its
+        // rows have no user, and the new code never sees them.
+        await database.exec(
+          `INSERT INTO sidebar_items (id, app_id, label)
+           VALUES ('orphan', 'app-notes', 'Notes')`,
+        );
       },
     ));
 

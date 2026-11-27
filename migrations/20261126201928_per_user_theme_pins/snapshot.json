@@ -2,7 +2,7 @@
   "type": "diff",
   "version": "10",
   "dialect": "postgres",
-  "id": "1e71ddac-cd07-43ed-bdb8-79de4f87d217",
+  "id": "239ce455-aecb-45e4-b974-c70d165724ed",
   "prevIds": ["64a7310a-f328-455f-a467-7256cac8955f"],
   "footprints": [
     {
@@ -214,7 +214,7 @@
         "name": "user_id",
         "type": "text",
         "typeSchema": null,
-        "notNull": true,
+        "notNull": false,
         "dimensions": 0,
         "default": null,
         "generated": null,

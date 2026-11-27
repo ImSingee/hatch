@@ -267,6 +267,35 @@ describe('Per-user pins', () => {
     ]);
   });
 
+  it('never shows or touches a pin without a user, as a previous release writes them', async () => {
+    const mine = (await pinApp(U, { app: 'notes' })).pin;
+    await db.insert(schema.sidebarItems).values({
+      id: 'old-server-pin',
+      appId: 'app-notes',
+      label: 'Notes',
+      sortOrder: 0,
+    });
+    const orphan = { id: 'old-server-pin', sortOrder: 0, label: 'Notes' };
+    const stored = () =>
+      db.query.sidebarItems.findFirst({
+        where: { id: 'old-server-pin' },
+        columns: { id: true, sortOrder: true, label: true },
+      });
+    expect(await ids()).toEqual([mine.id]);
+    expect(await ids(OTHER)).toEqual([]);
+    expect((await reorderAppPins(U, [mine.id])).map((pin) => pin.id)).toEqual([
+      mine.id,
+    ]);
+    await expect(reorderAppPins(U, ['old-server-pin'])).rejects.toMatchObject({
+      status: 404,
+    });
+    await expect(
+      updateAppPin(U, 'old-server-pin', { label: 'Taken' }),
+    ).rejects.toMatchObject({ status: 404 });
+    expect(await unpinApp(U, { app: 'notes' })).toEqual([mine.id]);
+    expect(await stored()).toEqual(orphan);
+  });
+
   it('keeps each user’s dashboard pins and order to that user', async () => {
     await db.insert(schema.dashboards).values([
       { id: 'd1', name: 'Home', createdAt: new Date('2026-01-01') },
