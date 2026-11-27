@@ -21,6 +21,7 @@ import {
   type Transport,
 } from '@connectrpc/connect';
 import { createConnectTransport } from '@connectrpc/connect-web';
+import { refreshRunEnvironment } from './run-credential';
 import {
   type AppBackend,
   type AppTask,
@@ -45,6 +46,7 @@ import {
 } from '../../hatch-platform-api/gen/hatch/platform/v1/theme_pb';
 import {
   ServerService,
+  type BuilderStatus,
   type ServerInfo,
 } from '../../hatch-platform-api/gen/hatch/platform/v1/server_pb';
 import {
@@ -74,7 +76,10 @@ import {
   type WidgetSize,
 } from '../../hatch-platform-api/gen/hatch/platform/v1/dashboard_pb';
 import { PreferenceService } from '../../hatch-platform-api/gen/hatch/platform/v1/preference_pb';
-import { type AppIcon } from '../../hatch-platform-api/gen/hatch/platform/v1/app_pb';
+import {
+  type AppDeployment,
+  type AppIcon,
+} from '../../hatch-platform-api/gen/hatch/platform/v1/app_pb';
 import { SdkService } from '../../hatch-platform-api/gen/hatch/platform/v1/sdk_pb';
 import { PublicErrorSchema } from '../../hatch-platform-api/gen/hatch/platform/v1/error_pb';
 import {
@@ -137,6 +142,31 @@ const deployment = (value: Deployment) => ({
   compatibilityVersion: value.compatibilityVersion,
   ...(value.slug === undefined ? {} : { slug: value.slug }),
   normalized: jsonObject(toJson(ValueSchema, required(value.normalized))),
+});
+/** A deployment request as the CLI prints it. */
+export type DeploymentView = ReturnType<typeof deploymentView>;
+const deploymentView = (value: AppDeployment) => ({
+  deploymentId: value.id,
+  appId: value.appId,
+  seq: value.seq,
+  commit: value.commit,
+  message: value.message,
+  build: value.build,
+  trigger: value.trigger,
+  actor: value.actor ?? null,
+  status: value.status,
+  finished: value.finished,
+  errorCode: value.errorCode ?? null,
+  errorMessage: value.errorMessage ?? null,
+  ...(value.deployment
+    ? (({ deploymentId: _id, ...released }) => released)(
+        deployment(value.deployment),
+      )
+    : {}),
+  createdAt: value.createdAt,
+  startedAt: value.startedAt ?? null,
+  finishedAt: value.finishedAt ?? null,
+  logSeq: value.logSeq,
 });
 const restored = (value: RestoredVersion) => ({
   version: value.version,
@@ -312,9 +342,25 @@ const themeProblem = (value: ThemeProblem) => ({
       }
     : {}),
 });
-const serverInfo = (value: ServerInfo | undefined) => {
+const serverInfo = (
+  value: ServerInfo | undefined,
+  builder: BuilderStatus | undefined,
+) => {
   const info = required(value);
-  return { commit: info.commit ?? null, commitTime: info.commitTime ?? null };
+  return {
+    commit: info.commit ?? null,
+    commitTime: info.commitTime ?? null,
+    builder: {
+      configured: builder?.configured ?? false,
+      builders: (builder?.builders ?? []).map((entry) => ({
+        id: entry.id,
+        concurrency: entry.concurrency,
+        running: entry.running,
+        lastSeenAt: entry.lastSeenAt,
+        online: entry.online,
+      })),
+    },
+  };
 };
 const appPin = (value: PinnedApp | undefined) => {
   const pin = required(value);
@@ -403,16 +449,6 @@ type CreateInput = {
   name: string;
   description?: string;
   pin?: boolean;
-};
-type DeployInput = {
-  params: { id: string };
-  body: {
-    message: string;
-    generation: string;
-    commit: string;
-    allowDestructiveDataMigration?: boolean;
-    dataMigrationApprovalToken?: string;
-  };
 };
 function parseData<T>(
   schema: { parse: (value: unknown) => T },
@@ -560,14 +596,6 @@ export function cliClient(transport: Transport) {
       request: CreateInput,
     ) => Promise<{ id: string; slug: string; name: string; files: File[] }>;
     get: (request: { id: string }) => Promise<{ resource?: Resource }>;
-    deploy: (request: {
-      id: string;
-      message: string;
-      generation: string;
-      commit?: string;
-      allowDestructiveDataMigration?: boolean;
-      dataMigrationApprovalToken?: string;
-    }) => Promise<{ deployment?: Deployment }>;
     rollback: (request: {
       id: string;
       version: number;
@@ -596,17 +624,6 @@ export function cliClient(transport: Transport) {
       },
       get: async (input: { id: string }) =>
         resource(required((await client.get(input)).resource)),
-      deploy: async (input: DeployInput) =>
-        deployment(
-          required(
-            (
-              await client.deploy({
-                id: input.params.id,
-                ...input.body,
-              })
-            ).deployment,
-          ),
-        ),
       rollback: async (input: {
         params: { id: string };
         body: { version: number };
@@ -902,7 +919,10 @@ export function cliClient(transport: Transport) {
       }) => catalogStatus((await catalog.updateCatalogSettings(input)).status),
     },
     server: {
-      info: async () => serverInfo((await servers.getServerInfo({})).server),
+      info: async () => {
+        const result = await servers.getServerInfo({});
+        return serverInfo(result.server, result.builder);
+      },
     },
     theme: {
       get: async (resolve = false) => {
@@ -1254,9 +1274,109 @@ export function cliClient(transport: Transport) {
         create: (input) =>
           apps.createApp(parseCreate(CreateAppRequestSchema, input)),
         get: apps.getApp,
-        deploy: apps.deployApp,
         rollback: apps.rollbackApp,
       }),
+      deployments: {
+        create: async (input: {
+          id: string;
+          message: string;
+          generation: string;
+          commit?: string;
+          build: 'builder' | 'local';
+          allowDestructiveDataMigration?: boolean;
+          dataMigrationApprovalToken?: string;
+          notify?: boolean;
+          /** Repeating it returns the deployment it already made. */
+          requestId?: string;
+        }) =>
+          deploymentView(
+            required((await apps.createAppDeployment(input)).deployment),
+          ),
+        upload: async (input: {
+          id: string;
+          deploymentId: string;
+          artifact: Uint8Array;
+        }) =>
+          deploymentView(
+            required(
+              (await apps.uploadAppDeploymentArtifact(input)).deployment,
+            ),
+          ),
+        get: async (
+          input: { id: string; deploymentId: string },
+          options: { timeoutMs?: number; signal?: AbortSignal } = {},
+        ) =>
+          deploymentView(
+            required(
+              (
+                await apps.getAppDeployment(input, {
+                  timeoutMs: options.timeoutMs,
+                  signal: options.signal,
+                })
+              ).deployment,
+            ),
+          ),
+        list: async (input: {
+          id: string;
+          limit?: number;
+          cursor?: number;
+          /** Only the deployment this create request made. */
+          requestId?: string;
+        }) => {
+          const result = await apps.listAppDeployments(input);
+          return {
+            deployments: result.deployments.map((value) =>
+              deploymentView(value),
+            ),
+            nextCursor: result.nextCursor ?? null,
+          };
+        },
+        /** Unfinished deployments of every App, oldest first. */
+        queue: async (input: { limit?: number; cursor?: string }) => {
+          const result = await apps.listDeploymentQueue(input);
+          return {
+            entries: result.entries.map((entry) => ({
+              appSlug: entry.appSlug,
+              appName: entry.appName,
+              queuePosition: entry.queuePosition ?? null,
+              builderId: entry.builderId ?? null,
+              deployment: deploymentView(required(entry.deployment)),
+            })),
+            nextCursor: result.nextCursor ?? null,
+          };
+        },
+        cancel: async (input: {
+          id: string;
+          deploymentId: string;
+          failureMessage?: string;
+          failureCode?: 'app_build_failed' | 'APP_MANIFEST_INVALID';
+        }) =>
+          deploymentView(
+            required((await apps.cancelAppDeployment(input)).deployment),
+          ),
+        /** Lines and state changes until the deployment finishes. */
+        async *watch(
+          input: { id: string; deploymentId: string; afterSeq?: number },
+          options: { timeoutMs?: number; signal?: AbortSignal } = {},
+        ) {
+          for await (const message of apps.watchAppDeploymentLogs(input, {
+            timeoutMs: options.timeoutMs,
+            signal: options.signal,
+          })) {
+            yield {
+              lines: message.lines.map((line) => ({
+                seq: line.seq,
+                stream: line.stream,
+                text: line.text,
+                at: line.at,
+              })),
+              deployment: message.deployment
+                ? deploymentView(message.deployment)
+                : null,
+            };
+          }
+        },
+      },
       backend: {
         list: async (input: { limit?: number; cursor?: string }) => {
           const result = await apps.listAppBackends(input);
@@ -1434,6 +1554,8 @@ export function cliClient(transport: Transport) {
                     result.tooling.typescriptVersion || undefined,
                   esbuildVersion: result.tooling.esbuildVersion || undefined,
                   pnpmVersion: result.tooling.pnpmVersion || undefined,
+                  nshVersion: result.tooling.nshVersion || undefined,
+                  builderEnabled: result.tooling.builderEnabled,
                 },
               }
             : {}),
@@ -1452,29 +1574,189 @@ export function platformClient(
   return cliClient(platformTransport(credential, timeout, signal));
 }
 
-/** Authenticated Connect transport that converts errors to safe CLI errors. */
+/** When a JWT expires (its `exp`, in ms), or null for any other token. */
+function jwtExpiresAt(token: string): number | null {
+  const payload = token.split('.')[1];
+  if (!payload || token.split('.').length !== 3) return null;
+  try {
+    const exp = (
+      JSON.parse(Buffer.from(payload, 'base64url').toString('utf8')) as {
+        exp?: unknown;
+      }
+    ).exp;
+    return typeof exp === 'number' ? exp * 1000 : null;
+  } catch {
+    return null;
+  }
+}
+
+/** A Run credential this close to expiry is replaced before a request. */
+const RUN_CREDENTIAL_MARGIN_MS = 30_000;
+
+/**
+ * Authenticated Connect transport that converts errors to safe CLI errors.
+ * Inside an Agent Run (the Runner's credential endpoint is configured), the
+ * short-lived Run JWT is renewed before any request it would not outlive,
+ * so a long build, follow or reconnect never sends an expired one.
+ */
 export function platformTransport(
   credential: Profile,
   timeout: number,
   signal: AbortSignal,
 ): Transport {
-  const headers = credentialHeaders(credential);
+  let headers = credentialHeaders(credential);
+  const issued = new Set(
+    [credential.token, credential.apiKey].filter(Boolean) as string[],
+  );
+  const runCredential =
+    !credential.apiKey &&
+    credential.token !== undefined &&
+    process.env.HATCH_CLI_RUN_ENDPOINT !== undefined &&
+    process.env.HATCH_CLI_TOKEN === credential.token;
+  // One renewal at a time, shared by every request that needs it. Each
+  // request waits only within its own deadline; the renewal stops once no
+  // request waits for it any more.
+  let renewal:
+    | { done: Promise<void>; stop: AbortController; waiters: number }
+    | undefined;
+  const renew = (callSignal: AbortSignal) => {
+    if (!renewal) {
+      const stop = new AbortController();
+      const entry = {
+        stop,
+        waiters: 0,
+        done: refreshRunEnvironment(
+          process.env,
+          AbortSignal.any([signal, stop.signal]),
+        ).then(() => {
+          const next = process.env.HATCH_CLI_TOKEN;
+          if (next) {
+            issued.add(next);
+            headers = { authorization: `Bearer ${next}` };
+          }
+        }),
+      };
+      // Settled or abandoned, it is no longer the one to join.
+      entry.done
+        .finally(() => {
+          if (renewal === entry) renewal = undefined;
+        })
+        .catch(() => {});
+      renewal = entry;
+    }
+    const entry = renewal;
+    entry.waiters++;
+    return new Promise<void>((resolve, reject) => {
+      let left = false;
+      const leave = (abandoned: boolean) => {
+        if (left) return;
+        left = true;
+        callSignal.removeEventListener('abort', onAbort);
+        if (--entry.waiters === 0 && abandoned && renewal === entry) {
+          renewal = undefined;
+          entry.stop.abort();
+        }
+      };
+      // Connect ends the call with its own reason (deadline or cancel).
+      const onAbort = () => {
+        leave(true);
+        reject(callSignal.reason);
+      };
+      callSignal.addEventListener('abort', onAbort, { once: true });
+      if (callSignal.aborted) {
+        onAbort();
+        return;
+      }
+      entry.done.then(
+        () => {
+          leave(false);
+          resolve();
+        },
+        (error: unknown) => {
+          leave(false);
+          reject(error);
+        },
+      );
+    });
+  };
+  const current = async (callSignal: AbortSignal) => {
+    if (!runCredential) return headers;
+    const token = headers.authorization?.slice('Bearer '.length) ?? '';
+    const expiresAt = jwtExpiresAt(token);
+    if (expiresAt !== null && expiresAt - Date.now() > RUN_CREDENTIAL_MARGIN_MS)
+      return headers;
+    await renew(callSignal);
+    return headers;
+  };
   const transport = createConnectTransport({
     baseUrl: `${credential.url}/api/rpc`,
     useBinaryFormat: true,
     defaultTimeoutMs: timeout,
     interceptors: [
-      (next) => (request) => {
-        for (const [key, value] of Object.entries(headers))
+      (next) => async (request) => {
+        for (const [key, value] of Object.entries(
+          await current(request.signal),
+        ))
           request.header.set(key, value);
         return next(request);
       },
     ],
     fetch: async (input, init) => fetch(input, { ...init, redirect: 'error' }),
   });
+  const convert = (error: unknown) => {
+    // Connect reports what an interceptor or fetch threw as Unknown with
+    // that error as the cause: a rejected fetch is a TypeError, and a Run
+    // credential renewal that failed (no request was sent) a CliError.
+    const cause =
+      error instanceof ConnectError && error.code === Code.Unknown
+        ? error.cause
+        : undefined;
+    const safe =
+      cause instanceof TypeError
+        ? fetchFailure(credential.url, cause)
+        : cause instanceof CliError
+          ? cause
+          : publicError(error);
+    let message = safe.message;
+    for (const value of issued)
+      message = message.replaceAll(value, '[redacted]');
+    return new CliError(safe.code, message, safe.exitCode, safe.httpStatus);
+  };
   // Convert errors after Connect's call boundary, which wraps interceptor errors.
   return {
     ...transport,
+    stream: async (
+      method,
+      callSignal,
+      timeoutMs,
+      callHeaders,
+      input,
+      contextValues,
+    ) => {
+      try {
+        const response = await transport.stream(
+          method,
+          callSignal ? AbortSignal.any([callSignal, signal]) : signal,
+          timeoutMs,
+          callHeaders,
+          input,
+          contextValues,
+        );
+        const messages = response.message;
+        return {
+          ...response,
+          message: (async function* () {
+            try {
+              yield* messages;
+            } catch (error) {
+              throw convert(error);
+            }
+          })(),
+        };
+      } catch (error) {
+        throw convert(error);
+      }
+    },
     unary: async (
       method,
       callSignal,
@@ -1493,17 +1775,7 @@ export function platformTransport(
           contextValues,
         );
       } catch (error) {
-        // Connect reports a rejected fetch as Unknown with the TypeError.
-        const safe =
-          error instanceof ConnectError &&
-          error.code === Code.Unknown &&
-          error.cause instanceof TypeError
-            ? fetchFailure(credential.url, error.cause)
-            : publicError(error);
-        let message = safe.message;
-        for (const value of [credential.token, credential.apiKey])
-          if (value) message = message.replaceAll(value, '[redacted]');
-        throw new CliError(safe.code, message, safe.exitCode, safe.httpStatus);
+        throw convert(error);
       }
     },
   };

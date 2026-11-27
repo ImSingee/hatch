@@ -38,8 +38,8 @@ TypeScript authoring does not introduce a new deployment compatibility version:
 the platform still stores parsed source JSON
 and normalized deployment JSON, and rollback uses stored deployment artifacts.
 
-A platform build predating TypeScript manifest support cannot necessarily rebuild
-TS source with the same `compatibilityVersion`. Upgrade that platform, or use the
+A platform predating TypeScript manifest support cannot necessarily build TS
+source with the same `compatibilityVersion`. Upgrade that platform, or use the
 new platform's restricted manifest evaluation to materialize equivalent source
 JSON, replace the TS file in one commit, and verify the parsed configuration is
 unchanged. Do not lower the compatibility declaration to bypass a build failure.

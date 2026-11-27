@@ -1,5 +1,5 @@
 /** Server-only: Git-backed source storage for Hatch apps. */
-import { appDeployCheckoutDir, appRepoDir } from '~agent/paths';
+import { appRepoDir } from '~agent/paths';
 import {
   DEPLOY_TAG_PREFIX,
   SOURCE_BRANCH,
@@ -14,14 +14,14 @@ export type { PublishedSource };
 const core = createGitSource({
   noun: 'app',
   repoDir: appRepoDir,
-  deployCheckoutDir: appDeployCheckoutDir,
 });
 
 export const ensureAppRepo = core.ensureRepo;
 export const appMasterCommit = core.masterCommit;
-export const prepareDeployCheckout = core.prepareDeployCheckout;
+export const archiveAppCommit = core.archiveCommit;
+export const checkoutAppCommit = core.checkoutCommitInto;
+export const appCommitOnMaster = core.commitOnMaster;
 export const resolveDeployCommit = core.resolveDeployCommit;
 export const publishDeploymentSource = core.publishDeploymentSource;
 export const deleteDeploymentTag = core.deleteDeploymentTag;
 export const moveMasterToDeploymentTag = core.moveMasterToDeploymentTag;
-export const importAppBundleToMaster = core.importBundleToMaster;

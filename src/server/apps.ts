@@ -33,7 +33,21 @@ import {
   listCronRuns,
   runCronJobNow,
 } from './apps/scheduler';
-import { authMiddleware } from './auth';
+import { authMiddleware, requireSession } from './auth';
+import {
+  builderConfigured,
+  builderOnline,
+  builderStatus,
+} from './apps/builders';
+import {
+  cancelDeployment as cancelBuildRequest,
+  createDeployment,
+  getDeployment as getBuildRequest,
+  listDeployments as listBuildRequests,
+  listDeploymentQueue,
+  readBuildLog,
+  type AppBuild,
+} from './apps/builds';
 import { AppError } from './errors';
 import {
   idAndDeploymentSchema,
@@ -214,6 +228,163 @@ export const getDeploymentBuildLog = createServerFn({ method: 'GET' })
   )
   .handler(async ({ data }) => {
     return deploymentBuildLog(data.id, data.deploymentId);
+  });
+
+const ACTIVE_DEPLOYMENT_STATUSES: readonly string[] = [
+  'queued',
+  'awaiting_artifact',
+  'building',
+  'verifying',
+  'releasing',
+];
+
+/**
+ * A deployment request as the manage page shows it. Module-level code stays
+ * in the client bundle, so it uses no server value import.
+ */
+function deploymentRequestView(row: AppBuild) {
+  return {
+    id: row.id,
+    seq: row.seq,
+    commit: row.commit,
+    message: row.message,
+    build: row.mode,
+    trigger: row.trigger,
+    status: row.status,
+    finished: !ACTIVE_DEPLOYMENT_STATUSES.includes(row.status),
+    errorCode: row.errorCode,
+    errorMessage: row.errorMessage,
+    version: row.deploymentVersion,
+    createdAt: row.createdAt.toISOString(),
+    finishedAt: row.finishedAt?.toISOString() ?? null,
+  };
+}
+export type AppDeploymentRequestView = ReturnType<typeof deploymentRequestView>;
+
+/**
+ * Recent deployment requests, whether the platform has a Builder, and
+ * whether one is online to take a build now.
+ */
+export const listAppDeploymentRequestsFn = createServerFn({ method: 'GET' })
+  .middleware([authMiddleware])
+  .validator((id: string) => idSchema.parse(id))
+  .handler(async ({ data: id }) => {
+    const page = await listBuildRequests(id, { limit: 10 });
+    const builderEnabled = builderConfigured();
+    return {
+      builderEnabled,
+      builderOnline: builderEnabled && (await builderOnline()),
+      deployments: page.items.map(deploymentRequestView),
+    };
+  });
+
+/** Queue entries the Builder settings page shows at most. */
+const QUEUE_PAGE = 100;
+
+/**
+ * The dedicated Builders and every unfinished deployment of every App,
+ * oldest first (Web Settings → Builder; `hatch server info` and
+ * `hatch app deployments queue` in the CLI).
+ */
+export const getBuilderOverviewFn = createServerFn({ method: 'GET' })
+  .middleware([authMiddleware])
+  .handler(async () => {
+    const [status, page] = await Promise.all([
+      builderStatus(),
+      listDeploymentQueue({ limit: QUEUE_PAGE }),
+    ]);
+    return {
+      status,
+      queue: page.items.map((item) => ({
+        app: item.app,
+        queuePosition: item.queuePosition,
+        builderId:
+          item.build.status === 'building' ? item.build.builderId : null,
+        deployment: deploymentRequestView(item.build),
+      })),
+      /** More unfinished deployments than the page shows. */
+      truncated: page.nextCursor !== null,
+    };
+  });
+export type BuilderOverview = Awaited<ReturnType<typeof getBuilderOverviewFn>>;
+
+/** Log lines one `getAppDeploymentLogFn` response carries at most. */
+const DEPLOYMENT_LOG_PAGE = 2000;
+
+/**
+ * A deployment's current state and its log lines after `afterSeq`, in `seq`
+ * order. `more` says the page is full and later lines exist: ask again from
+ * the last returned `seq`. The state is read before the lines, so a finished
+ * deployment's response holds every line written before it finished.
+ */
+export const getAppDeploymentLogFn = createServerFn({ method: 'GET' })
+  .middleware([authMiddleware])
+  .validator((input: { id: string; deploymentId: string; afterSeq: number }) =>
+    z
+      .object({
+        id: idSchema,
+        deploymentId: z.string().min(1).max(64),
+        afterSeq: z.number().int().min(0),
+      })
+      .parse(input),
+  )
+  .handler(async ({ data }) => {
+    const row = await getBuildRequest(data.id, data.deploymentId);
+    const lines = await readBuildLog(
+      row.id,
+      data.afterSeq,
+      DEPLOYMENT_LOG_PAGE + 1,
+    );
+    return {
+      deployment: deploymentRequestView(row),
+      more: lines.length > DEPLOYMENT_LOG_PAGE,
+      lines: lines.slice(0, DEPLOYMENT_LOG_PAGE).map((line) => ({
+        seq: line.seq,
+        stream: line.stream,
+        text: line.text,
+      })),
+    };
+  });
+
+export const cancelAppDeploymentFn = createServerFn({ method: 'POST' })
+  .middleware([authMiddleware])
+  .validator((input: { id: string; deploymentId: string }) =>
+    z
+      .object({ id: idSchema, deploymentId: z.string().min(1).max(64) })
+      .parse(input),
+  )
+  .handler(async ({ data }) => {
+    const session = await requireSession();
+    return deploymentRequestView(
+      await cancelBuildRequest(data.id, data.deploymentId, session.user.id),
+    );
+  });
+
+/** Build a recorded commit again on the Builder and release it. */
+export const redeployAppFn = createServerFn({ method: 'POST' })
+  .middleware([authMiddleware])
+  .validator((input: { id: string; commit: string; message: string }) =>
+    z
+      .object({
+        id: idSchema,
+        commit: z.string().regex(/^[0-9a-f]{40}$/),
+        message: z.string().trim().min(1).max(1000),
+      })
+      .parse(input),
+  )
+  .handler(async ({ data }) => {
+    const session = await requireSession();
+    return deploymentRequestView(
+      await createDeployment({
+        appId: data.id,
+        commit: data.commit,
+        message: data.message,
+        build: 'builder',
+        trigger: 'ui',
+        actor: session.user.id,
+        notify: true,
+      }),
+    );
   });
 
 export const rollbackAppFn = createServerFn({ method: 'POST' })

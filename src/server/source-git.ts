@@ -16,18 +16,40 @@ import {
   chmod,
   mkdir,
   mkdtemp,
+  readdir,
   readFile,
   rm,
   writeFile,
 } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
+import { PassThrough, type Readable } from 'node:stream';
+import { checkoutCommit } from '../app-build/checkout';
 import { AppError } from './errors';
 
 export const SOURCE_BRANCH = 'master';
 export const DEPLOY_TAG_PREFIX = 'deploy/';
 /** Largest pack a single push may send; matches the deploy RPC body cap. */
 export const MAX_PUSH_BYTES = 256 * 1024 * 1024;
+/** Stable code of a deploy whose commit is not (or no longer) on master. */
+export const COMMIT_NOT_ON_MASTER_ERROR = 'deployments.commitNotOnMaster';
+
+/**
+ * Largest committed tree the platform writes out (a checkout to evaluate
+ * the manifest, an archive for the Builder), checked against the commit's
+ * blob sizes before anything is written. A push is capped as a compressed
+ * pack only, so a small push can still name a huge tree. The byte budget is
+ * the expanded size a build package may have (src/app-build/format.ts); the
+ * file budget is far above any App's source and bounds inode use.
+ */
+export const SOURCE_TREE_BUDGET = {
+  bytes: 512 * 1024 * 1024,
+  files: 100_000,
+};
+export type SourceTreeBudget = typeof SOURCE_TREE_BUDGET;
+
+/** Commit ids the build path accepts: SHA-1 only (see checkout.ts). */
+const COMMIT_ID = /^[0-9a-f]{40}$/;
 
 type CommandResult = {
   exitCode: number;
@@ -44,8 +66,10 @@ export type PublishedSource = {
 export type GitSourceConfig = {
   /** Noun used in error messages ("app"). */
   noun: string;
+  /** Bare canonical repo for an entity id. */
   repoDir: (id: string) => string;
-  deployCheckoutDir: (id: string) => string;
+  /** Overrides SOURCE_TREE_BUDGET. */
+  treeBudget?: SourceTreeBudget;
 };
 
 async function pathExists(p: string): Promise<boolean> {
@@ -108,30 +132,48 @@ done
 exit 0
 `;
 
+/**
+ * Run Git to completion. A Git that exited without a status (stopped by a
+ * signal) gave no answer at all, so it rejects even with `allowFailure`:
+ * callers read exit statuses as answers (`merge-base --is-ancestor`).
+ */
 function git(
   args: string[],
-  opts: { cwd?: string } = {},
+  opts: { cwd?: string; input?: string } = {},
 ): Promise<CommandResult> {
   return new Promise((resolve, reject) => {
     const child = spawn('git', args, {
       cwd: opts.cwd,
       env: process.env,
-      stdio: ['ignore', 'pipe', 'pipe'],
+      stdio: ['pipe', 'pipe', 'pipe'],
     });
     let stdout = '';
     let stderr = '';
-    child.stdout.on('data', (d) => (stdout += d.toString()));
-    child.stderr.on('data', (d) => (stderr += d.toString()));
+    child.stdout.setEncoding('utf8');
+    child.stderr.setEncoding('utf8');
+    child.stdout.on('data', (chunk: string) => (stdout += chunk));
+    child.stderr.on('data', (chunk: string) => (stderr += chunk));
     child.on('error', reject);
-    child.on('close', (code) => {
-      resolve({ exitCode: code ?? 0, stdout, stderr });
+    // A Git that exits before reading its input is reported by `close`.
+    child.stdin.on('error', () => {});
+    child.stdin.end(opts.input ?? '');
+    child.on('close', (code, signal) => {
+      if (code === null) {
+        reject(
+          new Error(
+            `git ${args.join(' ')} failed: stopped by ${signal ?? 'a signal'}`,
+          ),
+        );
+        return;
+      }
+      resolve({ exitCode: code, stdout, stderr });
     });
   });
 }
 
 async function runGit(
   args: string[],
-  opts: { cwd?: string; allowFailure?: boolean } = {},
+  opts: { cwd?: string; input?: string; allowFailure?: boolean } = {},
 ): Promise<CommandResult> {
   const result = await git(args, opts);
   if (!opts.allowFailure && result.exitCode !== 0) {
@@ -141,20 +183,190 @@ async function runGit(
   return result;
 }
 
-async function setLocalGitIdentity(worktree: string): Promise<void> {
-  await runGit(['config', 'user.name', 'Hatch Agent'], { cwd: worktree });
-  await runGit(['config', 'user.email', 'agent@hatch.local'], {
-    cwd: worktree,
+/**
+ * Fail unless the tree of `commit` fits `budget`, before it is written
+ * anywhere. The listing is read as it streams and stopped once over budget.
+ */
+function assertTreeWithinBudget(
+  repoDir: string,
+  commit: string,
+  budget: SourceTreeBudget,
+  signal?: AbortSignal,
+): Promise<void> {
+  return new Promise((resolve, reject) => {
+    const child = spawn(
+      'git',
+      ['--git-dir', repoDir, 'ls-tree', '-r', '-l', '-z', commit],
+      { env: process.env, stdio: ['ignore', 'pipe', 'pipe'], signal },
+    );
+    let bytes = 0;
+    let files = 0;
+    let over: AppError | null = null;
+    let pending = '';
+    let stderr = '';
+    child.stdout.setEncoding('utf8');
+    child.stdout.on('data', (chunk: string) => {
+      if (over) return;
+      const records = (pending + chunk).split('\0');
+      pending = records.pop() ?? '';
+      for (const record of records) {
+        // `<mode> <type> <object> <size>\t<path>`; a submodule's size is `-`.
+        const [, type, , size] = record
+          .slice(0, record.indexOf('\t'))
+          .split(/ +/);
+        files += 1;
+        if (type === 'blob') bytes += Number(size) || 0;
+        if (bytes > budget.bytes || files > budget.files) {
+          over = new AppError(
+            `The source of commit ${commit} is larger than the platform ` +
+              `builds (at most ${budget.files} files and ` +
+              `${Math.floor(budget.bytes / (1024 * 1024))} MiB).`,
+            413,
+          );
+          child.kill('SIGKILL');
+          return;
+        }
+      }
+    });
+    child.stderr.setEncoding('utf8');
+    child.stderr.on('data', (chunk: string) => (stderr += chunk));
+    child.once('error', (error) => reject(over ?? error));
+    child.once('close', (code) => {
+      if (over) reject(over);
+      else if (code === 0) resolve();
+      else
+        reject(
+          new Error(`Could not list the tree of ${commit}: ${stderr.trim()}`),
+        );
+    });
   });
 }
 
+/**
+ * The object id `ref` names, or null when there is no such ref. Rejects when
+ * Git cannot tell (`--verify --quiet` exits 1 only for a name it cannot
+ * resolve). A full ref is resolved from the refs alone, without reading the
+ * object it names.
+ */
 async function refCommit(repoDir: string, ref: string): Promise<string | null> {
   const result = await runGit(
-    ['--git-dir', repoDir, 'rev-parse', '--verify', ref],
+    ['--git-dir', repoDir, 'rev-parse', '--verify', '--quiet', ref],
     { allowFailure: true },
   );
-  if (result.exitCode !== 0) return null;
+  if (result.exitCode === 1) return null;
+  if (result.exitCode !== 0) {
+    throw new Error(
+      `git rev-parse ${ref} failed: ${(result.stderr || result.stdout).trim()}`,
+    );
+  }
   return result.stdout.trim();
+}
+
+/**
+ * The type of each object in `ids` (full ids), null for one that is not in
+ * the repository. Rejects when Git reports it could not read the store.
+ *
+ * An unreadable pack is indistinguishable from an absent object here (Git
+ * answers `missing` without a word on stderr), so a caller that knows an
+ * object must exist (the master tip) treats `missing` for it as a fault.
+ */
+async function objectTypes(
+  repoDir: string,
+  ids: readonly string[],
+): Promise<(string | null)[]> {
+  const result = await runGit(
+    ['--git-dir', repoDir, 'cat-file', '--batch-check'],
+    { allowFailure: true, input: ids.map((id) => `${id}\n`).join('') },
+  );
+  const answers = result.stdout.split('\n').slice(0, ids.length);
+  if (
+    result.exitCode !== 0 ||
+    /^(?:error|fatal):/m.test(result.stderr) ||
+    answers.length !== ids.length
+  ) {
+    throw new Error(
+      `git cat-file --batch-check failed: ${(result.stderr || result.stdout).trim()}`,
+    );
+  }
+  return answers.map((answer, index) => {
+    const id = ids[index];
+    if (answer === `${id} missing`) return null;
+    const [answered, type] = answer.split(' ');
+    if (answered !== id || !type) {
+      throw new Error(`git cat-file --batch-check failed: ${answer}`);
+    }
+    return type;
+  });
+}
+
+/** Alternates Git follows from one object directory to the next. */
+const MAX_ALTERNATE_DEPTH = 5;
+
+/**
+ * Rejects unless this process can read every place Git would look for
+ * `id`: each file of each pack directory, the object's loose path, and the
+ * same in every alternate object directory. Git answers an object it cannot
+ * open as `missing` (exit 0, nothing on stderr), so a `missing` answer means
+ * absent only once this holds.
+ */
+async function assertObjectStoreReadable(
+  objectsDir: string,
+  id: string,
+  depth = 0,
+): Promise<void> {
+  const failed = (target: string, error: unknown): Error =>
+    new Error(
+      `git object store read failed: ${target} cannot be read ` +
+        `(${(error as NodeJS.ErrnoException).code ?? String(error)})`,
+    );
+  /** Whether `target` exists; rejects when it exists but cannot be read. */
+  const readable = async (target: string, mode: number): Promise<boolean> => {
+    try {
+      await access(target, mode);
+      return true;
+    } catch (error) {
+      // Gone is fine: a push or repack may have replaced it meanwhile.
+      if ((error as NodeJS.ErrnoException).code === 'ENOENT') return false;
+      throw failed(target, error);
+    }
+  };
+  if (!(await readable(objectsDir, fsConstants.R_OK | fsConstants.X_OK))) {
+    throw failed(objectsDir, 'ENOENT');
+  }
+  await readable(
+    path.join(objectsDir, id.slice(0, 2), id.slice(2)),
+    fsConstants.R_OK,
+  );
+  const packDir = path.join(objectsDir, 'pack');
+  if (await readable(packDir, fsConstants.R_OK | fsConstants.X_OK)) {
+    const entries = await readdir(packDir).catch((error) => {
+      if ((error as NodeJS.ErrnoException).code === 'ENOENT') return [];
+      throw failed(packDir, error);
+    });
+    for (const entry of entries) {
+      await readable(path.join(packDir, entry), fsConstants.R_OK);
+    }
+  }
+  const alternatesFile = path.join(objectsDir, 'info', 'alternates');
+  const alternates = await readFile(alternatesFile, 'utf8').catch((error) => {
+    if ((error as NodeJS.ErrnoException).code === 'ENOENT') return '';
+    throw failed(alternatesFile, error);
+  });
+  for (const line of alternates.split('\n')) {
+    const alternate = line.trim();
+    if (!alternate || alternate.startsWith('#')) continue;
+    if (depth >= MAX_ALTERNATE_DEPTH) {
+      throw new Error(
+        `git object store read failed: alternates nest deeper than ` +
+          `${MAX_ALTERNATE_DEPTH} at ${alternatesFile}`,
+      );
+    }
+    await assertObjectStoreReadable(
+      path.resolve(objectsDir, alternate),
+      id,
+      depth + 1,
+    );
+  }
 }
 
 export function createGitSource(cfg: GitSourceConfig) {
@@ -206,28 +418,60 @@ export function createGitSource(cfg: GitSourceConfig) {
     return refCommit(cfg.repoDir(id), `refs/heads/${SOURCE_BRANCH}`);
   }
 
+  const treeBudget = cfg.treeBudget ?? SOURCE_TREE_BUDGET;
+
   function notOnMaster(id: string, commit: string): AppError {
     return new AppError(
       `Cannot deploy ${cfg.noun} "${id}": commit ${commit} is not on ` +
         `${SOURCE_BRANCH}. Push it to ${SOURCE_BRANCH} first.`,
       409,
+      { code: COMMIT_NOT_ON_MASTER_ERROR },
     );
   }
 
-  /** True when `commit` is the master tip or one of its ancestors. */
+  /**
+   * Whether `commit` is still on master: a restore moves master back, so a
+   * newer version's commit may no longer be deployable. Rejects when Git
+   * cannot tell (an unreadable repository), which is not "not on master".
+   */
+  async function commitOnMaster(id: string, commit: string): Promise<boolean> {
+    const repoDir = await ensureRepo(id);
+    return isOnMaster(repoDir, commit);
+  }
+
+  /**
+   * True when `commit` (a full id) is the master tip or one of its ancestors;
+   * false when it is not, or is no commit of this repository. Rejects when Git
+   * cannot tell (an unreadable repository), which is not "not on master".
+   */
   async function isOnMaster(repoDir: string, commit: string): Promise<boolean> {
+    const master = `refs/heads/${SOURCE_BRANCH}`;
+    const tip = await refCommit(repoDir, master);
+    if (!tip) return false;
+    // The tip is read as well: an object the ref names but Git cannot read
+    // means the store is unreadable, never that `commit` is absent from it.
+    const [tipType, commitType] = await objectTypes(repoDir, [tip, commit]);
+    if (tipType !== 'commit') {
+      throw new Error(
+        `git cat-file ${master} failed: ${tip} is ${tipType ?? 'unreadable'}`,
+      );
+    }
+    if (commitType === null) {
+      // Absent, or in a pack Git could not open: only a store this process
+      // can read in full makes it absent.
+      await assertObjectStoreReadable(path.join(repoDir, 'objects'), commit);
+      return false;
+    }
+    if (commitType !== 'commit') return false;
     const result = await runGit(
-      [
-        '--git-dir',
-        repoDir,
-        'merge-base',
-        '--is-ancestor',
-        commit,
-        `refs/heads/${SOURCE_BRANCH}`,
-      ],
+      ['--git-dir', repoDir, 'merge-base', '--is-ancestor', commit, master],
       { allowFailure: true },
     );
-    return result.exitCode === 0;
+    if (result.exitCode === 0) return true;
+    if (result.exitCode === 1) return false;
+    throw new Error(
+      `git merge-base ${commit} failed: ${(result.stderr || result.stdout).trim()}`,
+    );
   }
 
   /**
@@ -247,40 +491,29 @@ export function createGitSource(cfg: GitSourceConfig) {
         409,
       );
     }
+    // Builds check out and package SHA-1 commit ids only, so a deployment
+    // that could never be built is refused here, before it is created.
+    const unsupported = () =>
+      new AppError(
+        `${capitalize(cfg.noun)} "${id}" uses SHA-256 commit ids, which ` +
+          'deployments do not support yet.',
+        400,
+      );
+    // The repository's format first: in a SHA-256 repository a 40-digit id
+    // would still resolve, as an abbreviation of a 64-digit one.
+    if (!COMMIT_ID.test(master)) throw unsupported();
     if (!requested) return master;
-    if (!/^[0-9a-f]{40}([0-9a-f]{24})?$/.test(requested)) {
-      throw new AppError('Deploy commit must be a full commit id.', 400);
+    if (/^[0-9a-f]{64}$/.test(requested)) throw unsupported();
+    if (!COMMIT_ID.test(requested)) {
+      throw new AppError(
+        'Deploy commit must be a full 40-character commit id.',
+        400,
+      );
     }
-    const commit = await refCommit(repoDir, `${requested}^{commit}`);
-    if (!commit || !(await isOnMaster(repoDir, commit))) {
+    if (!(await isOnMaster(repoDir, requested))) {
       throw notOnMaster(id, requested);
     }
-    return commit;
-  }
-
-  /**
-   * Check out `commit` from the canonical repo into a checkout of its own.
-   * Each deploy attempt gets a fresh directory, so concurrent attempts, also
-   * from other processes, never build each other's source. The caller removes
-   * it when the attempt ends.
-   */
-  async function prepareDeployCheckout(
-    id: string,
-    commit: string,
-  ): Promise<string> {
-    const repoDir = await ensureRepo(id);
-    const base = cfg.deployCheckoutDir(id);
-    await mkdir(path.dirname(base), { recursive: true });
-    const checkout = await mkdtemp(`${base}-`);
-    try {
-      await runGit(['clone', '--no-checkout', repoDir, checkout]);
-      await runGit(['checkout', '--detach', commit], { cwd: checkout });
-      await setLocalGitIdentity(checkout);
-      return checkout;
-    } catch (error) {
-      await rm(checkout, { recursive: true, force: true });
-      throw error;
-    }
+    return requested;
   }
 
   /**
@@ -318,83 +551,6 @@ export function createGitSource(cfg: GitSourceConfig) {
     });
   }
 
-  /**
-   * Push an uploaded bundle's HEAD to master, as a fast-forward only. This is
-   * the bundle transport's equivalent of `git push`, used by Agent Tool
-   * deploys and by CLI versions that predate the Git endpoint. Returns the
-   * pushed commit.
-   */
-  async function importBundleToMaster(
-    id: string,
-    bundle: Buffer,
-  ): Promise<string> {
-    const repoDir = await ensureRepo(id);
-    const tmp = await mkdtemp(path.join(os.tmpdir(), 'hatch-push-'));
-    try {
-      const bundleFile = path.join(tmp, 'incoming.bundle');
-      await writeFile(bundleFile, bundle);
-      const verify = await runGit(
-        ['--git-dir', repoDir, 'bundle', 'verify', bundleFile],
-        { allowFailure: true },
-      );
-      // A bundle with prerequisites missing from the canonical repo fails
-      // verify: the checkout is based on history this repo doesn't have.
-      if (verify.exitCode !== 0) {
-        throw new AppError(
-          `Cannot deploy ${cfg.noun} "${id}": the uploaded source bundle ` +
-            `does not apply to the canonical repository. Run checkout again ` +
-            `to sync with ${SOURCE_BRANCH}, rebase your work, then retry.`,
-          409,
-        );
-      }
-      // A worktree bundle names HEAD; a bundle exported from this repository
-      // names only the branch.
-      const heads = new Map(
-        (await runGit(['bundle', 'list-heads', bundleFile])).stdout
-          .trim()
-          .split('\n')
-          .map((line) => line.split(' '))
-          .map(([sha, ref]) => [ref, sha] as const),
-      );
-      const ref = heads.has('HEAD') ? 'HEAD' : `refs/heads/${SOURCE_BRANCH}`;
-      const commit = heads.get(ref);
-      if (!commit) {
-        throw new AppError(
-          `Cannot deploy ${cfg.noun} "${id}": the uploaded source bundle ` +
-            `has neither HEAD nor ${SOURCE_BRANCH}.`,
-          400,
-        );
-      }
-      // Without a leading "+", fetch refuses anything but a fast-forward. A
-      // concurrent upload of the same commit can win the ref lock instead; that
-      // push has then already happened, so retry once and accept master
-      // sitting exactly on this commit.
-      for (let attempt = 0; attempt < 2; attempt++) {
-        const pushed = await runGit(
-          [
-            '--git-dir',
-            repoDir,
-            'fetch',
-            '--no-tags',
-            bundleFile,
-            `${ref}:refs/heads/${SOURCE_BRANCH}`,
-          ],
-          { allowFailure: true },
-        );
-        if (pushed.exitCode === 0 || (await masterCommit(id)) === commit)
-          return commit;
-      }
-      throw new AppError(
-        `Cannot deploy ${cfg.noun} "${id}" because ${SOURCE_BRANCH} ` +
-          `advanced. Run "git fetch origin ${SOURCE_BRANCH}" and rebase ` +
-          'your work before deploying.',
-        409,
-      );
-    } finally {
-      await rm(tmp, { recursive: true, force: true });
-    }
-  }
-
   async function moveMasterToDeploymentTag(
     id: string,
     tag: string,
@@ -415,15 +571,99 @@ export function createGitSource(cfg: GitSourceConfig) {
     return commit;
   }
 
+  /**
+   * Check `commit` out into `target`, a directory that does not exist yet.
+   * A tree over the source budget is refused before anything is written.
+   */
+  async function checkoutCommitInto(
+    id: string,
+    commit: string,
+    target: string,
+    signal?: AbortSignal,
+  ): Promise<void> {
+    const repoDir = await ensureRepo(id);
+    if (!COMMIT_ID.test(commit)) {
+      throw new AppError('Commit must be a full commit id.', 400);
+    }
+    await assertTreeWithinBudget(repoDir, commit, treeBudget, signal);
+    await checkoutCommit({
+      repo: { gitDir: repoDir },
+      commit,
+      target,
+      signal,
+    });
+  }
+
+  /**
+   * The tree of `commit` as a gzipped tar stream, for a build elsewhere: a
+   * checkout (src/app-build/checkout.ts), so archive-only attributes such as
+   * `export-ignore` leave the source intact.
+   *
+   * Resolves once the checkout is written, so a commit over the source
+   * budget or one that cannot be checked out rejects before any byte is
+   * sent. The stream ends only after tar succeeded; a failed tar destroys it
+   * with an error instead. Destroying the stream (or aborting `signal`)
+   * stops tar. Either way the checkout is removed once tar has exited.
+   */
+  async function archiveCommit(
+    id: string,
+    commit: string,
+    signal?: AbortSignal,
+  ): Promise<Readable> {
+    const scratch = await mkdtemp(path.join(os.tmpdir(), 'hatch-source-'));
+    const tree = path.join(scratch, 'tree');
+    try {
+      await checkoutCommitInto(id, commit, tree, signal);
+      signal?.throwIfAborted();
+    } catch (error) {
+      await rm(scratch, { recursive: true, force: true });
+      throw error;
+    }
+    const child = spawn('tar', ['-czf', '-', '-C', tree, '.'], {
+      env: process.env,
+      stdio: ['ignore', 'pipe', 'pipe'],
+    });
+    const output = new PassThrough();
+    let stderr = '';
+    let exited = false;
+    const stop = () => {
+      if (!exited) child.kill('SIGKILL');
+    };
+    child.stderr.setEncoding('utf8');
+    child.stderr.on('data', (chunk: string) => (stderr += chunk));
+    child.stdout.pipe(output, { end: false });
+    output.once('close', stop);
+    signal?.addEventListener('abort', () => output.destroy(), { once: true });
+    const finish = (error: Error | null) => {
+      if (exited) return;
+      exited = true;
+      if (error) output.destroy(error);
+      else output.end();
+      void rm(scratch, { recursive: true, force: true }).catch((cleanup) => {
+        console.error(`[source] could not remove ${scratch}:`, cleanup);
+      });
+    };
+    child.once('error', (error) => finish(error));
+    child.once('close', (code) =>
+      finish(
+        code === 0
+          ? null
+          : new Error(`Could not archive the source: ${stderr.trim()}`),
+      ),
+    );
+    return output;
+  }
+
   return {
     ensureRepo,
     masterCommit,
+    archiveCommit,
+    checkoutCommitInto,
+    commitOnMaster,
     resolveDeployCommit,
-    prepareDeployCheckout,
     publishDeploymentSource,
     deleteDeploymentTag,
     moveMasterToDeploymentTag,
-    importBundleToMaster,
   };
 }
 

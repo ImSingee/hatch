@@ -30,28 +30,28 @@ import {
 } from './paths';
 import { resolveAgentOwnershipSession, sandboxSpawn } from './shell-sandbox';
 import {
-  APP_SDK,
-  LEGACY_DATA_SDK,
   SDK_DENO_TYPES,
   SDK_DENO_TYPES_LICENSE,
   appMaterializedSdkDefinitions,
-  sdkImports,
   sdkToolchainFiles,
   type SdkDefinition,
 } from '../../sdk-internal/definitions';
 
-export const HATCH_SDK_IMPORT_MAP = '.hatch/import-map.json';
-export const HATCH_BUF_GEN_CONFIG = '.hatch/buf.gen.yaml';
+import {
+  APP_HATCH_SDK_IMPORTS,
+  HATCH_BUF_GEN_CONFIG,
+  HATCH_SDK_IMPORT_MAP,
+  appHatchDataPackageDir,
+  hatchImportMapPath,
+} from './hatch-sdk-paths';
 
-export const APP_HATCH_SDK_IMPORTS = sdkImports([APP_SDK, LEGACY_DATA_SDK]);
-
-export function appHatchDataPackageDir(root: string): string {
-  return path.join(root, '.hatch', 'sdk', '@hatch', 'data');
-}
-
-export function hatchImportMapPath(root: string): string {
-  return path.join(root, ...HATCH_SDK_IMPORT_MAP.split('/'));
-}
+export {
+  APP_HATCH_SDK_IMPORTS,
+  HATCH_BUF_GEN_CONFIG,
+  HATCH_SDK_IMPORT_MAP,
+  appHatchDataPackageDir,
+  hatchImportMapPath,
+};
 
 function managedPathError(target: string, reason: string): Error {
   return new Error(

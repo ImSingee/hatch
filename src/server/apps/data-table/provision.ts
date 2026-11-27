@@ -105,16 +105,48 @@ export async function withAppDataCutoverLock<T>(
   id: string,
   fn: () => Promise<T>,
 ): Promise<T> {
+  const outcome = await cutoverLocked(id, true, fn);
+  if (!outcome.locked) throw new Error('The Data cutover lock was not taken.');
+  return outcome.value;
+}
+
+/**
+ * Run `fn` under the Data cutover lock only if no one holds it now. A
+ * holder is a lifecycle operation still running in some process: its
+ * session keeps the lock until it finishes or its process stops.
+ */
+export function tryWithAppDataCutoverLock<T>(
+  id: string,
+  fn: () => Promise<T>,
+): Promise<{ locked: true; value: T } | { locked: false }> {
+  return cutoverLocked(id, false, fn);
+}
+
+async function cutoverLocked<T>(
+  id: string,
+  wait: boolean,
+  fn: () => Promise<T>,
+): Promise<{ locked: true; value: T } | { locked: false }> {
   const platform = postgres(platformUrl(), { max: 1, onnotice: () => {} });
   let locked = false;
   try {
-    await platform`
-      select pg_advisory_lock(
-        ${DATA_CUTOVER_LOCK_NAMESPACE}, hashtext(${id})
-      )
-    `;
-    locked = true;
-    return await fn();
+    if (wait) {
+      await platform`
+        select pg_advisory_lock(
+          ${DATA_CUTOVER_LOCK_NAMESPACE}, hashtext(${id})
+        )
+      `;
+      locked = true;
+    } else {
+      const [row] = await platform<{ locked: boolean }[]>`
+        select pg_try_advisory_lock(
+          ${DATA_CUTOVER_LOCK_NAMESPACE}, hashtext(${id})
+        ) as locked
+      `;
+      locked = row?.locked === true;
+      if (!locked) return { locked: false };
+    }
+    return { locked: true, value: await fn() };
   } finally {
     if (locked) {
       await platform`

@@ -120,6 +120,10 @@ COPY --from=deno /deno /usr/local/bin/deno
 # NSH builds native App frontends (HATCH_NSH_BIN points the platform at it).
 COPY --from=nsh /opt/nsh /opt/nsh
 ENV HATCH_NSH_BIN=/opt/nsh/bin/nsh
+# `hatch app deploy --build local` (the Agent's Runner without a Builder)
+# builds with the image's own esbuild, TypeScript and buf instead of
+# downloading them.
+ENV HATCH_BUILD_TOOLCHAIN_DIR=/app
 COPY --from=tailscale /hatch-tailscale /app/bin/hatch-tailscale
 
 # Runtime needs: the built server, the full dependency tree (esbuild bundling,
@@ -130,10 +134,15 @@ COPY --from=deps /app/node_modules ./node_modules
 COPY --from=build /app/dist ./dist
 # Standalone CLI, available to both the Platform and Runner image entrypoints.
 # It needs only Node and never receives the Runner fleet token automatically.
-COPY --from=build --chmod=755 /app/packages/hatch-cli/dist/main.mjs /usr/local/bin/hatch
+# Local builds run the build driver that sits next to the CLI's real path,
+# so both files live in one directory and `hatch` links to the CLI there.
+COPY --from=build --chmod=755 /app/packages/hatch-cli/dist/main.mjs /usr/local/lib/hatch-cli/main.mjs
+COPY --from=build /app/packages/hatch-cli/dist/build-driver.mjs /usr/local/lib/hatch-cli/build-driver.mjs
+RUN ln -s /usr/local/lib/hatch-cli/main.mjs /usr/local/bin/hatch
 COPY --from=build /app/packages/hatch-cli/dist/licenses /usr/local/share/hatch-cli/licenses
-# The Agent Runner service: same image, alternate entrypoint
-# (`node dist/runner/main.mjs`), no DB credentials.
+# The Agent Runner and the optional Builder: same image, alternate
+# entrypoints (`node dist/runner/main.mjs`, `node dist/builder/main.mjs`),
+# no DB credentials.
 COPY package.json ./
 COPY migrations ./migrations
 COPY templates ./templates

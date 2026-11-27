@@ -1,9 +1,8 @@
-/** Server-only: build + record a deployment and flip the app live. */
+/** Server-only: record a built deployment and flip the app live. */
 import { randomUUID } from 'node:crypto';
 import { promises as fs } from 'node:fs';
 import path from 'node:path';
 import { and, eq } from 'drizzle-orm';
-import { ulid } from 'ulid';
 import { resolveAppDeployCompatibilityVersion } from '~/app-compatibility';
 import {
   BUILD_WORK_DIR,
@@ -14,22 +13,17 @@ import {
 import { db, schema } from '~/db';
 import { AppError } from '~server/errors';
 import { manifestInvalid } from './manifest-validation';
-import type { JsonObject } from '~/db/schema';
+import type { DeploymentBuildOrigin, JsonObject } from '~/db/schema';
 import { workspaceRelative } from '~server/deploy-lock';
 import { appDeployLock } from './deploy-lock';
 import { publishPlatformEvent } from '~server/platform-events';
 import { syncAppNotificationDestination } from '~server/notifications/app-destinations';
-import { buildApp, type BuildResult } from './build';
+import type { BuildResult } from './build';
 import {
   buildMatchesDeployment,
   liveBuildMatchesDeployment,
 } from './build-identity';
-import {
-  deleteDeploymentTag,
-  prepareDeployCheckout,
-  publishDeploymentSource,
-  resolveDeployCommit,
-} from './git';
+import { deleteDeploymentTag, publishDeploymentSource } from './git';
 import type { NormalizedManifest } from './manifest';
 import {
   beginAppDatabaseDeployment,
@@ -44,6 +38,39 @@ import {
 } from './data-table/migrate';
 import { appDataDbName, withAppDataCutoverLock } from './data-table/provision';
 
+/** The App was deleted or recreated after the deployment was requested. */
+export class ReleaseGenerationConflict extends AppError {
+  constructor() {
+    super('App was deleted or recreated while preparing the deploy.', 409);
+    this.name = 'ReleaseGenerationConflict';
+  }
+}
+
+/**
+ * A release that got past the point where it can be confirmed undone: it
+ * committed (`version` is its recorded version) but did not finish its
+ * activation, or its COMMIT outcome is unknown (`version` is null). Its
+ * activation fence stays set, so `reconcilePendingActivation` completes or
+ * undoes it; until then it is neither released nor failed.
+ */
+export class ReleaseUnfinished extends Error {
+  constructor(
+    readonly deploymentId: string,
+    readonly version: number | null,
+    options: { cause: unknown },
+  ) {
+    super(
+      version === null
+        ? `Deployment ${deploymentId} may have been recorded; its release ` +
+            'is recovered from the recorded deployments.'
+        : `Deployment ${deploymentId} was released as version ${version}, ` +
+            'but finishing its activation failed.',
+      options,
+    );
+    this.name = 'ReleaseUnfinished';
+  }
+}
+
 export type DeployResult = {
   deploymentId: string;
   version: number;
@@ -52,17 +79,43 @@ export type DeployResult = {
   log: string;
 };
 
-export type DeployAppOptions = {
+export type ReleaseDeploymentOptions = {
+  /** The deployment id the artifact was built for. */
+  deploymentId: string;
+  /** The master commit the artifact was built from. */
+  sourceCommit: string;
   /** Reject if the immutable ID belongs to a recreated resource. */
   expectedGeneration?: string;
-  /** Commit to release; must be on master. Defaults to the master tip. */
-  commit?: string;
   /** Required release note recorded on the deployment (e.g. what changed). */
   message: string;
   /** Explicit acknowledgement required for destructive Data Table migrations. */
   allowDestructiveDataMigration?: boolean;
   /** Fingerprint returned by the exact destructive migration preview. */
   dataMigrationApprovalToken?: string;
+  /** Where the artifact was built, recorded on the deployment. */
+  buildOrigin: DeploymentBuildOrigin | null;
+  /**
+   * Write the deployment artifact to `outputDir` and describe it. Runs under
+   * the release locks, after crash recovery, so it must not run App code.
+   */
+  produce: (outputDir: string) => Promise<BuildResult>;
+  /**
+   * Called under the release locks once the artifact is accepted, before
+   * anything is changed; throwing stops the release (a cancellation or a
+   * newer release).
+   */
+  beforeRelease?: () => Promise<void>;
+  /**
+   * Lets the requester confirm that no other instance settled its request.
+   * Called inside a transaction holding the App's cross-process deploy lock,
+   * twice: first thing once the release holds its locks, before anything
+   * (crash recovery, a Data migration) is changed, and again in the
+   * transaction that records the release. Throwing aborts the release; the
+   * first call leaves everything as it was.
+   */
+  fenceRelease?: (
+    tx: Parameters<Parameters<typeof db.transaction>[0]>[0],
+  ) => Promise<void>;
 };
 
 async function warmCommittedBackend(
@@ -255,7 +308,9 @@ export { appDeployLock } from './deploy-lock';
  * Reconcile a durable activation fence left by a crash or an unavailable
  * COMMIT acknowledgement. The caller must hold the per-App cutover lock.
  */
-async function reconcilePendingActivation(id: string): Promise<string | null> {
+export async function reconcilePendingActivation(
+  id: string,
+): Promise<string | null> {
   const state = await db.transaction(async (tx) => {
     // Wait for a release transaction whose client disappeared while PostgreSQL
     // was still resolving COMMIT, then inspect its exact deployment id.
@@ -466,26 +521,35 @@ export async function reconcilePendingAppActivations(): Promise<void> {
 }
 
 /**
- * Build + record a deployment and flip the app live. Serialized per app so two
- * concurrent deploys can't both read the same latest version, assign the same
+ * Record a built deployment and flip the app live. Serialized per app so two
+ * concurrent releases can't both read the same latest version, assign the same
  * next version, and force-move the same `deploy/v<n>` tag onto different commits.
  */
-export function deployApp(
+export function releaseDeployment(
   id: string,
-  options: DeployAppOptions,
+  options: ReleaseDeploymentOptions,
 ): Promise<DeployResult> {
   return appDeployLock.withLock(id, () =>
-    withAppDataCutoverLock(id, () => deployAppInner(id, options)),
+    withAppDataCutoverLock(id, () => releaseDeploymentInner(id, options)),
   );
 }
 
-async function deployAppInner(
+async function releaseDeploymentInner(
   id: string,
-  options: DeployAppOptions,
+  options: ReleaseDeploymentOptions,
 ): Promise<DeployResult> {
   const message = options.message?.trim();
   if (!message) {
     throw new Error('A deployment message is required.');
+  }
+  // A sweeper settles a stalled request under the same locks, so one that
+  // settled this request before the release took them stops it here.
+  const { fenceRelease } = options;
+  if (fenceRelease) {
+    await db.transaction(async (tx) => {
+      await appDeployLock.acquire(tx, id);
+      await fenceRelease(tx);
+    });
   }
 
   // A previous process may have died after swapping live bytes or while
@@ -503,23 +567,16 @@ async function deployAppInner(
     options.expectedGeneration &&
     app.createdAt.toISOString() !== options.expectedGeneration
   ) {
-    throw new AppError(
-      'App was deleted or recreated while preparing the deploy.',
-      409,
-    );
+    throw new ReleaseGenerationConflict();
   }
   // `status` is temporarily changed for build visibility. Keep the status that
   // existed before this deploy so a later failure cannot unarchive the app.
   let statusBeforeBuild = app.status;
 
-  const sourceCommit = await resolveDeployCommit(id, options.commit);
-  const sourceDir = await prepareDeployCheckout(id, sourceCommit);
-
+  const { sourceCommit, deploymentId } = options;
   // A deployment row records a *successful* release, so we don't write one until
-  // the build passes — a failed attempt leaves no history entry and burns no
-  // version number. We still mint a stable id up front to key the build/artifact
-  // dirs and the deployment row.
-  const deploymentId = ulid().toLowerCase();
+  // the artifact is accepted — a failed attempt leaves no history entry and
+  // burns no version number. The id keys the artifact dirs and the row.
   const tempBuild = path.join(BUILD_WORK_DIR, id, deploymentId, 'out');
   // Tracked so a failure after tagging can remove the tag (keeps Git history
   // free of failed attempts, mirroring the deployments table).
@@ -554,11 +611,10 @@ async function deployAppInner(
   let provisionedDbName: string | undefined;
 
   try {
-    build = await buildApp(id, {
-      sourceDir,
-      outputDir: tempBuild,
-      deploymentId,
-    });
+    await fs.rm(path.dirname(tempBuild), { recursive: true, force: true });
+    await fs.mkdir(path.dirname(tempBuild), { recursive: true });
+    build = await options.produce(tempBuild);
+    await options.beforeRelease?.();
     compatibilityVersion = resolveAppDeployCompatibilityVersion(
       build.source.compatibilityVersion,
     );
@@ -709,10 +765,7 @@ async function deployAppInner(
         options.expectedGeneration &&
         currentApp.createdAt.toISOString() !== options.expectedGeneration
       ) {
-        throw new AppError(
-          'App was deleted or recreated while preparing the deploy.',
-          409,
-        );
+        throw new ReleaseGenerationConflict();
       }
       // Capture a concurrent archive request, but never replace the original
       // state with the temporary `building` marker written by this deploy.
@@ -834,6 +887,7 @@ async function deployAppInner(
       const releaseBuild = build;
       await db.transaction(async (tx) => {
         await appDeployLock.acquire(tx, id);
+        await options.fenceRelease?.(tx);
         if (options.expectedGeneration) {
           const [currentApp] = await tx
             .select({ createdAt: schema.apps.createdAt })
@@ -844,10 +898,7 @@ async function deployAppInner(
             !currentApp ||
             currentApp.createdAt.toISOString() !== options.expectedGeneration
           ) {
-            throw new AppError(
-              'App was deleted or recreated while preparing the deploy.',
-              409,
-            );
+            throw new ReleaseGenerationConflict();
           }
         }
         const last = await tx.query.deployments.findFirst({
@@ -881,6 +932,8 @@ async function deployAppInner(
           sourceTag: published.tag,
           artifactPath: workspaceRelative(artifact),
           buildLog: releaseBuild.log,
+          buildId: deploymentId,
+          buildOrigin: options.buildOrigin,
         });
 
         await tx
@@ -1011,14 +1064,21 @@ async function deployAppInner(
       // The release transaction committed and is already live. Finish the same
       // idempotent post-commit work as the ordinary success path and report
       // success instead of falling through to destructive failure cleanup.
-      await appDatabaseLease?.release();
-      await finishCommittedRelease(
-        id,
-        liveBackup,
-        deploymentId,
-        build.source.backendMode === 'long-running' &&
-          build.source.capabilities.backend,
-      );
+      // Failing again, it is still released: recovery finishes it.
+      try {
+        await appDatabaseLease?.release();
+        await finishCommittedRelease(
+          id,
+          liveBackup,
+          deploymentId,
+          build.source.backendMode === 'long-running' &&
+            build.source.capabilities.backend,
+        );
+      } catch (finishError) {
+        throw new ReleaseUnfinished(deploymentId, version, {
+          cause: finishError,
+        });
+      }
       return {
         deploymentId,
         version,
@@ -1117,11 +1177,12 @@ async function deployAppInner(
         )
         .catch(() => {});
     }
+    if (releaseOutcomeUnknown) {
+      throw new ReleaseUnfinished(deploymentId, null, { cause: error });
+    }
     throw error;
   } finally {
     await appDatabaseLease?.release();
     await fs.rm(path.dirname(tempBuild), { recursive: true, force: true });
-    // The source checkout is only an input to this build.
-    await fs.rm(sourceDir, { recursive: true, force: true });
   }
 }

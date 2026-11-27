@@ -69,7 +69,11 @@ error says how to install the pinned release. The Docker image installs the
 Linux CLI and the web runtime component from the GitHub release, each checked
 against a SHA-256 (`Dockerfile`, `nsh` stage; CI installs from the same pin).
 `nsh check` uses the platform's own TypeScript 7 (`NSH_TSC`), so deploys never
-download a compiler; NSH's cache lives in `<HATCH_DATA_DIR>/cache/nsh`.
+download a compiler; NSH's cache lives in `<HATCH_DATA_DIR>/cache/nsh`. A local
+build (`hatch app deploy --local`) needs the same pinned `nsh` on that
+machine, found the same way; the CLI passes its pinned TypeScript as
+`NSH_TSC` and caches in `~/.cache/hatch/nsh`. The platform accepts a native
+package only from that NSH version.
 
 Upgrading NSH is a deliberate change: read NSH's compatibility notes, update
 the version and every SHA-256 (the `Dockerfile` ARGs and
@@ -86,10 +90,11 @@ between keep the newer runtime the same way.
 
 ## Build and deploy check
 
-`buildApp` (`src/server/apps/build.ts`) hands a native frontend to
-`buildNativeFrontend` (`src/server/apps/native/build-native.ts`) after the
-existing source steps (install, SDK, Connect codegen, the toolchain check of
-backend, widgets and schema). In the disposable build copy it:
+The deployment build (`buildAppSource` in `src/app-build/produce.ts`, run by
+the dedicated Builder or the CLI) hands a native frontend to
+`buildNativeFrontend` (`src/app-build/native.ts`) after the existing source
+steps (install, SDK, Connect codegen, the toolchain check of backend, widgets
+and schema). In the disposable build copy it:
 
 1. Writes `nsh.json` at the App root and `app/tsconfig.json` next to the
    entry. Both are generated, never authored: an authored root `nsh.json` or
@@ -129,7 +134,7 @@ backend, widgets and schema). In the disposable build copy it:
 4. `nsh build --release`; a warning about an unknown class fails the deploy.
 5. Start-up check: `nsh test app/main.tsx --web-host <canned host>`. NSH opens
    the App headless for about 1.2 s; a throw while rendering or starting fails
-   the deploy. This runs App code on the server, so it runs under the sandbox
+   the deploy. This runs App code, so on the Builder it runs under the sandbox
    identity (refused in production without it, like manifest evaluation),
    with the generated grant (no network, files or URLs), a canned host that
    answers `hatch.rpc` with empty messages and `hatch.data.query` with no
@@ -143,11 +148,17 @@ backend, widgets and schema). In the disposable build copy it:
 Source diagnostics (types, source rules, unknown classes, a start-up throw)
 name App-relative files and lines (`app/main.tsx:12:7`); other failures name
 the step or rule that failed (an entry outside `app/`, a missing toolchain).
-A failed build is an `AppBuildError` (`src/server/apps/build.ts`): the public
-deploy RPC rejects it as `BAD_REQUEST` with the build output as its message,
-so `hatch app deploy` exits 2 and prints it, and nothing was released. A
-failed system call during a build (a full disk, say) stays an internal error
-whose message, which names server paths, is not returned.
+A build that rejects the source fails its deployment with `app_build_failed`
+and the build output as its message, so `hatch app deploy` exits 2 and prints
+it, and nothing was released. A local build that fails for another reason
+exits differently: a missing tool or a build that times out or stops without
+a result exits 7, and an unexpected error while preparing it exits 6.
+
+The build package carries the release bundle, the App's linked module, its
+`nsh package` description and the runtime files. The platform makes the
+player from them (`src/server/apps/native/player.ts`): it copies only the
+App files the description references, and writes the player script, styles,
+fonts, configuration and page itself.
 
 Outputs, in the deployment's `app/` directory:
 
@@ -159,11 +170,16 @@ Outputs, in the deployment's `app/` directory:
 | `bundle.js`, `native/bundle.nshc`, `native/bundle.js.map`, `native/capabilities.json` | The release bundle native shells will load (packaged and signed in a later phase).                                        |
 
 `nsh package` links each App its own engine, but every runtime file it writes
-is named by its content. The build publishes those files (the runtime module,
-the engine `.wasm`, side modules, data files and `browser.<digest>/`, with
-their `.br`/`.gz` copies) to `<HATCH_DATA_DIR>/app-runtime/nsh/<version>/`,
-write-once: an existing name must hold the same bytes. Apps with the same
-engine share the download.
+is named by its content. Packages come from builds the platform does not
+trust, so it publishes their runtime files (the runtime module, the engine
+`.wasm`, side modules, data files and `browser.<digest>/`, with their
+`.br`/`.gz` copies) as one runtime set to
+`<HATCH_DATA_DIR>/app-runtime/nsh/<version>/sets/<digest>/`, named by the
+SHA-256 over every file name and its bytes, write-once
+(`publishRuntimeSet`). No package can replace or add a file another App's
+player loads. Deployments share a set only when every runtime file name and
+its bytes match, as with the same NSH release and the same side modules. Deployments
+built before sets keep their flat `<version>/` files.
 
 ## The web player
 

@@ -7,6 +7,7 @@ import {
 } from '@tanstack/react-router';
 import {
   IconBell,
+  IconHammer,
   IconInfoCircle,
   IconLogout,
   IconNetwork,
@@ -105,6 +106,13 @@ const GROUPS: { label: PlainTranslationKey; items: SettingsItem[] }[] = [
         icon: icon(IconServerBolt),
         color: 'blue',
         keywords: 'settings.backends.keywords',
+      },
+      {
+        to: '/settings/builder',
+        label: 'settings.builder.label',
+        icon: icon(IconHammer),
+        color: 'teal',
+        keywords: 'settings.builder.keywords',
       },
       {
         to: '/settings/agent-runner',

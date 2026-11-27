@@ -115,6 +115,9 @@ const ALLOWLIST: ReadonlySet<string> = new Set([
   // Toolchain niceties that don't point at the host home.
   'DENO_INSTALL_ROOT',
   'COREPACK_HOME',
+  // The platform's own build toolchain (the image's /app): a local deploy
+  // build in a Run uses it instead of downloading a copy per session.
+  'HATCH_BUILD_TOOLCHAIN_DIR',
   // TLS trust so network tooling behaves like the host.
   'NODE_EXTRA_CA_CERTS',
   'SSL_CERT_FILE',

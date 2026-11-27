@@ -1,0 +1,177 @@
+/**
+ * Build packages arrive from builds the platform does not trust, so
+ * unpacking one may only ever create regular files and directories below
+ * its destination.
+ */
+import {
+  lstat,
+  mkdir,
+  mkdtemp,
+  readFile,
+  readdir,
+  rm,
+  writeFile,
+} from 'node:fs/promises';
+import os from 'node:os';
+import path from 'node:path';
+import { gzipSync } from 'node:zlib';
+import { afterAll, describe, expect, it } from 'vitest';
+import { packBuildDirectory, unpackBuildArchive } from './archive';
+
+const root = await mkdtemp(path.join(os.tmpdir(), 'hatch-build-archive-'));
+// The directory-limit case leaves tens of thousands of directories.
+afterAll(() => rm(root, { recursive: true, force: true }), 60_000);
+
+let counter = 0;
+const target = () => path.join(root, `out-${++counter}`);
+// Where an absolute name in an archive points: outside every destination.
+const absolute = path.join(root, 'a', 'escape.js');
+
+/** One ustar entry with an arbitrary type flag and name. */
+function entry(name: string, type: string, body = Buffer.alloc(0)): Buffer {
+  // The name field holds 100 bytes; a longer name would be cut silently.
+  expect(Buffer.byteLength(name)).toBeLessThanOrEqual(100);
+  const header = Buffer.alloc(512, 0);
+  header.write(name, 0, 100, 'utf8');
+  header.write('0000644\0', 100, 8, 'ascii');
+  header.write(
+    `${body.length.toString(8).padStart(11, '0')}\0`,
+    124,
+    12,
+    'ascii',
+  );
+  header.fill(' ', 148, 156);
+  header.write(type, 156, 1, 'ascii');
+  if (type === '2' || type === '1') header.write('/etc/passwd', 157, 100);
+  header.write('ustar\0', 257, 6, 'ascii');
+  header.write('00', 263, 2, 'ascii');
+  let sum = 0;
+  for (const byte of header) sum += byte;
+  header.write(`${sum.toString(8).padStart(6, '0')}\0 `, 148, 8, 'ascii');
+  const padding = Buffer.alloc((512 - (body.length % 512)) % 512, 0);
+  return Buffer.concat([header, body, padding]);
+}
+
+const archive = (...entries: Buffer[]) =>
+  gzipSync(Buffer.concat([...entries, Buffer.alloc(1024, 0)]));
+
+describe('build archives', () => {
+  it('round-trips files and directories, long paths included', async () => {
+    const source = path.join(root, 'source');
+    const deep = path.join(
+      source,
+      'app',
+      'web',
+      'a'.repeat(60),
+      'b'.repeat(60),
+    );
+    await mkdir(deep, { recursive: true });
+    await writeFile(path.join(source, 'build.json'), '{"format":1}');
+    await writeFile(path.join(deep, 'chunk.js'), 'export {};');
+    await mkdir(path.join(source, 'backend', 'assets'), { recursive: true });
+    const destination = target();
+    expect(
+      await unpackBuildArchive(await packBuildDirectory(source), destination),
+    ).toBe(2);
+    expect(await readFile(path.join(destination, 'build.json'), 'utf8')).toBe(
+      '{"format":1}',
+    );
+    expect(
+      await readFile(
+        path.join(destination, path.relative(source, deep), 'chunk.js'),
+        'utf8',
+      ),
+    ).toBe('export {};');
+    expect(
+      (await lstat(path.join(destination, 'backend', 'assets'))).isDirectory(),
+    ).toBe(true);
+  });
+
+  it.each([
+    ['a symbolic link', entry('app/link.js', '2')],
+    ['a hard link', entry('app/link.js', '1')],
+    ['a device', entry('app/null', '3')],
+    ['a parent path', entry('../escape.js', '0', Buffer.from('x'))],
+    [
+      'a nested parent path',
+      entry('app/../../escape.js', '0', Buffer.from('x')),
+    ],
+    ['an absolute path', entry(absolute, '0', Buffer.from('x'))],
+  ])('rejects %s and writes nothing outside', async (_name, unsafe) => {
+    const destination = target();
+    await mkdir(path.dirname(absolute), { recursive: true });
+    await expect(
+      unpackBuildArchive(archive(unsafe), destination),
+    ).rejects.toThrow(/files and directories|unsafe path/);
+    expect(await readdir(root)).not.toContain('escape.js');
+    await expect(lstat(absolute)).rejects.toThrow(/ENOENT/);
+    const written = await readdir(destination).catch(() => []);
+    expect(written).toEqual([]);
+  });
+
+  it('never lets a later entry replace an earlier one', async () => {
+    const destination = target();
+    await expect(
+      unpackBuildArchive(
+        archive(
+          entry('build.json', '0', Buffer.from('first')),
+          entry('build.json', '0', Buffer.from('second')),
+        ),
+        destination,
+      ),
+    ).rejects.toThrow(/repeats/);
+    expect(await readFile(path.join(destination, 'build.json'), 'utf8')).toBe(
+      'first',
+    );
+  });
+
+  it('rejects an archive cut short of its padding or terminator', async () => {
+    const whole = entry('build.json', '0', Buffer.from('{"format":1}'));
+    // The body is complete, the padding to the next block is not.
+    await expect(
+      unpackBuildArchive(gzipSync(whole.subarray(0, 512 + 12)), target()),
+    ).rejects.toThrow(/truncated/);
+    // Every entry is complete, the end-of-archive blocks are missing.
+    await expect(unpackBuildArchive(gzipSync(whole), target())).rejects.toThrow(
+      /truncated/,
+    );
+    // Only the first of the two end-of-archive blocks is there.
+    await expect(
+      unpackBuildArchive(
+        gzipSync(Buffer.concat([whole, Buffer.alloc(512, 0)])),
+        target(),
+      ),
+    ).rejects.toThrow(/truncated/);
+  });
+
+  it.skipIf(process.platform === 'win32')(
+    'refuses to pack a name the platform would not unpack',
+    async () => {
+      const source = path.join(root, 'backslash');
+      await mkdir(path.join(source, 'app'), { recursive: true });
+      await writeFile(path.join(source, 'app', 'a\\b.js'), 'export {};');
+      await expect(packBuildDirectory(source)).rejects.toThrow(
+        'cannot unpack: app/a\\b.js',
+      );
+    },
+  );
+
+  it('bounds the directories an archive creates, not only its files', async () => {
+    // Few files, each implying 40 directories of its own: the directories
+    // alone pass the limit long before the files would.
+    const deep = 'a/'.repeat(39);
+    const many = Array.from({ length: 1_001 }, (_, index) =>
+      entry(`t${index}/${deep}f`, '0', Buffer.from('x')),
+    );
+    await expect(
+      unpackBuildArchive(archive(...many), target()),
+    ).rejects.toThrow(/too large/);
+    // Reaching the limit takes creating that many directories.
+  }, 60_000);
+
+  it('rejects data that is not a gzipped archive', async () => {
+    await expect(
+      unpackBuildArchive(Buffer.from('not gzip'), target()),
+    ).rejects.toThrow(/not gzip/);
+  });
+});

@@ -23,7 +23,8 @@ pnpm exec hatch help
 published. `scripts/build-cli.ts` bundles the pure contract and client, and
 rejects server-only imports in its build graph. The production Dockerfile
 installs `/usr/local/bin/hatch` in the shared Platform/Runner image, executable
-from any workdir with Node alone. The image also provides the pinned pnpm needed
+from any workdir with Node alone; it links to `/usr/local/lib/hatch-cli/`,
+where the build driver that local builds run sits next to it. The image also provides the pinned pnpm needed
 for workspace dependency installation/codegen. CLI/SDK outputs must be rebuilt
 before packing. On Windows, npm-global/Corepack pnpm shims are resolved to their
 Node entry point; standalone `pnpm.exe` is supported directly. Batch scripts
@@ -135,6 +136,11 @@ hatch app update --directory ./notes-copy --json
 hatch app push --directory ./notes-copy --json
 hatch app deploy --directory ./notes-copy --message 'Release notes' --json
 hatch app deploy --directory ./notes-copy --commit <full-commit-id> --json
+hatch app deploy --directory ./notes-copy --local --json
+hatch app deployments list <id-or-slug> --json
+hatch app deployments queue --json
+hatch app deployments logs <id-or-slug> <deployment-id> --follow
+hatch app deployments cancel <id-or-slug> <deployment-id> --yes --json
 hatch app rollback <id-or-slug> --version 1 --json
 ```
 
@@ -179,13 +185,77 @@ is rejected with `workspace_instance_mismatch`.
   `non_fast_forward`. Uncommitted changes are neither required to be absent nor
   sent. Output: `{id, commit, masterCommit, state: "pushed" | "up-to-date"}`.
 - **Deploy:** require clean committed source, validate tracked managed paths,
-  push `HEAD` exactly as `push` does, then release that commit with the recorded
-  generation. `--commit <full-commit-id>` skips the push and releases a commit
-  that is already on platform `master` (its tip or an ancestor); any other
-  commit is rejected. A failed build leaves the pushed commit on `master`
-  unreleased. Platform manifest ID/compatibility, build and migration policies
-  remain authoritative. No compatibility/protocol bump or source defaults are
-  added.
+  push `HEAD` exactly as `push` does, then create a deployment of that commit
+  with the recorded generation (`AppService/CreateAppDeployment`).
+  `--commit <full-commit-id>` skips the push and deploys a commit that is
+  already on platform `master` (its tip or an ancestor); any other commit is
+  rejected with `COMMIT_NOT_ON_MASTER` (exit 6). After a rollback moved
+  `master` back, the commits of newer versions are such commits until pushed
+  again. Source always comes first: a deployment only ever names a pushed
+  commit, and its build package is uploaded to that deployment.
+  - By default the platform's dedicated Builder builds the commit, and the
+    CLI follows its log (`WatchAppDeploymentLogs`) until the deployment
+    finishes; `--no-wait` prints the queued deployment instead and asks the
+    platform for a notification when it finishes. A platform without a
+    Builder refuses it with `BUILDER_UNAVAILABLE`, and one whose Builders
+    have not connected recently with `BUILDER_OFFLINE` (both exit 6, before
+    any deployment is created). `hatch server info` shows whether the
+    platform has a Builder and which are online. Then build here with
+    `--local`.
+  - `--local` builds here: the CLI checks the commit out into a
+    scratch directory (every tracked file; archive attributes such as
+    `export-ignore` do not apply), runs the platform's build with its pinned
+    esbuild, TypeScript, buf, protoc-gen-es and pnpm (installed once into
+    `$XDG_CACHE_HOME/hatch/toolchain`, default `~/.cache/hatch`; or taken
+    from `HATCH_BUILD_TOOLCHAIN_DIR` when that directory's `node_modules`
+    holds exactly those versions and `PATH` has the pinned pnpm, as in the
+    platform image), and uploads the package (`UploadAppDeploymentArtifact`,
+    at most 200 MiB compressed). A Deno source also needs `deno` on `PATH`
+    (on Windows `deno.exe`: a `deno.cmd` shim cannot run without a shell),
+    and a native frontend `nsh` of the platform's version (`HATCH_NSH_BIN` or
+    `PATH`); a missing or mismatched tool fails with `tool_unavailable` or
+    `nsh_unavailable` (exit 7). A build that outlives `--timeout` stops with
+    `local_build_timeout` (exit 7). With `--commit`, the commit must be in
+    this checkout (the build does not fetch it): otherwise the deploy fails
+    with `source_unavailable` (exit 6) before creating a deployment; run
+    `hatch app update` first. Build output goes to stderr. When a local
+    build stops without uploading a package (it fails, times out, a tool is
+    missing or the deploy is interrupted), the CLI tries to settle the
+    deployment: a build the source fails (`app_build_failed` or
+    `APP_MANIFEST_INVALID`) is recorded as a failed deployment, any other
+    stop cancels it. That is a single request. If it fails, the deploy still
+    exits with the build's error, stderr says the deployment could not be
+    canceled, and the checkout keeps it recorded as pending, because the
+    platform may still be waiting for its package; while it waits, the next
+    deploy fails with `deployment_in_progress`. Inspect it with
+    `hatch app deploy --reconcile` or
+    `hatch app deployments get <id> <deployment-id>`, or cancel it with
+    `hatch app deployments cancel <id> <deployment-id> --yes`.
+
+  The platform checks every package (its own App, deployment, commit and
+  toolchain, the manifest, API, tasks, data schema and docs) and writes the
+  files that decide how the App runs before it releases anything. A failed
+  build leaves the pushed commit on `master` unreleased. Output is the
+  finished deployment: `deploymentId`, `status`, `build`, `commit`, and once
+  `ready` its `version`, `compatibilityVersion`, `slug` and `normalized`
+  manifest, plus `sourceCommit` and `pushState`. No compatibility/protocol
+  bump or source defaults are added.
+
+- **Deployments:** `app deployments list|get|logs|cancel` inspect deployment
+  requests (status `queued`, `awaiting_artifact`, `building`, `verifying`,
+  `releasing`, `ready`, `failed`, `canceled` or `superseded`), print or
+  follow their build and release log, and cancel one that has not started
+  verifying. `app deployments queue` lists the unfinished deployments of
+  every App, oldest first, 50 per page (`--limit` 1–100; pass the printed
+  `nextCursor` as `--cursor`): each entry has `appSlug`, `appName`,
+  `queuePosition` (place among queued Builder builds in the order Builders
+  take them, oldest first and one per App at a time; `null` unless
+  `queued`), `builderId` (while `building`) and the `deployment`. Cancel any
+  of them, including one in the middle of the queue, with
+  `app deployments cancel <id> <deployment-id> --yes`; cancel requires
+  `--yes` because it cannot be undone. A newer deployment supersedes older ones still waiting for their
+  build, and an older build that finishes after a newer release is never
+  released.
 - **Rollback:** synchronous API call with a real release version; display the
   returned compatibility object and App `dataSchemaMismatch`. Data schema and
   contents are forward-only; rollback does not undo a destructive migration.
@@ -305,8 +375,9 @@ never the authored value; an object key that is not a plain identifier shows as
 
 ## Migration approval and uncertain outcomes
 
-A destructive App Data Table preview returns `CONFLICT` and an exact approval
-token. Review the authored schema diff, then retry the same committed change explicitly:
+A destructive App Data Table preview fails the deployment with
+`data_migration_approval_required` (exit 6) and an exact approval token in the
+message. Review the authored schema diff, then retry the same committed change explicitly:
 
 ```sh
 hatch app deploy --directory notes-copy --message 'Reviewed migration' \
@@ -319,28 +390,66 @@ approval or destructive retry is performed. Definite 4xx rejections clear the
 pending marker; source/data protection is owned by existing platform services.
 
 A deploy whose source fails to build (type check, codegen, bundling, or a
-native App's deploy check) is a definite rejection: `BAD_REQUEST` (exit 2)
+native App's deploy check) is a definite rejection: `app_build_failed` (exit 2)
 whose message is the build output, naming files and lines, for example
 `app/custom/ui.tsx:17: bare colour in a class`. Nothing was released; fix the
-source and deploy again.
+source and deploy again. Other ends of a deployment exit 6 with its code:
+`toolchain_mismatch` (upgrade the CLI), `app_build_invalid` (the platform
+refused the package), `COMMIT_NOT_ON_MASTER` (a rollback took the commit off
+`master` before it was released), `superseded`, `canceled`, `builder_lost`,
+`artifact_timeout`, `resource_generation_conflict` or `release_failed`.
+`BUILDER_UNAVAILABLE` and `BUILDER_OFFLINE` (exit 6) refuse a Builder
+deployment before it is created; deploy with `--local`. A
+source tree over 512 MiB or 100,000 files is refused (the platform checks it
+out to evaluate its manifest), and so is a repository that uses SHA-256 commit
+ids.
 
-Create/deploy/rollback are never automatically retried. Network/5xx/cancel can
-leave an unknown server outcome. Deploy fsyncs a pending commit before sending:
+Create/deploy/rollback are never automatically retried. Every deployment is a
+platform record, so an interrupted deploy is settled rather than guessed. The
+checkout records a deploy before creating it, with the id of its create
+request (which the platform stores and finds it by), and the deployment id
+once the platform answers:
 
 ```sh
 hatch app deploy --directory notes-copy --reconcile --json
-# Only after inspecting release history and confirming the previous request ended:
+hatch app deployments logs <id> <deployment-id> --follow
+# Forget the pending deployment without looking it up, then deploy again
+# (push and create a new deployment) in the same command:
 hatch app deploy --directory notes-copy --retry-after-confirming '<pending-commit>' --json
 ```
 
-`--reconcile` reports `source-matches-pending` when the resource's released
-commit (`currentSourceCommit`) equals the pending commit, otherwise
-`outcome-unresolved`. The push that precedes a release is safe to repeat.
-Matching source is evidence, not proof of a deployment version or completion.
-The explicit retry confirmation is recorded locally; it is not server-side
-idempotency. Cancellation does not cancel a platform build already in flight.
-Create/rollback uncertainty is reported for manual detail/source/release-history
-inspection. No durable operation service or fake async operation IDs are added.
+`--reconcile` only reads the platform record, so it works in a checkout with
+uncommitted changes. It reports the pending deployment as `not-created`,
+`in-progress`, `finished` (with the deployment), `missing` or `unconfirmed`,
+and forgets it only when `finished` or `not-created`. `not-created` is
+reported once the create request's own deadline (its `--timeout`) and a
+minute more have passed with no deployment found for its request id; until
+then the request is `unconfirmed`, so reconcile again later. The platform
+creates nothing for a request whose call has already ended when it checks,
+so `not-created` holds with one narrow exception: a create whose call ends
+while the platform is already committing it can still appear after
+`not-created` was reported. Its cost is a duplicate deployment of the same
+commit that deploy asked for, never a release of other source. `missing`
+means the checkout recorded a deployment id the platform no longer has; no
+wait settles it, so inspect `hatch app deployments list <id>` and forget it
+explicitly with `--retry-after-confirming <pending-commit>`, which then
+deploys again.
+
+The next deploy does the same on its own: a finished one is settled, one
+still in progress or unconfirmed fails with `deployment_in_progress` (exit 6)
+until it finishes, is canceled or can be confirmed absent, and a missing one
+fails with `pending_deployment_missing` (exit 6). A deploy whose `--timeout`
+passes while it follows a Builder build exits 7 with `deployment_in_progress`;
+the deployment keeps running on the platform, so follow it with
+`hatch app deployments logs <id> <deployment-id> --follow`. The error details
+carry the `afterSeq` to resume from with `--after` and the deployment when
+one could be read (otherwise `deployment` is `null`). A deployment that
+finished before the rest of its log arrived or could be read settles by its
+outcome, with a note on stderr; `deployments logs --follow` instead fails with
+`deployment_log_incomplete` (exit 7), the finished deployment, the `afterSeq`
+to resume from and, when reading failed, the failing error code as `cause`. The
+push that precedes a deployment is safe to
+repeat.
 
 ## Output, errors and unsupported commands
 
@@ -924,6 +1033,15 @@ server was built from and prints `commit` (the full SHA) and `commitTime`
 (RFC 3339), each `null` when the build recorded none. It is the same value as
 the Web Settings → About page. `hatch version` is different: it prints the
 revision the CLI itself was built from and works offline.
+
+It also prints `builder`, the platform's dedicated Builders (the same as Web
+Settings → Builder): `configured` says whether the platform accepts Builder
+builds (`HATCH_BUILDER_TOKEN`), and `builders` lists each Builder heard from
+in the last day, most recent first, with `id`, `concurrency`, `running`
+builds, `lastSeenAt` and `online`. A Builder is online while it keeps asking
+for work or renewing a lease. Without a configured Builder that is online,
+`hatch app deploy` is refused (`BUILDER_UNAVAILABLE` or `BUILDER_OFFLINE`);
+deploy with `--local`.
 
 Local rejections exit 2: `invalid_arguments` (a missing or unknown operation,
 an unknown flag or a positional argument).

@@ -29,7 +29,7 @@ import { syncAppNotificationDestination } from '~server/notifications/app-destin
 import { AppError } from '~server/errors';
 import { buildMatchesDeployment } from './build-identity';
 import { appDeployLock } from './deploy';
-import { moveMasterToDeploymentTag } from './git';
+import { appCommitOnMaster, moveMasterToDeploymentTag } from './git';
 import {
   type NormalizedManifest,
   isValidAppId,
@@ -93,6 +93,13 @@ export type DeploymentSummary = {
   rollbackBlockedCode: RollbackBlockedCode | null;
   /** Commit on the app's `master` branch this version was built from. */
   sourceCommit: string | null;
+  /**
+   * Whether that commit is still on master, so the version can be built
+   * again (a restore moves master back past newer versions). `null` when the
+   * lookup failed: unknown, so a client keeps offering the rebuild and the
+   * platform still refuses a commit that is not on master.
+   */
+  sourceOnMaster: boolean | null;
   /** Immutable `deploy/v<version>` Git tag for this version. */
   sourceTag: string | null;
   /** Whether the build artifact still exists on disk (required to restore). */
@@ -109,6 +116,37 @@ export type AppRollbackResult = {
   dataSchemaMismatch: boolean;
   compatibility: AppCompatibility;
 };
+
+/** Git lookups `commitsOnMaster` runs at once, whatever the history length. */
+const ON_MASTER_LOOKUPS = 4;
+
+/**
+ * Whether each distinct commit is on master; a commit whose lookup failed
+ * maps to null (unknown) instead of reading as "not on master".
+ */
+async function commitsOnMaster(
+  appId: string,
+  commits: readonly string[],
+): Promise<Map<string, boolean | null>> {
+  const pending = [...new Set(commits)];
+  const result = new Map<string, boolean | null>();
+  const worker = async () => {
+    for (let commit = pending.pop(); commit; commit = pending.pop()) {
+      result.set(
+        commit,
+        await appCommitOnMaster(appId, commit).catch((error) => {
+          console.error(
+            `[apps] could not tell whether ${commit} of ${appId} is on master:`,
+            error,
+          );
+          return null;
+        }),
+      );
+    }
+  };
+  await Promise.all(Array.from({ length: ON_MASTER_LOOKUPS }, worker));
+  return result;
+}
 
 /** List an app's deployment history, newest first, with rollback hints. */
 export async function listDeployments(
@@ -127,6 +165,10 @@ export async function listDeployments(
     (app.dataDbName || app.dataSchemaHash || app.capabilities?.dataTable),
   );
   const current = app?.currentDeploymentId ?? null;
+  const onMaster = await commitsOnMaster(
+    id,
+    rows.flatMap((d) => (d.sourceCommit ? [d.sourceCommit] : [])),
+  );
   return Promise.all(
     rows.map(async (d) => {
       const isCurrent = d.id === current;
@@ -158,6 +200,9 @@ export async function listDeployments(
         createdAt: d.createdAt.toISOString(),
         isCurrent,
         sourceCommit: d.sourceCommit,
+        sourceOnMaster: d.sourceCommit
+          ? (onMaster.get(d.sourceCommit) ?? null)
+          : false,
         sourceTag: d.sourceTag,
         hasArtifact,
         hasBuildLog: Boolean(d.buildLog),

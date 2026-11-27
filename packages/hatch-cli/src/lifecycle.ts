@@ -1,3 +1,4 @@
+import { randomUUID } from 'node:crypto';
 import { parseArgs } from 'node:util';
 import { mkdtemp, rename, writeFile, lstat, rm } from 'node:fs/promises';
 import { dirname, join, resolve } from 'node:path';
@@ -26,6 +27,14 @@ import { readInput } from './input';
 import { isValidAppSlug } from '../../hatch-manifest/src/app-schema.js';
 import { adopt } from './adopt';
 import { refreshRunEnvironment } from './run-credential';
+import type { DeploymentView } from './client';
+import { buildLocally, localBuildTooling } from './local-build';
+
+/**
+ * How long after its deadline a create request is still taken to be able
+ * to land (clock skew, the commit in flight).
+ */
+const CREATE_SETTLE_GRACE_MS = 60_000;
 
 export async function runLifecycle(
   args: readonly string[],
@@ -81,10 +90,20 @@ export async function runLifecycle(
               'data-migration-approval-token': { type: 'string' },
               reconcile: { type: 'boolean' },
               'retry-after-confirming': { type: 'string' },
+              local: { type: 'boolean' },
+              'no-wait': { type: 'boolean' },
             }
           : operation === 'rollback'
             ? { version: { type: 'string' } }
             : {};
+  if (
+    operation === 'deploy' &&
+    args.some((arg) => arg === '--build' || arg.startsWith('--build='))
+  )
+    throw new CliError(
+      'invalid_arguments',
+      '--build was removed. Leave it out to build on the platform Builder (the default), or pass --local to build on this machine and upload the build package.',
+    );
   let parsed;
   try {
     parsed = parseArgs({
@@ -151,6 +170,11 @@ export async function runLifecycle(
     throw new CliError(
       'invalid_arguments',
       '--commit cannot be combined with --reconcile.',
+    );
+  if (values.reconcile && values['retry-after-confirming'] !== undefined)
+    throw new CliError(
+      'invalid_retry_confirmation',
+      '--reconcile only reports the pending deployment; run --retry-after-confirming <commit> on its own.',
     );
   const credential = await resolveCredential(
     process.env,
@@ -417,6 +441,66 @@ export async function runLifecycle(
         'Resource was deleted/recreated. Clone into a new directory; local work was retained.',
         6,
       );
+    // The checkout's pending deployment as the platform records it: by the
+    // deployment id once known, else by the request id the create sent.
+    const lookupPending = async (
+      pending: NonNullable<Workspace['pending']>,
+    ) => {
+      // The platform answers for the moment the lookup was sent: a create
+      // that landed after that is not in the answer.
+      const sentAt = Date.now();
+      const found = pending.deploymentId
+        ? await api.deployments
+            .get({ id: metadata.id, deploymentId: pending.deploymentId })
+            .catch((error: unknown) => {
+              if (error instanceof CliError && error.exitCode === 5)
+                return null;
+              throw error;
+            })
+        : pending.requestId
+          ? ((
+              await api.deployments.list({
+                id: metadata.id,
+                requestId: pending.requestId,
+              })
+            ).deployments[0] ?? null)
+          : null;
+      // Nothing found is taken as final once the create request's deadline
+      // and a grace period have passed: the platform creates nothing for a
+      // call that ended before it commits. A known deployment the platform
+      // no longer has is missing, which no wait settles.
+      const state = found
+        ? found.finished
+          ? 'finished'
+          : 'in-progress'
+        : pending.deploymentId
+          ? 'missing'
+          : !!pending.requestId &&
+              sentAt >
+                Date.parse(pending.createDeadline ?? pending.startedAt) +
+                  CREATE_SETTLE_GRACE_MS
+            ? 'not-created'
+            : 'unconfirmed';
+      return { found, state };
+    };
+    // --reconcile only reads the platform record, so local edits made while
+    // the deployment runs do not block it, and it associates nothing.
+    if (operation === 'deploy' && values.reconcile) {
+      const pending = metadata.pending;
+      if (!pending)
+        throw new CliError(
+          'no_pending_deployment',
+          'No pending deployment to reconcile.',
+        );
+      const { found, state } = await lookupPending(pending);
+      // A settled deployment is reported once the checkout has forgotten it.
+      if (state === 'finished' || state === 'not-created') {
+        delete metadata.pending;
+        await saveWorkspace(root, metadata);
+      }
+      output({ id: metadata.id, state, pending, deployment: found ?? null });
+      return;
+    }
     await client.apps.associate({ params: { id: metadata.id }, body: {} });
     await configureOrigin(root, credential, metadata.id, signal, helperConfig);
     // A plain push or a deploy of an already pushed commit never reads the
@@ -526,13 +610,10 @@ export async function runLifecycle(
       return;
     }
     if (metadata.pending && values['retry-after-confirming']) {
-      if (
-        values.reconcile ||
-        values['retry-after-confirming'] !== metadata.pending.commit
-      )
+      if (values['retry-after-confirming'] !== metadata.pending.commit)
         throw new CliError(
           'invalid_retry_confirmation',
-          'Confirm the exact pending commit after inspecting platform release history and ensuring the earlier request finished.',
+          'Confirm the exact pending commit after inspecting the deployment with hatch app deployments list.',
         );
       await writeFile(
         join(root, '.git', 'hatch-deploy-confirmations.jsonl'),
@@ -546,33 +627,45 @@ export async function runLifecycle(
       await saveWorkspace(root, metadata);
     }
     if (metadata.pending) {
-      if (values.reconcile) {
-        const released = (detail as { currentSourceCommit?: unknown })
-          .currentSourceCommit;
-        const observed = typeof released === 'string' ? released : null;
-        output({
-          id: metadata.id,
-          state:
-            observed === metadata.pending.commit
-              ? 'source-matches-pending'
-              : 'outcome-unresolved',
-          pending: metadata.pending,
-          currentSourceCommit: observed,
-          note: 'A released commit equal to the pending one does not prove which deployment version released it or that an earlier request has finished. Inspect platform release history before another deploy.',
-        });
-        return;
-      }
-      throw new CliError(
-        'deployment_outcome_unknown',
-        'A previous deployment has an unresolved outcome. Use --reconcile, inspect platform release history, then use --retry-after-confirming <pending-commit> only after confirming that request finished. No automatic retry was made.',
-        6,
-      );
+      // The platform records every deployment, so a deploy this checkout
+      // lost track of is settled from its state rather than guessed.
+      const pending = metadata.pending;
+      // Only the platform's own record of this create request settles it.
+      const { found, state } = await lookupPending(pending);
+      if (found && !found.finished)
+        throw new CliError(
+          'deployment_in_progress',
+          `Deployment ${found.deploymentId} of ${found.commit} is still ${found.status}. Follow it with hatch app deployments logs ${metadata.id} ${found.deploymentId} --follow, or cancel it with hatch app deployments cancel ${metadata.id} ${found.deploymentId} --yes.`,
+          6,
+          undefined,
+          { deployment: found },
+        );
+      if (state === 'missing')
+        throw new CliError(
+          'pending_deployment_missing',
+          `The platform has no deployment ${pending.deploymentId}, which the deploy of ${pending.commit} started at ${pending.startedAt} created; waiting will not settle it. Inspect hatch app deployments list ${metadata.id}, then retry with --retry-after-confirming ${pending.commit}.`,
+          6,
+          undefined,
+          { pending },
+        );
+      if (state === 'unconfirmed')
+        throw new CliError(
+          'deployment_in_progress',
+          pending.requestId
+            ? `The deploy of ${pending.commit} started at ${pending.startedAt} may still be created. Run hatch app deploy --reconcile after ${new Date(Date.parse(pending.createDeadline ?? pending.startedAt) + CREATE_SETTLE_GRACE_MS).toISOString()}.`
+            : `The platform cannot tell whether the deploy of ${pending.commit} started at ${pending.startedAt} was created. Inspect hatch app deployments list ${metadata.id}, then retry with --retry-after-confirming ${pending.commit}.`,
+          6,
+          undefined,
+          { pending },
+        );
+      if (found?.status === 'ready')
+        metadata.lastDeployment = {
+          version: found.version as number,
+          deploymentId: found.deploymentId,
+        };
+      delete metadata.pending;
+      await saveWorkspace(root, metadata);
     }
-    if (values.reconcile)
-      throw new CliError(
-        'no_pending_deployment',
-        'No pending deployment to reconcile.',
-      );
     const approved = values['allow-destructive-data-migration'] === true;
     const approval = values['data-migration-approval-token'];
     if (approved !== (typeof approval === 'string' && !!approval))
@@ -584,11 +677,32 @@ export async function runLifecycle(
       values.commit === undefined ? null : String(values.commit);
     if (!requested && !head)
       throw new CliError('source_empty', 'Commit source before deployment.', 6);
-    // Deploy is push plus release. --commit releases a commit that is already
-    // on platform master, so nothing is pushed.
+    // Source first: deploy pushes HEAD, then deploys the pushed commit.
+    // --commit deploys a commit that is already on platform master.
     const commit = requested ?? head!;
+    // A local build reads the commit from this checkout without fetching:
+    // one that is not here fails before any deployment is created.
+    if (requested && values.local) {
+      const present =
+        (
+          await git(
+            root,
+            signal,
+            ['cat-file', '-e', `${requested}^{commit}`],
+            true,
+          )
+        ).code === 0;
+      if (!present)
+        throw new CliError(
+          'source_unavailable',
+          `Commit ${requested} is not in this checkout, so it cannot be built here. Run hatch app update first, or leave out --local to build it on the platform Builder. No deployment was created.`,
+          6,
+        );
+    }
     const pushed = requested ? null : await push(commit);
     // A long push can outlive a Run token; take a fresh one for the release.
+    // The client renews it itself before any later request it would not
+    // outlive (a long local build, a follow, a reconnect).
     await refreshRunEnvironment(process.env, signal);
     const releaseClient = platformClient(
       await resolveCredential(
@@ -599,35 +713,35 @@ export async function runLifecycle(
       timeout,
       signal,
     );
+    const deployments = releaseClient.apps.deployments;
+    const startedAt = Date.now();
     metadata.pending = {
       command: 'deploy',
       commit,
-      startedAt: new Date().toISOString(),
+      startedAt: new Date(startedAt).toISOString(),
+      requestId: randomUUID(),
+      // The create call's deadline is the client timeout.
+      createDeadline: new Date(startedAt + timeout).toISOString(),
     };
     await saveWorkspace(root, metadata);
+    let created;
     try {
-      const result = await releaseClient.apps.deploy({
-        params: { id: metadata.id },
-        body: {
-          message: String(values.message ?? 'Deploy from Hatch CLI'),
-          generation: metadata.generation,
-          commit,
-          ...(approved
-            ? {
-                allowDestructiveDataMigration: true,
-                dataMigrationApprovalToken: String(approval),
-              }
-            : {}),
-        },
-      });
-      metadata.lastDeployment = result;
-      delete metadata.pending;
-      await saveWorkspace(root, metadata);
-      output({
-        ...result,
+      created = await deployments.create({
         id: metadata.id,
-        sourceCommit: commit,
-        ...(pushed ? { pushState: pushed } : {}),
+        message: String(values.message ?? 'Deploy from Hatch CLI'),
+        generation: metadata.generation,
+        commit,
+        // The platform Builder unless asked to build here.
+        build: values.local ? 'local' : 'builder',
+        requestId: metadata.pending.requestId,
+        // Nobody follows a --no-wait deployment: the platform says how it ends.
+        ...(values['no-wait'] ? { notify: true } : {}),
+        ...(approved
+          ? {
+              allowDestructiveDataMigration: true,
+              dataMigrationApprovalToken: String(approval),
+            }
+          : {}),
       });
     } catch (error) {
       // A definite 4xx response is a rejected deployment, and is safe to fix/retry.
@@ -637,7 +751,316 @@ export async function runLifecycle(
       }
       throw error;
     }
+    metadata.pending.deploymentId = created.deploymentId;
+    await saveWorkspace(root, metadata);
+    process.stderr.write(
+      `Deployment ${created.deploymentId} of ${commit} (${created.build} build): ${created.status}\n`,
+    );
+    const deadline = Date.now() + timeout;
+    const follow = (options: {
+      afterSeq: number;
+      platformOnly: boolean;
+      signal?: AbortSignal;
+    }) =>
+      followDeployment(deployments, {
+        id: metadata.id,
+        deploymentId: created.deploymentId,
+        deadline,
+        ...options,
+      });
+    // Follow to the end; a deployment that finished before the rest of its
+    // log arrived settles by its outcome.
+    const followToEnd = (options: {
+      afterSeq: number;
+      platformOnly: boolean;
+      signal?: AbortSignal;
+    }) =>
+      follow(options).catch((error: unknown) => {
+        if (
+          error instanceof CliError &&
+          error.code === 'deployment_log_incomplete'
+        ) {
+          process.stderr.write(`${error.message}\n`);
+          return (error.details as { deployment: DeploymentView }).deployment;
+        }
+        throw error;
+      });
+    let final = created;
+    if (created.build === 'local' && created.status === 'awaiting_artifact') {
+      let archive: Buffer;
+      try {
+        const sdk = await releaseClient.sdk.get();
+        archive = await buildLocally({
+          root,
+          appId: metadata.id,
+          deploymentId: created.deploymentId,
+          commit,
+          sdkFiles: sdk.files,
+          tooling: localBuildTooling(sdk.tooling),
+          signal,
+          timeoutMs: Math.max(1, deadline - Date.now()),
+        });
+      } catch (error) {
+        // Nothing was uploaded: record the failed build (or the cancellation)
+        // instead of leaving the deployment waiting for a package.
+        const failure =
+          error instanceof CliError &&
+          ['app_build_failed', 'APP_MANIFEST_INVALID'].includes(error.code)
+            ? {
+                failureMessage: error.message.slice(0, 64_000),
+                failureCode: error.code as
+                  | 'app_build_failed'
+                  | 'APP_MANIFEST_INVALID',
+              }
+            : {};
+        const settled = await deployments
+          .cancel({
+            id: metadata.id,
+            deploymentId: created.deploymentId,
+            ...failure,
+          })
+          .then(
+            () => true,
+            () => false,
+          );
+        // Keep the deployment id while the platform may still be waiting
+        // for this package; --reconcile or deployments cancel settles it.
+        if (settled) {
+          delete metadata.pending;
+          await saveWorkspace(root, metadata);
+        } else {
+          process.stderr.write(
+            `Deployment ${created.deploymentId} could not be canceled; cancel it with hatch app deployments cancel ${metadata.id} ${created.deploymentId} --yes.\n`,
+          );
+        }
+        throw error;
+      }
+      process.stderr.write(
+        `Uploading the build package (${(archive.length / 1024 / 1024).toFixed(1)} MB)...\n`,
+      );
+      // The platform verifies and releases during the upload; show its
+      // progress meanwhile. The local build already printed its own output.
+      const watch = new AbortController();
+      const watching = followToEnd({
+        afterSeq: created.logSeq,
+        platformOnly: true,
+        signal: watch.signal,
+      }).then(
+        (deployment) => ({ deployment }),
+        (error: unknown) => ({ error }),
+      );
+      try {
+        final = await deployments.upload({
+          id: metadata.id,
+          deploymentId: created.deploymentId,
+          artifact: archive,
+        });
+      } catch (error) {
+        watch.abort();
+        await watching;
+        throw error;
+      }
+      // --no-wait leaves a release the platform has yet to finish to it.
+      if (!final.finished && values['no-wait']) watch.abort();
+      const watched = await watching;
+      // The platform may hand a release that committed but has yet to
+      // finish on to its recovery sweep; the watch followed it to its end.
+      if (!final.finished && !values['no-wait']) {
+        if ('error' in watched) throw watched.error;
+        final = watched.deployment;
+      }
+    } else if (!created.finished && !values['no-wait']) {
+      final = await followToEnd({ afterSeq: 0, platformOnly: false });
+    }
+    if (!final.finished) {
+      // --no-wait: the platform finishes the deployment on its own.
+      output({
+        ...final,
+        id: metadata.id,
+        sourceCommit: commit,
+        ...(pushed ? { pushState: pushed } : {}),
+      });
+      return;
+    }
+    delete metadata.pending;
+    if (final.status === 'ready')
+      metadata.lastDeployment = {
+        version: final.version as number,
+        deploymentId: final.deploymentId,
+      };
+    await saveWorkspace(root, metadata);
+    if (final.status !== 'ready')
+      throw new CliError(
+        final.errorCode ?? 'deployment_failed',
+        final.errorMessage ??
+          `Deployment ${final.deploymentId} ${final.status}.`,
+        // Source the build rejects is an input error; the rest are conflicts.
+        ['APP_MANIFEST_INVALID', 'app_build_failed'].includes(
+          final.errorCode ?? '',
+        )
+          ? 2
+          : 6,
+        undefined,
+        { deployment: final },
+      );
+    output({
+      ...final,
+      id: metadata.id,
+      sourceCommit: commit,
+      ...(pushed ? { pushState: pushed } : {}),
+    });
   });
+}
+
+type DeploymentsClient = ReturnType<
+  typeof platformClient
+>['apps']['deployments'];
+
+/** What a follow keeps of its budget to read the final state. */
+const FINAL_LOOKUP_MS = 5_000;
+
+/**
+ * Print a deployment's log to stderr until it finishes, reconnecting after
+ * a dropped stream. Returns the finished deployment once its whole log has
+ * arrived. Past `deadline` it fails with `deployment_in_progress`, leaving
+ * the deployment running, or with `deployment_log_incomplete` (and the
+ * finished deployment and the sequence to resume from) when only the rest
+ * of its log is missing. Once a finished state is known, a later failure to
+ * read the log also ends in `deployment_log_incomplete`, so the caller can
+ * settle that outcome; cancellation always ends the follow as it is.
+ */
+export async function followDeployment(
+  deployments: DeploymentsClient,
+  options: {
+    id: string;
+    deploymentId: string;
+    afterSeq: number;
+    deadline: number;
+    platformOnly?: boolean;
+    /** Stops following (the caller no longer needs it). */
+    signal?: AbortSignal;
+  },
+): Promise<DeploymentView> {
+  let after = options.afterSeq;
+  // Set by the stream and the final lookup, the freshest state known.
+  let last = null as DeploymentView | null;
+  // A terminal status alone is not the end: its log must have arrived too.
+  const complete = (state: DeploymentView | null) =>
+    !!state?.finished && after >= state.logSeq;
+  const canceled = (error: unknown) =>
+    !!options.signal?.aborted ||
+    (error instanceof CliError && error.exitCode === 130);
+  const resume = () =>
+    `hatch app deployments logs ${options.id} ${options.deploymentId} --after ${after}`;
+  const incomplete = (state: DeploymentView, cause?: unknown) => {
+    const code = cause
+      ? cause instanceof CliError
+        ? cause.code
+        : 'internal_error'
+      : undefined;
+    return new CliError(
+      'deployment_log_incomplete',
+      `Deployment ${options.deploymentId} is ${state.status}, but its log after line ${after} ${code ? `could not be read (${code})` : 'did not arrive in time'}. Print the rest with ${resume()}.`,
+      7,
+      undefined,
+      { deployment: state, afterSeq: after, ...(code ? { cause: code } : {}) },
+    );
+  };
+  // A failure other than a timeout or cancellation keeps a known outcome.
+  const settle = (error: unknown) => {
+    if (!canceled(error) && last?.finished) return incomplete(last, error);
+    return error;
+  };
+  /** Stream the log until it is complete or `until` passes. */
+  const watch = async (until: number) => {
+    const pause = (ms: number) =>
+      new Promise((resolve) =>
+        setTimeout(resolve, Math.max(0, Math.min(ms, until - Date.now()))),
+      );
+    for (;;) {
+      options.signal?.throwIfAborted();
+      const remaining = until - Date.now();
+      if (remaining <= 0) return;
+      const before = after;
+      try {
+        for await (const message of deployments.watch(
+          {
+            id: options.id,
+            deploymentId: options.deploymentId,
+            afterSeq: after,
+          },
+          { timeoutMs: remaining, signal: options.signal },
+        )) {
+          for (const line of message.lines) {
+            after = line.seq;
+            if (options.platformOnly && line.stream !== 'platform') continue;
+            process.stderr.write(`${line.text}\n`);
+          }
+          if (message.deployment) {
+            if (last && message.deployment.status !== last.status)
+              process.stderr.write(`-> ${message.deployment.status}\n`);
+            last = message.deployment;
+          }
+          if (complete(last)) return;
+        }
+        // The stream ended before the whole log arrived: resume from the
+        // last line, after a pause when it brought nothing new.
+        if (after === before) await pause(1000);
+      } catch (error) {
+        // A dropped or timed-out stream (exit 7) resumes from the last line
+        // seen; any other failure is the caller's to report.
+        if (
+          canceled(error) ||
+          !(error instanceof CliError) ||
+          error.exitCode !== 7
+        )
+          throw settle(error);
+        await pause(1000);
+      }
+    }
+  };
+  // The stream stops early enough to leave time to read the final state.
+  await watch(
+    options.deadline -
+      Math.min(
+        FINAL_LOOKUP_MS,
+        Math.floor((options.deadline - Date.now()) / 4),
+      ),
+  );
+  if (last && complete(last)) return last;
+  // The last frame may be older than the deployment: read it with what is
+  // left of the budget, keeping the last frame when that times out.
+  const left = options.deadline - Date.now();
+  if (left > 0)
+    last = await deployments
+      .get(
+        { id: options.id, deploymentId: options.deploymentId },
+        { timeoutMs: left, signal: options.signal },
+      )
+      .catch((error: unknown) => {
+        if (
+          canceled(error) ||
+          !(error instanceof CliError) ||
+          error.exitCode !== 7
+        )
+          throw settle(error);
+        return last;
+      });
+  if (last && complete(last)) return last;
+  // Still running, or finished with its log still arriving, with time left:
+  // the deadline ends the follow, not the share it kept for the lookup.
+  if (options.deadline > Date.now()) {
+    await watch(options.deadline);
+    if (last && complete(last)) return last;
+  }
+  if (last?.finished) throw incomplete(last);
+  throw new CliError(
+    'deployment_in_progress',
+    `Deployment ${options.deploymentId} is still ${last?.status ?? 'running'}. Follow it with ${resume()} --follow.`,
+    7,
+    undefined,
+    { deployment: last, afterSeq: after },
+  );
 }
 function isRejected(error: unknown) {
   return (

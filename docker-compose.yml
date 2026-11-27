@@ -52,6 +52,10 @@ services:
       # reach 3701, including generated app backends, impersonate the runner).
       # Generate one with e.g. `openssl rand -hex 32` and put it in `.env`.
       AGENT_RUNNER_TOKEN: ${AGENT_RUNNER_TOKEN:?set AGENT_RUNNER_TOKEN in .env (e.g. openssl rand -hex 32)}
+      # Optional: enables the dedicated Builder below. Without it, deployments
+      # build on the machine that runs `hatch app deploy` (for the Agent, its
+      # Runner). Must match the builder service's HATCH_BUILDER_TOKEN.
+      HATCH_BUILDER_TOKEN: ${HATCH_BUILDER_TOKEN:-}
       # REQUIRED: stable platform root secret used to encrypt and decrypt app
       # database credentials and newly written KV secrets. Direct rotation makes
       # existing encrypted values unreadable. Also signs auth sessions unless
@@ -123,9 +127,41 @@ services:
       - agent_workspace:/app/workspace
       - agent_cache:/cache
 
+  # Optional dedicated Builder: builds deployments so the platform never runs
+  # App source. Start it with `docker compose --profile builder up -d` after
+  # setting HATCH_BUILDER_TOKEN in .env. Like the Runner it only opens
+  # outbound connections to the platform's internal server (3701) and has no
+  # database credentials or platform secrets; each build's App code runs
+  # under a separate sandbox identity. It is still trusted like the platform:
+  # the frontends it builds run as the signed-in user (docs/app-builds.md),
+  # so run it only where you would run the platform. Run several (or raise
+  # BUILDER_CONCURRENCY) for parallel builds.
+  builder:
+    image: ${HATCH_IMAGE:-ghcr.io/imsingee/hatch:master}
+    pull_policy: always
+    restart: unless-stopped
+    profiles: ['builder']
+    command: ['node', 'dist/builder/main.mjs']
+    depends_on:
+      - app
+    environment:
+      HATCH_PLATFORM_URL: http://app:3701
+      # Compose reads this file before it applies profiles, so an unset token
+      # must not fail it; the Builder itself refuses to start without one.
+      HATCH_BUILDER_TOKEN: ${HATCH_BUILDER_TOKEN:-}
+      HATCH_BUILDER_ID: builder-1
+      BUILDER_CONCURRENCY: ${BUILDER_CONCURRENCY:-1}
+      # Scratch space for builds (nothing here outlives a build).
+      HATCH_DATA_DIR: /app/workspace
+    volumes:
+      - builder_workspace:/app/workspace
+      - builder_cache:/cache
+
 volumes:
   pgdata:
   platform_workspace:
   platform_cache:
   agent_workspace:
   agent_cache:
+  builder_workspace:
+  builder_cache:

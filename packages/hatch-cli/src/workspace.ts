@@ -34,7 +34,24 @@ export type Workspace = {
   id: string;
   generation: string;
   masterCommit: string | null;
-  pending?: { command: string; commit: string; startedAt: string };
+  /**
+   * A deploy this checkout started and has not seen finish. `deploymentId`
+   * is set once the platform created the deployment.
+   */
+  pending?: {
+    command: string;
+    commit: string;
+    startedAt: string;
+    /** Id of the create request, repeated to find what it made. */
+    requestId?: string;
+    /**
+     * When the create request's own deadline ends: the platform creates
+     * nothing for it after that, so a lookup that finds nothing later means
+     * none was made.
+     */
+    createDeadline?: string;
+    deploymentId?: string;
+  };
   lastDeployment?: { version: number; deploymentId: string };
 };
 import { childEnvironment, git } from './process';
@@ -307,7 +324,10 @@ export async function writeFiles(
   root: string,
   files: { path: string; contentBase64: string }[],
 ) {
+  // Every path is checked before the first file is written, so a payload
+  // with one unsafe path writes nothing at all.
   const seen = new Set<string>();
+  const planned: { parts: string[]; contentBase64: string }[] = [];
   for (const file of files) {
     const parts = file.path.split('/');
     if (
@@ -329,7 +349,10 @@ export async function writeFiles(
         7,
       );
     seen.add(file.path);
-    const target = join(root, ...parts);
+    planned.push({ parts, contentBase64: file.contentBase64 });
+  }
+  for (const file of planned) {
+    const target = join(root, ...file.parts);
     await mkdir(dirname(target), { recursive: true });
     await writeFile(target, Buffer.from(file.contentBase64, 'base64'), {
       flag: 'wx',

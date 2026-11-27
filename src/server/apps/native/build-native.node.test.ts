@@ -9,7 +9,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
 import { AppBuildError, buildApp } from '../build';
-import { NATIVE_HOST_CALLS, nshAppId } from './build-native';
+import { NATIVE_HOST_CALLS, nshAppId } from '../../../app-build/native';
 import { nshBinary, NSH_RELEASE_SHA256, NSH_VERSION } from './nsh-toolchain';
 import { nshRuntimeDir } from './runtime-store';
 
@@ -198,12 +198,15 @@ describe.skipIf(!nshAvailable())(
         'teal',
         'violet',
       ]);
-      // App code ships with the deployment; the engine goes to the shared,
-      // content-addressed runtime.
+      // App code ships with the deployment; the engine goes to a runtime set
+      // named by the digest of its files, which no other package can change.
       await fs.access(path.join(outputDir, 'app', config.app.code));
-      expect(config.runtime.base).toBe(`/api/app-runtime/nsh/${NSH_VERSION}/`);
+      const set = new RegExp(
+        `^/api/app-runtime/nsh/${NSH_VERSION.replaceAll('.', '\\.')}/(sets/[0-9a-f]{64})/$`,
+      ).exec(config.runtime.base)?.[1];
+      expect(set).toBeDefined();
       for (const file of [config.runtime.module, config.runtime.wasm]) {
-        await fs.access(path.join(nshRuntimeDir(NSH_VERSION), file));
+        await fs.access(path.join(nshRuntimeDir(NSH_VERSION), set!, file));
       }
     });
 
@@ -296,7 +299,7 @@ describe.skipIf(!nshAvailable())(
           page,
         )![1],
       ) as {
-        runtime: { sides: Record<string, { url: string }> };
+        runtime: { base: string; sides: Record<string, { url: string }> };
         app: {
           chunks: Record<string, string>;
           chunkSides: Record<string, string[]>;
@@ -307,10 +310,12 @@ describe.skipIf(!nshAvailable())(
       await fs.access(path.join(outputDir, 'app', config.app.chunks[chunk]));
       const needed = config.app.chunkSides[chunk] ?? [];
       expect(needed.length).toBeGreaterThan(0);
+      // The runtime set this deployment's page names serves the side modules.
+      const set = config.runtime.base.split(`/${NSH_VERSION}/`)[1];
       for (const name of needed) {
         const side = config.runtime.sides[name];
         expect(side).toBeDefined();
-        await fs.access(path.join(nshRuntimeDir(NSH_VERSION), side.url));
+        await fs.access(path.join(nshRuntimeDir(NSH_VERSION), set, side.url));
       }
     });
 

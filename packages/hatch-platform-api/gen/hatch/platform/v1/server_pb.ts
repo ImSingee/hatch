@@ -20,7 +20,7 @@ import type { Message } from '@bufbuild/protobuf';
 export const file_hatch_platform_v1_server: GenFile =
   /*@__PURE__*/
   fileDesc(
-    'Ch5oYXRjaC9wbGF0Zm9ybS92MS9zZXJ2ZXIucHJvdG8SEWhhdGNoLnBsYXRmb3JtLnYxIlYKClNlcnZlckluZm8SEwoGY29tbWl0GAEgASgJSACIAQESGAoLY29tbWl0X3RpbWUYAiABKAlIAYgBAUIJCgdfY29tbWl0Qg4KDF9jb21taXRfdGltZSIWChRHZXRTZXJ2ZXJJbmZvUmVxdWVzdCJGChVHZXRTZXJ2ZXJJbmZvUmVzcG9uc2USLQoGc2VydmVyGAEgASgLMh0uaGF0Y2gucGxhdGZvcm0udjEuU2VydmVySW5mbzJzCg1TZXJ2ZXJTZXJ2aWNlEmIKDUdldFNlcnZlckluZm8SJy5oYXRjaC5wbGF0Zm9ybS52MS5HZXRTZXJ2ZXJJbmZvUmVxdWVzdBooLmhhdGNoLnBsYXRmb3JtLnYxLkdldFNlcnZlckluZm9SZXNwb25zZWIGcHJvdG8z',
+    'Ch5oYXRjaC9wbGF0Zm9ybS92MS9zZXJ2ZXIucHJvdG8SEWhhdGNoLnBsYXRmb3JtLnYxIlYKClNlcnZlckluZm8SEwoGY29tbWl0GAEgASgJSACIAQESGAoLY29tbWl0X3RpbWUYAiABKAlIAYgBAUIJCgdfY29tbWl0Qg4KDF9jb21taXRfdGltZSJhCgdCdWlsZGVyEgoKAmlkGAEgASgJEhMKC2NvbmN1cnJlbmN5GAIgASgNEg8KB3J1bm5pbmcYAyABKA0SFAoMbGFzdF9zZWVuX2F0GAQgASgJEg4KBm9ubGluZRgFIAEoCCJRCg1CdWlsZGVyU3RhdHVzEhIKCmNvbmZpZ3VyZWQYASABKAgSLAoIYnVpbGRlcnMYAiADKAsyGi5oYXRjaC5wbGF0Zm9ybS52MS5CdWlsZGVyIhYKFEdldFNlcnZlckluZm9SZXF1ZXN0InkKFUdldFNlcnZlckluZm9SZXNwb25zZRItCgZzZXJ2ZXIYASABKAsyHS5oYXRjaC5wbGF0Zm9ybS52MS5TZXJ2ZXJJbmZvEjEKB2J1aWxkZXIYAiABKAsyIC5oYXRjaC5wbGF0Zm9ybS52MS5CdWlsZGVyU3RhdHVzMnMKDVNlcnZlclNlcnZpY2USYgoNR2V0U2VydmVySW5mbxInLmhhdGNoLnBsYXRmb3JtLnYxLkdldFNlcnZlckluZm9SZXF1ZXN0GiguaGF0Y2gucGxhdGZvcm0udjEuR2V0U2VydmVySW5mb1Jlc3BvbnNlYgZwcm90bzM',
   );
 
 /**
@@ -54,6 +54,84 @@ export const ServerInfoSchema: GenMessage<ServerInfo> =
   messageDesc(file_hatch_platform_v1_server, 0);
 
 /**
+ * A dedicated Builder this platform has heard from in the last day.
+ *
+ * @generated from message hatch.platform.v1.Builder
+ */
+export type Builder = Message<'hatch.platform.v1.Builder'> & {
+  /**
+   * Its `HATCH_BUILDER_ID`.
+   *
+   * @generated from field: string id = 1;
+   */
+  id: string;
+
+  /**
+   * Builds it runs at once.
+   *
+   * @generated from field: uint32 concurrency = 2;
+   */
+  concurrency: number;
+
+  /**
+   * Builds it holds now.
+   *
+   * @generated from field: uint32 running = 3;
+   */
+  running: number;
+
+  /**
+   * RFC 3339.
+   *
+   * @generated from field: string last_seen_at = 4;
+   */
+  lastSeenAt: string;
+
+  /**
+   * Heard from recently: it can take a build now (or once a slot frees).
+   *
+   * @generated from field: bool online = 5;
+   */
+  online: boolean;
+};
+
+/**
+ * Describes the message hatch.platform.v1.Builder.
+ * Use `create(BuilderSchema)` to create a new message.
+ */
+export const BuilderSchema: GenMessage<Builder> =
+  /*@__PURE__*/
+  messageDesc(file_hatch_platform_v1_server, 1);
+
+/**
+ * @generated from message hatch.platform.v1.BuilderStatus
+ */
+export type BuilderStatus = Message<'hatch.platform.v1.BuilderStatus'> & {
+  /**
+   * The platform accepts Builder builds (HATCH_BUILDER_TOKEN is set).
+   * Without it, deploy with a local build.
+   *
+   * @generated from field: bool configured = 1;
+   */
+  configured: boolean;
+
+  /**
+   * Most recently seen first.
+   *
+   * @generated from field: repeated hatch.platform.v1.Builder builders = 2;
+   */
+  builders: Builder[];
+};
+
+/**
+ * Describes the message hatch.platform.v1.BuilderStatus.
+ * Use `create(BuilderStatusSchema)` to create a new message.
+ */
+export const BuilderStatusSchema: GenMessage<BuilderStatus> =
+  /*@__PURE__*/
+  messageDesc(file_hatch_platform_v1_server, 2);
+
+/**
  * @generated from message hatch.platform.v1.GetServerInfoRequest
  */
 export type GetServerInfoRequest =
@@ -65,7 +143,7 @@ export type GetServerInfoRequest =
  */
 export const GetServerInfoRequestSchema: GenMessage<GetServerInfoRequest> =
   /*@__PURE__*/
-  messageDesc(file_hatch_platform_v1_server, 1);
+  messageDesc(file_hatch_platform_v1_server, 3);
 
 /**
  * @generated from message hatch.platform.v1.GetServerInfoResponse
@@ -76,6 +154,11 @@ export type GetServerInfoResponse =
      * @generated from field: hatch.platform.v1.ServerInfo server = 1;
      */
     server?: ServerInfo | undefined;
+
+    /**
+     * @generated from field: hatch.platform.v1.BuilderStatus builder = 2;
+     */
+    builder?: BuilderStatus | undefined;
   };
 
 /**
@@ -84,7 +167,7 @@ export type GetServerInfoResponse =
  */
 export const GetServerInfoResponseSchema: GenMessage<GetServerInfoResponse> =
   /*@__PURE__*/
-  messageDesc(file_hatch_platform_v1_server, 2);
+  messageDesc(file_hatch_platform_v1_server, 4);
 
 /**
  * The platform server that answers these RPCs.

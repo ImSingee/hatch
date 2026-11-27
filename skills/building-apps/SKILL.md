@@ -87,12 +87,19 @@ Do not import generated files or execution modules from the manifest.
    hatch app deploy --directory <path> --message 'Add tags' --json
    ```
 
-   Deploy requires a clean tree, pushes `HEAD` to platform `master`, then
-   repeats source validation before building or changing durable deployment
-   state. A failed deploy leaves that commit on `master` unreleased: fix the
-   failure, validate again, commit on top, and redeploy. (`hatch app push`
-   only pushes without releasing; deploy already pushes, so you rarely need
-   it.)
+   Deploy requires a clean tree, pushes `HEAD` to platform `master`, creates
+   a deployment of that commit and builds it on the platform's dedicated
+   Builder. If deploy is refused with `BUILDER_UNAVAILABLE` (the platform has
+   no Builder) or `BUILDER_OFFLINE` (none is running now), run it again with
+   `--local`: the build then runs right here, in this checkout's environment,
+   and the package is uploaded. `hatch server info --json` shows the
+   Builders. The build repeats source validation; the platform then checks
+   the build package and releases it.
+   Build and release output streams to stderr, and the command prints the
+   finished deployment. A failed deploy leaves that commit on `master`
+   unreleased: read the error and the log, fix the failure, validate again,
+   commit on top, and redeploy. (`hatch app push` only pushes without
+   releasing; deploy already pushes, so you rarely need it.)
 
 7. Run `hatch app get <id> --json` to confirm the deployed state. Then call
    `report_deployed_apps` with `app_ids` listing every App this turn deployed
@@ -116,22 +123,38 @@ If deploy fails with `APP_MANIFEST_INVALID`, the message lists each manifest
 field to fix as `path: reason` (for example `app.routes[1].path`). Fix those
 fields in the manifest, commit, and deploy again.
 
-A destructive Data Table migration fails deploy with `CONFLICT`; the error
-message lists the preview and includes `Approval token: <token>`. Show the
+A destructive Data Table migration fails deploy with
+`data_migration_approval_required`; the error message includes
+`Approval token: <token>`. Show the
 user what data is lost and get explicit approval with `ask`, then repeat the
 same deploy with
 `--allow-destructive-data-migration --data-migration-approval-token '<token>'`.
 
-If deploy ends in `outcome_unknown`, a network error, or a timeout, do not
-deploy again blindly. Run `hatch app deploy --directory <path> --reconcile
---json`. Neither result proves anything: `source-matches-pending` only means
-the released commit equals the pending one, and `outcome-unresolved` means it
-does not. In both cases inspect the deployment history in
-`hatch app get <id> --json`, and do not report success until it lists a
-release of the pending commit. The checkout stays
-blocked for further deploys until you confirm the earlier request has
-finished. Then `--retry-after-confirming <pending-commit>` clears the marker
-and deploys that commit again.
+Every deployment is recorded on the platform, so an interrupted deploy is
+never a guess. If deploy ends in `deployment_in_progress` (its `--timeout`
+passed while the Builder was still working) or a network error, do not deploy
+again: run `hatch app deployments logs <id> <deployment-id> --follow --json`
+to wait for it (the id is in the error details and in
+`hatch app deployments list <id> --json`), or
+`hatch app deploy --directory <path> --reconcile --json` to see the state of
+the checkout's pending deployment. The next deploy from the checkout settles a
+finished one by itself; one still running blocks it with
+`deployment_in_progress` until it finishes or you cancel it with
+`hatch app deployments cancel <id> <deployment-id> --yes`. Report success only for
+a deployment whose status is `ready`.
+
+When no deployment id exists (the create request may never have reached the
+platform, and `hatch app deployments list <id> --json` shows no deployment of
+that commit), rely on `--reconcile`. While it reports `unconfirmed`, the
+create could still land: do not deploy, and run `--reconcile` again once a
+minute has passed after `pending.createDeadline` (the deploy error names that
+time). `not-created` means no deployment was made and the checkout forgot the
+request: deploy again normally. `in-progress` or
+`finished` carries the deployment: follow, cancel or report it as above.
+`missing` (or deploy failing with `pending_deployment_missing`) means the
+recorded deployment no longer exists: check `hatch app deployments list`,
+then deploy with `--retry-after-confirming <pending-commit>`, which forgets
+the record and starts a new deployment in the same command.
 
 ## Source contract
 
@@ -567,17 +590,18 @@ Never drop `--no-lock`. A `deno.lock` or `deno.json` written beside
 `pnpm-lock.yaml` makes the toolchain ambiguous, and preparation and deploy fail
 until the file is removed.
 
-`hatch app deploy` repeats the install, type-checks every enabled manifest entry
+The deployment build (on the Builder, or locally from a clean export of the
+pushed commit) repeats the install, type-checks every enabled manifest entry
 with `tsc`, and evaluates `manifest.ts` and `data/schema.ts` in a Node process
 that has no file, network, subprocess, or worker access. Keep both files pure
 declarations: they may import only local source modules, `@hatch/*`, and
 packages from `package.json`, and must not call Node or Deno APIs at module
-scope. Deploy then bundles the
+scope. The build then bundles the
 frontend, widgets, and backend, and rejects any import left unresolved, remote
-URLs included; backend code may import Node built-ins as `node:*`. All of this
-happens before database migration, artifact persistence, or live-release
-activation. A failed check must be fixed in authored source and committed
-before retrying deploy.
+URLs included; backend code may import Node built-ins as `node:*`. The
+platform checks the resulting package again before database migration,
+artifact persistence, or live-release activation. A failed check must be fixed
+in authored source and committed before retrying deploy.
 
 ## Managed Data Tables
 

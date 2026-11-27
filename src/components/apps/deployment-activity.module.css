@@ -1,0 +1,41 @@
+.item + .item {
+  border-top: 1px solid var(--mantine-color-default-border);
+  padding-top: var(--mantine-spacing-md);
+}
+
+.meta {
+  color: var(--mantine-color-dimmed);
+}
+
+.error {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--mantine-color-dimmed);
+}
+
+.toggle:hover {
+  color: var(--mantine-color-text);
+}
+
+.chevron {
+  transition: transform 150ms ease;
+}
+
+.chevronOpen {
+  transition: transform 150ms ease;
+  transform: rotate(90deg);
+}
+
+.log {
+  max-height: 320px;
+  overflow: auto;
+  font-size: var(--mantine-font-size-xs);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}

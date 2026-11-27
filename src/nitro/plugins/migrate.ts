@@ -8,6 +8,7 @@ import {
 } from '~server/agent-runs';
 import { startAgentInternalServer } from '~server/agent-runner/internal-server';
 import { hardenPlatformDatabase } from '~server/apps/provision';
+import { ensureBuildSweeper } from '~server/apps/builds';
 import { reconcilePendingAppActivations } from '~server/apps/deploy';
 import { warmLongRunningBackends } from '~server/apps/runtime';
 import { ensureScheduler } from '~server/apps/scheduler';
@@ -42,6 +43,9 @@ export default definePlugin(async () => {
   // Resolve deploys whose platform COMMIT acknowledgement or post-commit
   // cleanup was interrupted before starting cron jobs/backends from DB state.
   await reconcilePendingAppActivations();
+  // Deployments a previous process was verifying or releasing, lost Builder
+  // leases and uploads that never came are settled, then checked regularly.
+  await ensureBuildSweeper();
   // Agent runs execute on remote runners: bring up the runner-facing internal
   // server (WS control channel + REST API), then reap only runs whose lease
   // already expired — runs with live leases survive a platform restart, their

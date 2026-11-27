@@ -7,7 +7,7 @@ import { promises as fs } from 'node:fs';
 import path from 'node:path';
 import { build, type BuildFailure } from 'esbuild';
 import { sdkEntryTsconfig } from '../../sdk-internal/definitions';
-import { APP_HATCH_SDK_IMPORTS } from '../agent/hatch-sdk';
+import { APP_HATCH_SDK_IMPORTS } from '../agent/hatch-sdk-paths';
 import { validateNodeDependencySource } from '../node-dependencies';
 import {
   NODE_EVALUATION_CONDITIONS,

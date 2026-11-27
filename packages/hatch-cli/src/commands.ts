@@ -30,7 +30,7 @@ const definitions: readonly CliCommandDefinition[] = [
     path: ['server', 'info'],
     usage: 'server info',
     description:
-      'Show the source revision the connected platform server was built from: the full commit SHA and its commit time, or null for each when the build recorded none. Unlike version, this asks the server, so it needs a credential.',
+      'Show the source revision the connected platform server was built from (the full commit SHA and its commit time, or null for each when the build recorded none) and its dedicated Builders: builder.configured says whether the platform accepts Builder builds, and builder.builders lists each Builder heard from in the last day (id, concurrency, running builds, lastSeenAt, online). Without a configured, online Builder, deploy with hatch app deploy --local. Unlike version, this asks the server, so it needs a credential.',
   },
   {
     path: ['auth', 'login'],
@@ -83,9 +83,42 @@ const definitions: readonly CliCommandDefinition[] = [
   {
     path: ['app', 'deploy'],
     usage:
-      'app deploy [--directory <path>] [--message <text>] [--commit <sha>] [--allow-destructive-data-migration --data-migration-approval-token <token>] [--reconcile | --retry-after-confirming <commit>]',
+      'app deploy [--directory <path>] [--message <text>] [--commit <sha>] [--local] [--no-wait] [--allow-destructive-data-migration --data-migration-approval-token <token>] [--reconcile | --retry-after-confirming <commit>]',
     description:
-      'Push HEAD to platform master, then release it. --commit <sha> skips the push and releases that full commit id, which must already be on platform master.',
+      "Push HEAD to platform master, create a deployment of it and release it; --commit <sha> skips the push and deploys that full commit id, which must already be on platform master (otherwise COMMIT_NOT_ON_MASTER, exit 6; a rollback moves master back past newer versions); with --local the commit must also be in this checkout (otherwise source_unavailable, exit 6, and no deployment is created). By default the platform's dedicated Builder builds the commit. A platform without a Builder refuses that with BUILDER_UNAVAILABLE, and one whose Builders have not connected recently with BUILDER_OFFLINE (both exit 6, before any deployment is created; hatch server info shows the Builders). Then build on this machine with --local: it builds the commit with the platform's pinned toolchain, installed once into ~/.cache/hatch (native frontends also need nsh), and uploads the build package. --local also works where a Builder is available. Build and release output goes to stderr; stdout prints the finished deployment (deploymentId, status, version, normalized manifest). A deployment that does not end ready exits with its error code: source the build rejects is app_build_failed or APP_MANIFEST_INVALID (exit 2); toolchain_mismatch, data_migration_approval_required (with the approval token in the message), superseded, canceled and the rest exit 6. --no-wait prints the created deployment without following a Builder build and has the platform post a notification when it finishes; a local build that outlives --timeout (default 600s) stops with local_build_timeout (exit 7). A local build that stops without uploading (it fails, times out or is interrupted) makes one attempt to settle the deployment: source the build rejects is recorded as a failed deployment, anything else cancels it. If that request fails, the deploy still exits with the build's error, stderr says so, and the checkout keeps the deployment recorded as pending because the platform may still be waiting for its package (the next deploy fails with deployment_in_progress while it waits): inspect it with deploy --reconcile or hatch app deployments get <id> <deployment-id>, or cancel it with hatch app deployments cancel <id> <deployment-id> --yes. When --timeout expires while deploy follows a Builder build, it exits 7 with deployment_in_progress and leaves the deployment running (follow it with hatch app deployments logs <id> <deployment-id> --follow). A deployment that finished before the rest of its log arrived or could be read settles by its outcome, with a note on stderr. The checkout records a started deploy, and the next deploy settles it from the platform record first: one still running or unconfirmed fails with deployment_in_progress, and one whose recorded deployment id the platform no longer has with pending_deployment_missing (both exit 6). --reconcile only reports that pending deployment and changes nothing on the platform (not-created, in-progress, finished, missing, or unconfirmed while its create request could still complete), works with uncommitted changes, and forgets it once finished or not-created. --retry-after-confirming <commit> forgets the pending deployment of that exact commit and then runs a normal deploy in the same invocation: it pushes HEAD (or uses --commit) and creates a new deployment. Use --reconcile, not this flag, to only inspect the pending deployment.",
+  },
+  {
+    path: ['app', 'deployments', 'list'],
+    usage:
+      'app deployments list <id-or-slug> [--limit <1-100>] [--cursor <seq>] [--json]',
+    description:
+      'List deployments newest first, 20 per page by default; pass the printed nextCursor as --cursor for the next page (null on the last). Each carries deploymentId, status (queued, awaiting_artifact, building, verifying, releasing, ready, failed, canceled or superseded), build (builder or local), commit, version once ready, error code and message.',
+  },
+  {
+    path: ['app', 'deployments', 'queue'],
+    usage:
+      'app deployments queue [--limit <1-100>] [--cursor <deployment-id>] [--json]',
+    description:
+      'List every unfinished deployment of every App, oldest first, 50 per page by default; pass the printed nextCursor as --cursor for the next page (null on the last). Each entry carries appSlug and appName, queuePosition (1-based place among queued Builder builds in the order Builders take them, oldest first and one build per App at a time; null unless queued), builderId (the Builder holding a building one, else null) and the deployment (deploymentId, id of its App, status: queued, awaiting_artifact, building, verifying or releasing). Cancel one with hatch app deployments cancel <id> <deployment-id> --yes. Read-only.',
+  },
+  {
+    path: ['app', 'deployments', 'get'],
+    usage: 'app deployments get <id-or-slug> <deployment-id> [--json]',
+    description:
+      'Show one deployment: status, build, commit, actor, timestamps, error, and once ready its version and normalized manifest.',
+  },
+  {
+    path: ['app', 'deployments', 'logs'],
+    usage:
+      'app deployments logs <id-or-slug> <deployment-id> [--after <seq>] [--follow] [--timeout <seconds>] [--json]',
+    description:
+      'Print the build and release log after line --after (default 0). --follow streams new lines to stderr until the deployment finishes, reconnecting as needed, then prints the deployment; --timeout (default 1800s with --follow) expiring exits 7 with deployment_in_progress, or with deployment_log_incomplete when the deployment finished but the rest of its log did not arrive (or could no longer be read). Both carry afterSeq (the --after to resume from) in the error details; deployment_log_incomplete also carries the finished deployment (and, when reading failed, the failing error code as cause), and deployment_in_progress the deployment only when one was read (otherwise deployment is null). Without --follow, --json prints {deployment, lines:[{seq,stream,text,at}]} (stream is build or platform). With --follow the lines go to stderr as text and --json prints only the final deployment object, the same DTO as deployments get.',
+  },
+  {
+    path: ['app', 'deployments', 'cancel'],
+    usage: 'app deployments cancel <id-or-slug> <deployment-id> --yes [--json]',
+    description:
+      'Cancel a deployment that is queued, waiting for its local build or building; it is never released, and the cancel cannot be undone (deploy the commit again to retry), so --yes is required. Fails with DEPLOYMENT_NOT_CANCELABLE once it is verifying, releasing or finished.',
   },
   {
     path: ['app', 'rollback'],
@@ -849,6 +882,8 @@ export const commandGroups: Readonly<Record<string, string>> = {
   'app invoke': 'Call a deployed App backend or webhook.',
   'app backend': 'Inspect and control App backend processes.',
   'app task': 'List, run and inspect App tasks and their runs.',
+  'app deployments':
+    'List, follow and cancel App deployments and read their logs.',
   'app docs': 'Read the docs an App publishes for the services that call it.',
   'app kv': 'Read and write App key-value data.',
   'app data-table': 'Inspect and change App data tables.',
