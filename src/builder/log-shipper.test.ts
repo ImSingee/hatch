@@ -75,4 +75,32 @@ describe('build output shipped to the platform', () => {
 
     expect(calls).toEqual([['a', 'b', 'c'], [note(3)]]);
   });
+
+  it('keeps every line of a long diagnostic written at once while the endpoint keeps up', async () => {
+    const { calls, send } = endpoint([]);
+    const shipper = new LogShipper(send);
+    const lines = Array.from({ length: 45_000 }, (_, i) => `line ${i}`);
+
+    await shipper.pushPaced(lines, new AbortController().signal);
+    await shipper.drain(10_000, new AbortController().signal);
+
+    expect(calls.flat()).toEqual(lines);
+  });
+
+  it('marks what a long diagnostic could not send before its deadline', async () => {
+    const { calls, send } = endpoint([]);
+    const shipper = new LogShipper(send);
+    const lines = Array.from({ length: 45_000 }, (_, i) => `line ${i}`);
+    const deadline = new AbortController();
+    deadline.abort();
+
+    await shipper.pushPaced(lines, deadline.signal);
+    await shipper.drain(10_000, new AbortController().signal);
+
+    const sent = calls.flat();
+    expect(sent.filter((line) => line.startsWith('line '))).toHaveLength(
+      20_000,
+    );
+    expect(sent.at(-1)).toBe(note(25_000));
+  });
 });

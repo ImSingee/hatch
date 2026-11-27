@@ -353,7 +353,14 @@ async function startBuilder(): Promise<void> {
               ),
           ),
         );
-        logs.push(['[builder] The build failed:', ...pieces]);
+        const deadline = AbortSignal.any([
+          AbortSignal.timeout(LOG_DRAIN_MS),
+          stop.signal,
+        ]);
+        await logs.pushPaced(
+          ['[builder] The build failed:', ...pieces],
+          deadline,
+        );
         await logs.drain(LOG_DRAIN_MS, stop.signal);
       }
       if (stop.signal.aborted) return;

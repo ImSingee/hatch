@@ -112,6 +112,33 @@ export class LogShipper {
     }
   }
 
+  /**
+   * Queue `lines` a batch at a time, each once the earlier ones were sent,
+   * so a long burst (a failure's full diagnostic) is not cut by the queue
+   * limit while the endpoint keeps up. Once `signal` aborts or the shipper
+   * stops, the rest is queued as `push` would, which marks what it drops.
+   */
+  async pushPaced(
+    lines: readonly string[],
+    signal: AbortSignal,
+  ): Promise<void> {
+    for (let start = 0; start < lines.length; start += LOG_BATCH_MAX_LINES) {
+      if (this.stopped || signal.aborted) {
+        this.push(lines.slice(start));
+        return;
+      }
+      this.push(lines.slice(start, start + LOG_BATCH_MAX_LINES));
+      await new Promise<void>((resolve) => {
+        const done = () => {
+          signal.removeEventListener('abort', done);
+          resolve();
+        };
+        signal.addEventListener('abort', done, { once: true });
+        void this.flush().finally(done);
+      });
+    }
+  }
+
   private noteDropped(): void {
     if (this.dropped === 0) return;
     this.enqueue({ text: droppedNote(this.dropped), lines: this.dropped });

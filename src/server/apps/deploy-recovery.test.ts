@@ -1442,6 +1442,54 @@ describe('App deployment activation recovery', () => {
     });
   });
 
+  // The deployment sweep settles a stalled release only when it can take
+  // the Data cutover lock (builds.postgres.test.ts shows it yields to any
+  // holder). The migration must therefore run under that same lock: a
+  // release paused mid-migration is then never settled behind its back.
+  it('applies the Data migration only while it holds the Data cutover lock', async () => {
+    const id = 'migration-under-cutover-lock';
+    const app = appState(id, {
+      status: 'deployed',
+      currentDeploymentId: 'deployment-current',
+      capabilities: { backend: false, dataTable: false },
+      dataDbName: null,
+      dataSchemaHash: null,
+      dataActivationId: null,
+    });
+    mocks.apps.set(id, app);
+    mocks.deployments.set(
+      'deployment-current',
+      deploymentState('deployment-current', id),
+    );
+    await writeBuild(
+      `${mocks.root}/live/${id}`,
+      'deployment-current',
+      'current deployment',
+    );
+    mocks.buildApp.mockImplementationOnce(stageDataTableBuild);
+    let heldDuringMigration: boolean | undefined;
+    mocks.applyDataMigration.mockImplementationOnce(async () => {
+      heldDuringMigration = mocks.heldCutoverLocks.has(id);
+      return {
+        hash: 'locked-schema-hash',
+        schema: { version: 1, tables: {} },
+        plan: {
+          fromHash: null,
+          toHash: 'locked-schema-hash',
+          steps: [],
+          destructive: false,
+          approvalToken: 'locked-approval-token',
+        },
+        applied: true,
+      };
+    });
+
+    await deployApp(id, { message: 'Migrate', commit: 'source-commit' });
+
+    expect(heldDuringMigration).toBe(true);
+    expect(mocks.heldCutoverLocks.has(id)).toBe(false);
+  });
+
   it('provisions fresh Data state when re-enabled after permanent deletion', async () => {
     const id = 're-enable-deleted-data';
     const app = appState(id, {
