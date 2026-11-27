@@ -36,6 +36,12 @@ export async function pinDefaultDashboardForNewUser(
   tx: TX,
   userId: string,
 ): Promise<void> {
+  // Most reads are by users past their first visit: no lock for them.
+  const applied = await tx.query.userPreferences.findFirst({
+    where: { userId },
+    columns: { dashboardDefaultsApplied: true },
+  });
+  if (applied?.dashboardDefaultsApplied) return;
   // The oldest dashboard nobody is deleting right now; the lock keeps it
   // from being deleted until this transaction ends, so the pin cannot fail.
   const [candidate] = await tx

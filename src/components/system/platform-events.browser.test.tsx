@@ -495,6 +495,15 @@ test('re-reads the theme when it changes and after every reconnect', async () =>
   } satisfies PlatformEvent);
   await vi.waitFor(() => expect(stale()).toBe(true));
 
+  // A library change goes to everyone: their theme may be the one changed.
+  markFresh();
+  queryClient.setQueryData(['theme', 'library'], []);
+  source?.emit('platform', { type: 'themes.updated' } satisfies PlatformEvent);
+  await vi.waitFor(() => expect(stale()).toBe(true));
+  expect(queryClient.getQueryState(['theme', 'library'])?.isInvalidated).toBe(
+    true,
+  );
+
   markFresh();
   source?.emit('resync');
   await vi.waitFor(() => expect(stale()).toBe(true));
