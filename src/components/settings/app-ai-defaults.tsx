@@ -1,4 +1,4 @@
-import { Group, Paper, Select, Stack, Text } from '@mantine/core';
+import { Group, Paper, Select, SimpleGrid, Stack, Text } from '@mantine/core';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { IconSparkles } from '@tabler/icons-react';
 import { toast } from 'sonner';
@@ -63,7 +63,6 @@ function DefaultSelect({
         disabled={save.isPending || (!options.length && !entry.model)}
         onChange={(value) => save.mutate(value)}
         comboboxProps={{ withinPortal: true }}
-        style={{ flex: 1, minWidth: 220 }}
       />
       {entry.unavailable ? (
         <Text size="xs" c="red">
@@ -94,10 +93,11 @@ export function AppAiDefaults() {
         <Text size="xs" c="dimmed">
           {t('settings.appAi.description')}
         </Text>
-        <Group gap="md" align="flex-start" wrap="wrap">
+        {/* Full-width columns so long model names stay readable. */}
+        <SimpleGrid cols={{ base: 1, sm: 2 }} spacing="md">
           <DefaultSelect kind="chat" view={data} />
           <DefaultSelect kind="image" view={data} />
-        </Group>
+        </SimpleGrid>
       </Stack>
     </Paper>
   );
