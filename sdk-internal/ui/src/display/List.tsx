@@ -3,6 +3,7 @@ import type { JSX } from 'nsh';
 import { Button as BaseButton } from 'nsh/base';
 import { Each, If } from '../core/control';
 import { byLook, look } from '../core/env';
+import { SurfaceContext } from '../core/surface';
 import { FOCUS_RING_INSET } from '../core/styles';
 import type { Action, IconData } from '../core/types';
 import { Glyph } from '../icons/Icon';
@@ -65,7 +66,7 @@ export function List<T>(props: ListProps<T>): JSX.Element {
   // `If` on booleans, not ternaries over `items`: a ternary would rebuild
   // every row (losing focus and row state) whenever the App passes a new
   // array; `Each` keeps the rows by key instead.
-  const rows = (
+  const rows = () => (
     <If
       when={props.loading === true}
       else={
@@ -105,7 +106,15 @@ export function List<T>(props: ListProps<T>): JSX.Element {
         accessibilityLabel={props.title}
         class={FRAME.sheet}
       >
-        {FRAME.rows ? <View class={FRAME.rows}>{rows}</View> : rows}
+        {/* The rows are made here, inside the surface they sit on: on iOS
+            the list's own card, so their controls take the opposite fill. */}
+        {look === 'ios' ? (
+          <SurfaceContext.Provider value="card">
+            <View class={FRAME.rows}>{rows()}</View>
+          </SurfaceContext.Provider>
+        ) : (
+          rows()
+        )}
       </View>
     </View>
   );

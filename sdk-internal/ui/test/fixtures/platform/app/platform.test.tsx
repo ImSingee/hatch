@@ -139,3 +139,15 @@ test('scrolls the last row clear of the iOS tab bar after the pane narrows', asy
     barTop,
   ]);
 });
+
+test('draws iOS gray buttons on the fill opposite the card they sit on', async () => {
+  const app = await openOn('ios', {});
+  const fill = (label: string) =>
+    (app.viewStyle(`label:${label}`)?.backgroundColor ?? '').slice(0, 7);
+  // The theme's ground (`background`), not the card's white.
+  expect(['Water', 'Log', 'Share'].map(fill)).toEqual([
+    '#edebe6',
+    '#edebe6',
+    '#edebe6',
+  ]);
+});

@@ -76,8 +76,9 @@ const PRESS = byLook({
  * windows.
  */
 export function Card(props: CardProps): JSX.Element {
+  // The header's actions sit on the card too.
   const body = () => (
-    <>
+    <SurfaceContext.Provider value="card">
       {props.title || props.description || props.actions ? (
         <Header
           title={props.title}
@@ -85,10 +86,8 @@ export function Card(props: CardProps): JSX.Element {
           actions={props.actions}
         />
       ) : null}
-      <SurfaceContext.Provider value="card">
-        {props.children}
-      </SurfaceContext.Provider>
-    </>
+      {props.children}
+    </SurfaceContext.Provider>
   );
   const layout = () =>
     `${SURFACE} ${PADDING[props.padding ?? 'md']} flex-col ${GAP[props.gap ?? 'md']}`;

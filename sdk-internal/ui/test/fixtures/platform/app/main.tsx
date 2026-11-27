@@ -1,6 +1,7 @@
 import {
   AppShell,
   Button,
+  Card,
   Each,
   IconLeaf,
   IconPencil,
@@ -34,7 +35,11 @@ function Notes() {
       <TextField label="Name" value="North bed" />
       <List title="Beds">
         <ListItem title="North bed" onPress={() => undefined} />
+        <ListItem title="South bed" control={<Button label="Water" />} />
       </List>
+      <Card title="Harvest" actions={<Button label="Log" />}>
+        <Button label="Share" />
+      </Card>
       <Button label="Filter" onPress={() => open.set(true)} />
       <Sheet
         open={open()}
