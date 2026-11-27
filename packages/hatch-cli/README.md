@@ -210,12 +210,22 @@ is rejected with `workspace_instance_mismatch`.
     and a native frontend `nsh` of the platform's version (`HATCH_NSH_BIN` or
     `PATH`); a missing or mismatched tool fails with `tool_unavailable` or
     `nsh_unavailable` (exit 7). A build that outlives `--timeout` stops with
-    `local_build_timeout` (exit 7) and the CLI cancels the deployment, so
-    nothing is left waiting for its package. With `--commit`, the commit must be in
+    `local_build_timeout` (exit 7). With `--commit`, the commit must be in
     this checkout (the build does not fetch it): otherwise the deploy fails
     with `source_unavailable` (exit 6) before creating a deployment; run
-    `hatch app update` first. Build output goes to stderr. A build that fails
-    here is recorded as a failed deployment.
+    `hatch app update` first. Build output goes to stderr. When a local
+    build stops without uploading a package (it fails, times out, a tool is
+    missing or the deploy is interrupted), the CLI tries to settle the
+    deployment: a build the source fails (`app_build_failed` or
+    `APP_MANIFEST_INVALID`) is recorded as a failed deployment, any other
+    stop cancels it. That is a single request. If it fails, the deploy still
+    exits with the build's error, stderr says the deployment could not be
+    canceled, and the checkout keeps it recorded as pending, because the
+    platform may still be waiting for its package; while it waits, the next
+    deploy fails with `deployment_in_progress`. Inspect it with
+    `hatch app deploy --reconcile` or
+    `hatch app deployments get <id> <deployment-id>`, or cancel it with
+    `hatch app deployments cancel <id> <deployment-id>`.
   - `--build auto` (default) is `builder` where the platform has one, else
     `local`.
 

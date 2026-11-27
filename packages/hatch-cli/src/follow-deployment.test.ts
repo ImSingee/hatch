@@ -106,6 +106,55 @@ describe('followDeployment', () => {
     expect(Date.now()).toBeGreaterThanOrEqual(deadline);
   });
 
+  it('keeps reading the log of a deployment the final lookup finds finished', async () => {
+    const { deployments, calls } = fake(
+      [
+        (timeoutMs) =>
+          stream(
+            [{ lines: [line(1)], deployment: state('building', 1) }],
+            timeoutMs,
+          ),
+        (timeoutMs) =>
+          stream(
+            [{ lines: [line(2), line(3)], deployment: state('ready', 3) }],
+            timeoutMs,
+          ),
+      ],
+      async () => state('ready', 3),
+    );
+    await expect(follow(deployments, 2_000)).resolves.toMatchObject({
+      status: 'ready',
+      logSeq: 3,
+    });
+    expect(calls).toEqual({ watch: 2, get: 1 });
+
+    // The rest of the log does not arrive before the deadline.
+    const stalled = fake(
+      [
+        (timeoutMs) =>
+          stream(
+            [{ lines: [line(1)], deployment: state('building', 1) }],
+            timeoutMs,
+          ),
+        (timeoutMs) => stream([], timeoutMs),
+      ],
+      async () => state('ready', 3),
+    );
+    const deadline = Date.now() + 2_000;
+    const error = await followDeployment(stalled.deployments, {
+      id: 'notes',
+      deploymentId: 'dep-1',
+      afterSeq: 0,
+      deadline,
+    }).catch((caught: unknown) => caught);
+    expect(error).toMatchObject({
+      code: 'deployment_log_incomplete',
+      exitCode: 7,
+      details: { afterSeq: 1, deployment: { status: 'ready', logSeq: 3 } },
+    });
+    expect(Date.now()).toBeGreaterThanOrEqual(deadline);
+  });
+
   it('keeps a known outcome when the rest of its log cannot be read', async () => {
     const unavailable = new CliError(
       'run_credentials_unavailable',

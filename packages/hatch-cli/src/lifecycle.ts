@@ -1035,9 +1035,9 @@ export async function followDeployment(
         return last;
       });
   if (last && complete(last)) return last;
-  // Still running with time left: the deadline ends the follow, not the
-  // share it kept for the lookup.
-  if (!last?.finished && options.deadline > Date.now()) {
+  // Still running, or finished with its log still arriving, with time left:
+  // the deadline ends the follow, not the share it kept for the lookup.
+  if (options.deadline > Date.now()) {
     await watch(options.deadline);
     if (last && complete(last)) return last;
   }
