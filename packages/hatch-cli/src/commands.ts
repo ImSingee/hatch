@@ -924,8 +924,7 @@ export const commandGroups: Readonly<Record<string, string>> = {
   'app deployments':
     'List, follow and cancel App deployments and read their logs.',
   'app docs': 'Read the docs an App publishes for the services that call it.',
-  'app ai':
-    "Choose the models an App's AI roles use, cap its spend and read its AI calls.",
+  'app ai': "Choose the models Apps' AI roles use and read an App's AI calls.",
   'app kv': 'Read and write App key-value data.',
   'app data-table': 'Inspect and change App data tables.',
   'app db': 'Query App databases.',

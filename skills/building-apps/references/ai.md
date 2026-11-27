@@ -6,7 +6,9 @@ names a **role** it declares; the owner picks which model serves each role.
 The provider API key never reaches the App.
 
 Do not ask the user for an OpenAI, Anthropic or other provider key, and do
-not open backend network access to a provider. Declare a role instead.
+not open backend network access to a provider. Declare a role instead; keep
+`backend.network` as `[]` unless the App calls other services, since the AI
+endpoint is reachable without it.
 
 ## Declare roles
 
@@ -17,7 +19,11 @@ does, not for a model:
 ```json
 {
   "capabilities": { "backend": true, "ai": true },
-  "backend": { "entry": "backend/main.ts", "runtime": "deno-serve" },
+  "backend": {
+    "entry": "backend/main.ts",
+    "runtime": "deno-serve",
+    "network": []
+  },
   "ai": {
     "roles": [
       {
@@ -90,10 +96,11 @@ The result has `message` (the reply's text, tool calls and opaque
 `{ type: 'reasoning', state }` parts), `stopReason` (`stop`, `length` or
 `toolUse`), `usage` (token counts)
 and `model` (`provider`, `id`). Keep the whole `message`, reasoning parts
-included, in the history you send next: some providers reject a tool result
+included, in the history you send next (tool-call ids may be long; send them
+back unchanged): some providers reject a tool result
 without the reasoning that asked for it. Never change, show or store a
 reasoning part on its own; `replyText` skips it. A changed one fails with
-`ai_invalid_request`. One request body is at most 8 MB, including inline
+`ai_invalid_request`. `maxTokens` must be at least 16 and is capped at the model's own limit. One request body is at most 8 MB, including inline
 images.
 
 Stop iterating `chat()` (for example `break`) to cancel a reply: the platform

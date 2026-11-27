@@ -58,7 +58,8 @@ Checks, in order:
    429).
 7. The call. Chat goes through pi-ai with the same model config an Agent Run
    uses (`src/server/model-resolution.ts`, `src/agent/remote-models.ts`).
-   `maxTokens` is capped at the model's limit; the model's default thinking
+   `maxTokens` is at least 16 (OpenAI Responses APIs never go below it) and
+   is capped at the model's limit; the model's default thinking
    level applies. Reasoning blocks come back as opaque `reasoning` parts
    (base64url JSON with the producing api/provider/model, the thinking text
    and its signature) that the App sends back unchanged; the platform

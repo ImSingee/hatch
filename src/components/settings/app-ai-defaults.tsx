@@ -26,10 +26,14 @@ function DefaultSelect({
   const save = useMutation({
     mutationFn: (model: string | null) =>
       setAppAiDefaultsFn({ data: { [kind]: model } }),
-    onSuccess: async (next) => {
-      qc.setQueryData(appAiDefaultsQueryOptions.queryKey, next);
-      // Every App's unpicked roles follow the new default.
-      await qc.invalidateQueries({ queryKey: ['app-ai'] });
+    // Refetch instead of writing this response: the chat and image saves can
+    // finish out of order, and an older view would undo the other default.
+    onSuccess: async () => {
+      await Promise.all([
+        qc.invalidateQueries({ queryKey: appAiDefaultsQueryOptions.queryKey }),
+        // Every App's unpicked roles follow the new default.
+        qc.invalidateQueries({ queryKey: ['app-ai'] }),
+      ]);
       toast.success(t('settings.appAi.saved'));
     },
   });

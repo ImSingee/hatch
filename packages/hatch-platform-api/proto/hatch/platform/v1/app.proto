@@ -966,6 +966,17 @@ message SetAppAiDefaultsRequest {
     max_len: 400
   }];
   bool clear_image_model = 4;
+
+  option (buf.validate.message).cel = {
+    id: "set_app_ai_defaults.chat_conflict"
+    message: "set chat_model or clear_chat_model, not both"
+    expression: "!(has(this.chat_model) && this.clear_chat_model)"
+  };
+  option (buf.validate.message).cel = {
+    id: "set_app_ai_defaults.image_conflict"
+    message: "set image_model or clear_image_model, not both"
+    expression: "!(has(this.image_model) && this.clear_image_model)"
+  };
 }
 
 message SetAppAiDefaultsResponse {

@@ -37,8 +37,13 @@ function RoleRow({
   const save = useMutation({
     mutationFn: (model: string | null) =>
       setAppAiRoleModelFn({ data: { id: appId, role: role.name, model } }),
-    onSuccess: (next) => {
-      qc.setQueryData(appAiQueryOptions(appId).queryKey, next);
+    // Refetch instead of writing this response: saves of different roles can
+    // finish out of order, and an older full view would undo the other pick.
+    onSuccess: async () => {
+      await qc.invalidateQueries({
+        queryKey: appAiQueryOptions(appId).queryKey,
+        exact: true,
+      });
       toast.success(t('ops.ai.modelSaved', { role: role.name }));
     },
   });

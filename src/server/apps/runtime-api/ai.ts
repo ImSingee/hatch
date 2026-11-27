@@ -65,23 +65,8 @@ export async function handleAiRequest({
     });
   }
 
-  const app = await db.query.apps.findFirst({
-    where: { id: parsed.id },
-    columns: {
-      id: true,
-      status: true,
-      currentDeploymentId: true,
-      capabilities: true,
-      signingSecret: true,
-    },
-  });
-  if (
-    !app ||
-    app.status === 'archived' ||
-    !app.currentDeploymentId ||
-    !app.capabilities?.ai ||
-    !app.signingSecret
-  ) {
+  // Rejects an App that cannot call AI before reading its body.
+  if (!(await loadAiApp(parsed.id))) {
     return new Response('Not found', { status: 404 });
   }
 
@@ -89,6 +74,10 @@ export async function handleAiRequest({
   if (rawBody === null) {
     return new Response('Payload too large', { status: 413 });
   }
+  // Read the App again: a redeploy or archive while the body was arriving
+  // must decide the signature, deployment and role checks below.
+  const app = await loadAiApp(parsed.id);
+  if (!app) return new Response('Not found', { status: 404 });
   const verified = verifyHatchSignature({
     secret: app.signingSecret,
     timestamp: request.headers.get(HATCH_TIMESTAMP_HEADER),
@@ -131,6 +120,33 @@ export async function handleAiRequest({
     if (error instanceof AiCallError) return aiErrorResponse(error);
     throw error;
   }
+}
+
+/** The App's current state, when it may call AI at all. */
+async function loadAiApp(id: string) {
+  const app = await db.query.apps.findFirst({
+    where: { id },
+    columns: {
+      id: true,
+      status: true,
+      currentDeploymentId: true,
+      capabilities: true,
+      signingSecret: true,
+    },
+  });
+  if (
+    !app ||
+    app.status === 'archived' ||
+    !app.currentDeploymentId ||
+    !app.capabilities?.ai ||
+    !app.signingSecret
+  )
+    return null;
+  return {
+    id: app.id,
+    currentDeploymentId: app.currentDeploymentId,
+    signingSecret: app.signingSecret,
+  };
 }
 
 /** The role as the live deployment declares it, or a stable rejection. */

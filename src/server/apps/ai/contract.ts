@@ -10,6 +10,8 @@ import { z } from 'zod';
 export const MAX_AI_BODY_BYTES = 8 * 1024 * 1024;
 /** Calls one App may have in flight at once. */
 export const MAX_AI_CONCURRENT_CALLS = 4;
+/** Smallest `maxTokens` an App may ask for: OpenAI Responses APIs floor it at 16. */
+export const MIN_MAX_TOKENS = 16;
 /** Longest an image prompt may be. */
 export const MAX_IMAGE_PROMPT_CHARS = 4000;
 
@@ -74,10 +76,16 @@ const toolName = z
     /^[A-Za-z0-9_-]{1,64}$/,
     'tool names are 1-64 letters, digits, "_" or "-"',
   );
+/**
+ * Provider tool-call id, echoed back unchanged in the next request. Some
+ * (OpenAI Responses) are several hundred characters long.
+ */
+const toolCallId = z.string().min(1).max(4096);
+
 const toolCallPart = z
   .object({
     type: z.literal('toolCall'),
-    id: z.string().min(1).max(256),
+    id: toolCallId,
     name: toolName,
     arguments: z.record(z.string(), z.unknown()),
   })
@@ -113,7 +121,7 @@ const assistantMessage = z
 const toolResultMessage = z
   .object({
     role: z.literal('tool'),
-    toolCallId: z.string().min(1).max(256),
+    toolCallId,
     toolName,
     content: z.union([z.string(), z.array(z.union([textPart, imagePart]))]),
     isError: z.boolean().optional(),
@@ -158,8 +166,11 @@ export const aiChatRequestSchema = z
           seen.add(tool.name);
         });
       }),
-    /** Upper bound on generated tokens; capped at the model's own limit. */
-    maxTokens: z.number().int().positive().optional(),
+    /**
+     * Upper bound on generated tokens, at least 16 (the smallest limit every
+     * provider API honours); capped at the model's own limit.
+     */
+    maxTokens: z.number().int().min(MIN_MAX_TOKENS).optional(),
     /** Stream server-sent events (default) or return one JSON response. */
     stream: z.boolean().optional(),
   })

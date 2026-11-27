@@ -347,6 +347,37 @@ describe('App AI endpoint boundary', () => {
     expect(await errorCode(disabled)).toBe('ai_model_unavailable');
   });
 
+  it('round-trips long provider tool-call ids and rejects tiny token limits', async () => {
+    await seed();
+    const id = `fc_${'x'.repeat(500)}`;
+    provider.responses = [fauxAssistantMessage('ok')];
+    const response = await call('chat', {
+      role: 'summarize',
+      stream: false,
+      messages: [
+        { role: 'user', content: 'go' },
+        {
+          role: 'assistant',
+          content: [{ type: 'toolCall', id, name: 'lookup', arguments: {} }],
+        },
+        { role: 'tool', toolCallId: id, toolName: 'lookup', content: 'A' },
+      ],
+    });
+    expect(response.status).toBe(200);
+    const replayed = provider.seen[0].context.messages.find(
+      (message) => message.role === 'toolResult',
+    );
+    expect(replayed).toMatchObject({ toolCallId: id });
+
+    const tiny = await call('chat', {
+      role: 'summarize',
+      maxTokens: 15,
+      messages: [{ role: 'user', content: 'hi' }],
+    });
+    expect(tiny.status).toBe(400);
+    expect(await errorCode(tiny)).toBe('ai_invalid_request');
+  });
+
   it('never passes the provider key on in an error', async () => {
     await seed();
     provider.responses = [
@@ -491,6 +522,23 @@ describe('App AI SDK against the endpoint', () => {
     });
     expect(tampered.status).toBe(400);
     expect(await errorCode(tampered)).toBe('ai_invalid_request');
+  });
+
+  it('reports an unreachable platform and a bad step limit as AiError', async () => {
+    vi.stubGlobal('fetch', async () => {
+      throw new TypeError('connection refused');
+    });
+    const request = {
+      role: 'summarize',
+      messages: [{ role: 'user' as const, content: 'hi' }],
+    };
+    await expect(sdk.complete(request, options)).rejects.toMatchObject({
+      name: 'AiError',
+      code: 'ai_request_failed',
+    });
+    await expect(
+      sdk.runTools({ ...request, tools: [], maxSteps: Number.NaN }, options),
+    ).rejects.toMatchObject({ code: 'ai_invalid_request' });
   });
 
   it('stops the provider call when the App stops reading the stream', async () => {

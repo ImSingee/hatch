@@ -56,6 +56,7 @@ export type ChatRequest = {
   messages: AiMessage[];
   tools?: AiToolDefinition[];
   /** Upper bound on generated tokens; capped at the model's own limit. */
+  /** Upper bound on generated tokens, at least 16; capped at the model's limit. */
   maxTokens?: number;
 };
 
@@ -128,17 +129,35 @@ async function post(
     );
   }
   const body = JSON.stringify(payload);
-  const response = await fetch(`${base.replace(/\/+$/, '')}${path}`, {
-    method: 'POST',
-    headers: {
-      'content-type': 'application/json',
-      ...(await hmacHeaders(secret, body)),
-    },
-    body,
-    signal: options.signal,
-  });
+  let response: Response;
+  try {
+    response = await fetch(`${base.replace(/\/+$/, '')}${path}`, {
+      method: 'POST',
+      headers: {
+        'content-type': 'application/json',
+        ...(await hmacHeaders(secret, body)),
+      },
+      body,
+      signal: options.signal,
+    });
+  } catch (error) {
+    throw transportError(error, options.signal);
+  }
   if (!response.ok) throw await responseError(response);
   return response;
+}
+
+/**
+ * A failure reaching the platform as `AiError`, so callers classify every
+ * failure by code. The caller's own cancellation stays as thrown.
+ */
+function transportError(error: unknown, signal?: AbortSignal): unknown {
+  if (error instanceof AiError || signal?.aborted) return error;
+  return new AiError(
+    'ai_request_failed',
+    `Could not reach the platform AI endpoint: ${error instanceof Error ? error.message : String(error)}`,
+    0,
+  );
 }
 
 async function responseError(response: Response): Promise<AiError> {
@@ -165,6 +184,7 @@ async function responseError(response: Response): Promise<AiError> {
 
 async function* readServerEvents(
   body: ReadableStream<Uint8Array>,
+  signal?: AbortSignal,
 ): AsyncGenerator<{ event: string; data: string }> {
   const reader = body.getReader();
   const decoder = new TextDecoder();
@@ -172,7 +192,13 @@ async function* readServerEvents(
   let ended = false;
   try {
     for (;;) {
-      const { done, value } = await reader.read();
+      let read: ReadableStreamReadResult<Uint8Array>;
+      try {
+        read = await reader.read();
+      } catch (error) {
+        throw transportError(error, signal);
+      }
+      const { done, value } = read;
       if (done) {
         ended = true;
         break;
@@ -223,7 +249,10 @@ export function chat(
     const response = await post('/chat', { ...request, stream: true }, options);
     if (!response.body)
       throw new AiError('ai_request_failed', 'Empty AI response', 0);
-    for await (const { event, data } of readServerEvents(response.body)) {
+    for await (const { event, data } of readServerEvents(
+      response.body,
+      options.signal,
+    )) {
       const payload = JSON.parse(data) as Record<string, unknown>;
       if (event === 'text') {
         yield { type: 'text', delta: String(payload.delta ?? '') };
@@ -344,6 +373,12 @@ export async function runTools(
   options: AiRequestOptions = {},
 ): Promise<{ result: ChatResult; messages: AiMessage[]; steps: number }> {
   const { tools, maxSteps = 8, ...rest } = request;
+  if (!Number.isSafeInteger(maxSteps) || maxSteps < 1)
+    throw new AiError(
+      'ai_invalid_request',
+      'maxSteps must be a positive whole number.',
+      0,
+    );
   const byName = new Map(tools.map((tool) => [tool.name, tool]));
   const definitions = tools.map(({ name, description, parameters }) => ({
     name,

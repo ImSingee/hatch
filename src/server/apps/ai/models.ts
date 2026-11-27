@@ -163,19 +163,9 @@ export async function resolveImageRole(
       );
     throw error;
   }
-  const row = await db.query.agentModels.findFirst({
-    where: { id: resolved.id },
-    columns: { providerId: true },
-  });
-  const provider = row
-    ? await db.query.agentProviders.findFirst({
-        where: { id: row.providerId },
-        columns: { name: true },
-      })
-    : undefined;
   return {
     kind: 'image',
-    providerName: provider?.name ?? '',
+    providerName: resolved.providerName,
     modelId: resolved.modelId,
     driver: resolved.driver,
     provider: resolved.provider,
