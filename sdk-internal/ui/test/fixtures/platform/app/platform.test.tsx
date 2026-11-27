@@ -104,3 +104,38 @@ test('opens a sheet with Cancel at the top on iOS only', async () => {
     }
   }
 });
+
+test('updates a bar action when its icon goes and comes', async () => {
+  for (const platform of ['ios', 'android'] as const) {
+    const app = await openOn(platform, {});
+    // An action with an icon shows the icon alone in the bar.
+    expect(app.shows('text:Edit')).toBe(false);
+    await app.press('label:Edit');
+    await app.waitFor('text:Done');
+    await app.press('label:Done');
+    await app.waitUntil(() => !app.shows('text:Done'));
+  }
+});
+
+test('scrolls the last row clear of the iOS tab bar after the pane narrows', async () => {
+  const app = await open('./main.tsx', {
+    platform: 'ios',
+    width: 800,
+    height: 600,
+    host: { params: {}, handlers },
+  });
+  await app.waitFor('text:Garden notes');
+  await app.setViewport(390, 600);
+  await app.waitFor('role:tab >> text:Notes');
+  await app.scroll('label:Garden notes', 4000);
+  const last = app.layout('text:Bed 14');
+  const tab = app.layout('label:Notes');
+  // The row ends above the bar, whose tabs sit 6 points into it.
+  const rowBottom = (last?.y ?? 0) + (last?.height ?? 0);
+  const barTop = (tab?.y ?? 0) - 6;
+  expect([rowBottom <= barTop, rowBottom, barTop]).toEqual([
+    true,
+    rowBottom,
+    barTop,
+  ]);
+});

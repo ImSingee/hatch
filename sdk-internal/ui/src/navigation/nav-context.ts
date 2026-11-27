@@ -19,9 +19,10 @@ export const PageNavContext = context<PageNav | null>(null);
 export const ChromeContext = context<{ inShell: boolean }>({ inShell: false });
 
 /** Space the shell's chrome takes over the bottom of a section, as the
- * height class of a spacer: `AppShell`'s floating iOS tab bar draws over
- * the section, so a `Page` scrolls its content clear of it. */
-export const BottomChromeContext = context<string>('');
+ * height class of a spacer (reactive: the shell's layout follows the pane):
+ * `AppShell`'s floating iOS tab bar draws over the section, so a `Page`
+ * scrolls its content clear of it. */
+export const BottomChromeContext = context<() => string>(() => '');
 
 /** Whether an `AppShell` shows its bottom tab bar, which toasts rise above. */
 export const bottomBarShown = signal(false);

@@ -353,13 +353,6 @@ export function AppShell(props: AppShellProps): JSX.Element {
     if (paneWidth() >= SIDEBAR_MIN) return 'sidebar';
     return touch ? 'bottom' : 'top';
   };
-  const panels = (
-    <Panels
-      items={props.sections}
-      selected={selected.get}
-      scope={sectionScope}
-    />
-  );
   // Toasts rise above the bottom bar while it shows.
   effect(() => {
     const shown = layout() === 'bottom';
@@ -380,10 +373,16 @@ export function AppShell(props: AppShellProps): JSX.Element {
           <TopTabs {...props} selected={selected} />
         </If>
         <View class="flex-1 self-stretch">
+          {/* The panels are made here, inside the provider: their pages read
+              the context when they are created. */}
           <BottomChromeContext.Provider
-            value={layout() === 'bottom' ? 'h-20' : ''}
+            value={() => (layout() === 'bottom' ? 'h-20' : '')}
           >
-            {panels}
+            <Panels
+              items={props.sections}
+              selected={selected.get}
+              scope={sectionScope}
+            />
           </BottomChromeContext.Provider>
         </View>
         <If when={layout() === 'bottom'}>
@@ -392,6 +391,13 @@ export function AppShell(props: AppShellProps): JSX.Element {
       </View>
     );
   }
+  const panels = (
+    <Panels
+      items={props.sections}
+      selected={selected.get}
+      scope={sectionScope}
+    />
+  );
   return (
     <View
       class={`flex-1 self-stretch bg-surface-window ${layout() === 'sidebar' ? 'flex-row' : 'flex-col'}`}

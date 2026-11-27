@@ -250,7 +250,6 @@ function BarButton(props: ButtonProps): JSX.Element {
     props.kind === 'danger' ? 'danger-strong' : 'primary-strong';
   const textTone = () =>
     props.kind === 'danger' ? 'text-danger-strong' : 'text-primary-strong';
-  const icon = props.icon;
   return (
     <BaseButton
       onPress={press}
@@ -263,7 +262,7 @@ function BarButton(props: ButtonProps): JSX.Element {
         'flex-row items-center justify-center disabled:opacity-40',
         ios
           ? 'h-11 min-w-11 rounded-(--radius-md) px-2 active:opacity-50'
-          : icon
+          : props.icon
             ? 'size-12 rounded-full active:bg-surface-pressed'
             : 'h-10 rounded-full px-3 active:bg-surface-pressed',
         FOCUS_RING,
@@ -271,9 +270,9 @@ function BarButton(props: ButtonProps): JSX.Element {
     >
       {busy() ? (
         <Spinner size="lg" color={tone()} />
-      ) : icon ? (
+      ) : props.icon ? (
         <Glyph
-          icon={icon}
+          icon={props.icon}
           size="2xl"
           color={ios || props.kind === 'danger' ? tone() : 'foreground'}
         />

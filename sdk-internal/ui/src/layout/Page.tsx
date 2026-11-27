@@ -146,7 +146,7 @@ function PlatformBody(props: {
       >
         {props.children}
       </View>
-      {bottom ? <View class={bottom} /> : null}
+      <View class={bottom()} />
     </Scroll>
   );
 }
