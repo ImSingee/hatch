@@ -229,6 +229,9 @@ as the Builder is (see
 So shells load the bytecode of either build as trusted input, and need not
 compile the source. Capabilities are not taken from the build: a package
 always declares the ones the platform derived from the committed manifest.
+A `--local` deployment built while the platform still dropped the bytecode
+of `--local` builds keeps a source-only input, so its packages stay source
+only, also after a rollback to it; deploying again includes the bytecode.
 
 **Activation counter and repacking.** `apps.activation_seq` grows by one in
 the transaction that makes a deployment live, deploy or rollback. A signed
