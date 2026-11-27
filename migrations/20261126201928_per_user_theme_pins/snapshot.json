@@ -2,7 +2,7 @@
   "type": "diff",
   "version": "10",
   "dialect": "postgres",
-  "id": "357b644d-30a7-4ac1-8ae2-481045e7195d",
+  "id": "1e71ddac-cd07-43ed-bdb8-79de4f87d217",
   "prevIds": ["64a7310a-f328-455f-a467-7256cac8955f"],
   "footprints": [
     {
@@ -97,26 +97,6 @@
         "e|col|public.user_preferences.dashboard_defaults_applied"
       ],
       "reads": ["n|tbl|public.user_preferences", "n|sch|public"]
-    },
-    {
-      "statementType": "drop_column",
-      "statementTarget": ["column", "public", "dashboards", "pinned"],
-      "writes": [
-        "s|col|public.dashboards.pinned",
-        "n|col|public.dashboards.pinned",
-        "e|col|public.dashboards.pinned"
-      ],
-      "reads": ["n|tbl|public.dashboards", "n|sch|public"]
-    },
-    {
-      "statementType": "drop_column",
-      "statementTarget": ["column", "public", "dashboards", "sort_order"],
-      "writes": [
-        "s|col|public.dashboards.sort_order",
-        "n|col|public.dashboards.sort_order",
-        "e|col|public.dashboards.sort_order"
-      ],
-      "reads": ["n|tbl|public.dashboards", "n|sch|public"]
     },
     {
       "statementType": "create_index",
@@ -490,14 +470,6 @@
         "nameExplicit": false,
         "entityType": "pks"
       }
-    },
-    {
-      "op": "drop",
-      "key": "columns\u0000[\"public\",\"dashboards\",\"pinned\"]"
-    },
-    {
-      "op": "drop",
-      "key": "columns\u0000[\"public\",\"dashboards\",\"sort_order\"]"
     }
   ]
 }

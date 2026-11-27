@@ -200,13 +200,16 @@ function scenarios(open: () => Database | Promise<Database>) {
             sort_order: 1,
           },
         ]);
+        // A server still on the previous release (a rolling upgrade or a
+        // rollback) reads the shared columns, so they stay one more release.
         expect(
           await database.rows(
-            `SELECT column_name FROM information_schema.columns
-             WHERE table_name = 'dashboards'
-               AND column_name IN ('pinned', 'sort_order')`,
+            `SELECT id, pinned, sort_order FROM dashboards ORDER BY id`,
           ),
-        ).toEqual([]);
+        ).toEqual([
+          { id: 'd-home', pinned: true, sort_order: 1 },
+          { id: 'd-ops', pinned: false, sort_order: 0 },
+        ]);
 
         expect(
           await database.rows(
@@ -250,11 +253,12 @@ function scenarios(open: () => Database | Promise<Database>) {
           { theme_preset: null, custom_theme_id: null },
           { theme_preset: null, custom_theme_id: null },
         ]);
+        // So does the instance theme the previous release draws.
         expect(
           await database.rows(
             `SELECT key FROM platform_config WHERE key = 'ui.theme'`,
           ),
-        ).toEqual([]);
+        ).toEqual([{ key: 'ui.theme' }]);
 
         // A pin now always belongs to a user.
         await expect(
@@ -370,7 +374,7 @@ function scenarios(open: () => Database | Promise<Database>) {
       expect(await database.rows('SELECT * FROM user_dashboards')).toEqual([]);
     }));
 
-  it('drops pins and the theme when there is no user to keep them', () =>
+  it('drops pins when there is no user to keep them', () =>
     migrate(
       open,
       `${WORKSPACE}
@@ -384,9 +388,9 @@ function scenarios(open: () => Database | Promise<Database>) {
         expect(
           await database.rows('SELECT id FROM dashboards ORDER BY id'),
         ).toEqual([{ id: 'd-home' }, { id: 'd-ops' }]);
-        expect(await database.rows('SELECT key FROM platform_config')).toEqual(
-          [],
-        );
+        expect(await database.rows('SELECT key FROM platform_config')).toEqual([
+          { key: 'ui.theme' },
+        ]);
       },
     ));
 

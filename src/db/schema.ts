@@ -814,6 +814,14 @@ export const dashboards = snakeCase.table('dashboards', {
   autoRefresh: integer('auto_refresh').notNull().default(0),
   /** Monotonic version for widget membership and breakpoint layout drafts. */
   editorRevision: integer('editor_revision').notNull().default(0),
+  /**
+   * Legacy: the instance-wide pin and order from before they became per user
+   * (`user_dashboards`). Unused, and kept one release so a server still on
+   * the previous release can read dashboards; see docs/database-cleanups.md.
+   */
+  pinned: boolean().notNull().default(true),
+  /** Legacy, like `pinned`. */
+  sortOrder: integer().notNull().default(0),
   createdAt,
   updatedAt,
 });

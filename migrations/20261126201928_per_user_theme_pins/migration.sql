@@ -14,7 +14,7 @@
 --   (the service draws `desk` for a name that is no preset). Missing, it
 --   stays null: `desk`.
 -- Without a `ui.theme` row the instance drew the defaults, which is what a
--- user without these columns set draws.
+-- user without these columns set draws. The row itself stays (see step 3).
 ALTER TABLE "user_preferences" ADD COLUMN "accent" text;--> statement-breakpoint
 ALTER TABLE "user_preferences" ADD COLUMN "dock_labels" boolean;--> statement-breakpoint
 ALTER TABLE "user_preferences" ADD COLUMN "theme_preset" text;--> statement-breakpoint
@@ -52,7 +52,6 @@ ON CONFLICT ("user_id") DO UPDATE SET
   "dock_labels" = excluded."dock_labels",
   "theme_preset" = excluded."theme_preset",
   "custom_theme_id" = excluded."custom_theme_id";--> statement-breakpoint
-DELETE FROM "platform_config" WHERE "key" = 'ui.theme';--> statement-breakpoint
 
 -- 2. App pins: every user gets a copy of every pin, in the same order. Each
 -- copy needs its own id; a 26-character hex digest of the original id and the
@@ -79,7 +78,10 @@ ALTER TABLE "sidebar_items" ADD CONSTRAINT "sidebar_items_user_id_user_id_fkey" 
 CREATE INDEX "sidebar_items_user_order_idx" ON "sidebar_items" ("user_id","sort_order");--> statement-breakpoint
 
 -- 3. Dashboards stay shared; each user gets the instance pinned flag and order
--- of every dashboard. The shared columns go once they are copied.
+-- of every dashboard. The shared `dashboards.pinned` and `sort_order` stay one
+-- more release, unused, so a server still on the previous release (a rolling
+-- upgrade or a rollback) can read dashboards; so does the `ui.theme` row the
+-- previous release draws. docs/database-cleanups.md tracks their removal.
 CREATE TABLE "user_dashboards" (
 	"user_id" text,
 	"dashboard_id" text,
@@ -94,8 +96,6 @@ INSERT INTO "user_dashboards" ("user_id", "dashboard_id", "pinned", "sort_order"
 SELECT "user"."id", "dashboards"."id", "dashboards"."pinned", "dashboards"."sort_order"
 FROM "dashboards"
 CROSS JOIN "user";--> statement-breakpoint
-ALTER TABLE "dashboards" DROP COLUMN "pinned";--> statement-breakpoint
-ALTER TABLE "dashboards" DROP COLUMN "sort_order";--> statement-breakpoint
 
 -- 4. A new user's first visit pins the default dashboard once. Users who
 -- already see dashboards are past that visit: they keep exactly the pins
