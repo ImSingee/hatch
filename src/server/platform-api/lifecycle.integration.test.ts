@@ -280,11 +280,18 @@ async function cliInvoke(
     HATCH_BUILD_TOOLCHAIN_DIR: process.cwd(),
     ...extra,
   };
-  const child = spawn(process.execPath, [executable, ...args, '--json'], {
-    cwd: root,
-    env,
-    stdio: ['pipe', 'pipe', 'pipe'],
-  });
+  // This platform has no Builder, so every deployment is built here.
+  const local =
+    args[1] === 'deploy' && !args.includes('--reconcile') ? ['--local'] : [];
+  const child = spawn(
+    process.execPath,
+    [executable, ...args, ...local, '--json'],
+    {
+      cwd: root,
+      env,
+      stdio: ['pipe', 'pipe', 'pipe'],
+    },
+  );
   child.stdin.on('error', () => {});
   child.stdin.end(input);
   child.stdout.setEncoding('utf8');
