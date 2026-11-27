@@ -106,7 +106,11 @@ export const UI_SDK: SdkDefinition = {
   directory: 'ui',
   manifest: uiManifest,
   form: 'source',
-  entries: { '.': { source: 'index.ts', runtime: 'native' } },
+  entries: {
+    '.': { source: 'index.ts', runtime: 'native' },
+    // The notification cards, as components and from markup.
+    './card': { source: 'card/index.ts', runtime: 'native' },
+  },
   nsh: {
     theme: (accent) => buildAppTheme({ accent: accent as AccentName }),
     resolvedTheme: (theme) => buildAppTheme({ theme }),
