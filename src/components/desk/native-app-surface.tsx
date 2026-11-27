@@ -22,6 +22,8 @@ import {
 import { trackSurface } from './native-surface-tracker';
 import classes from './app-surface.module.css';
 
+/** Keys stay unique across page loads: the app outlives this page. */
+const PAGE = Math.random().toString(36).slice(2, 10);
 let surfaces = 0;
 
 /** The App's state; `key` names the engine (one per load) it is about. */
@@ -85,7 +87,7 @@ export function NativeAppSurface({
   // One engine per load, under a key of its own: a reload stops the App and
   // starts it again, and a key the app saw closed never opens.
   useEffect(() => {
-    const surfaceKey = `native-${++surfaces}`;
+    const surfaceKey = `native-${PAGE}-${++surfaces}`;
     notified.current = null;
     const stop = onNativeAppEvent(surfaceKey, (event) => {
       switch (event.type) {

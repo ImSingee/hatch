@@ -955,10 +955,13 @@ fn create_window(app: &AppHandle) -> tauri::Result<WebviewWindow> {
         // from the Keychain at launch.
         .incognito(true)
         .visible(false)
-        .on_page_load(|window, payload| {
-            if payload.event() == PageLoadEvent::Finished {
-                on_page_load(&window, payload.url());
+        .on_page_load(|window, payload| match payload.event() {
+            // A new page (a reload, or another instance page loaded whole)
+            // never closes the surfaces of the one it replaces.
+            PageLoadEvent::Started => {
+                let _ = window.run_on_main_thread(native::session::close_all);
             }
+            PageLoadEvent::Finished => on_page_load(&window, payload.url()),
         })
         .on_new_window(move |url, _features| {
             match policy::decide_new_window(url.as_str()) {
