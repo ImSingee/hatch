@@ -688,8 +688,8 @@ export function Field(props: FieldProps): JSX.Element {
   const mono = () => props.mono === true || fields.mono();
   return (
     <View class="min-w-0 flex-row items-baseline gap-3">
-      <View
-        class={`min-w-13 ${LABEL_COLUMN}`}
+      <NshText
+        class={`min-w-13 ${LABEL_COLUMN} ${TYPE.data} text-muted-foreground`}
         style={SHARED_COLUMN ? { minWidth: fields.labelWidth() } : undefined}
         onLayout={
           SHARED_COLUMN
@@ -697,10 +697,8 @@ export function Field(props: FieldProps): JSX.Element {
             : undefined
         }
       >
-        <NshText class={`${TYPE.data} text-muted-foreground`}>
-          {props.label}
-        </NshText>
-      </View>
+        {props.label}
+      </NshText>
       <NshText
         class={`min-w-0 flex-1 ${mono() ? `${TYPE.mono} font-mono` : TYPE.data} text-foreground`}
       >
@@ -1093,7 +1091,7 @@ export function Callout(props: CalloutProps): JSX.Element {
       class={`min-w-0 gap-0.5 ${BLOCK_RADIUS} ${TONE_SURFACE[props.tone ?? 'neutral']} px-3 py-2.5`}
     >
       {props.title ? (
-        <NshText class={`${TYPE.text.md} ${TYPE.bold} ${ink()}`}>
+        <NshText class={`${TYPE.text.lg} ${TYPE.bold} ${ink()}`}>
           {props.title}
         </NshText>
       ) : null}

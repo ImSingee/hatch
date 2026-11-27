@@ -33,13 +33,10 @@ import {
   TYPE,
 } from './styles';
 
-/** A multiple choice's box: the library's, with the Desk card's rounder
- * corner on the web. */
+/** A multiple choice's box: the library's, round on the web as the Desk
+ * card draws it. */
 const CHECKBOX = byLook({
-  web: CHOICE_STYLE.checkbox.replace(
-    'rounded-(--radius-xs)',
-    'rounded-(--radius-sm)',
-  ),
+  web: CHOICE_STYLE.checkbox.replace('rounded-(--radius-xs)', 'rounded-full'),
   ios: CHOICE_STYLE.checkbox,
   android: CHOICE_STYLE.checkbox,
   macos: CHOICE_STYLE.checkbox,
@@ -302,7 +299,14 @@ export function Option(props: OptionProps): JSX.Element {
       class={rowClass()}
       indicatorClass={CHECKBOX}
       indicator={
-        chosen() ? (
+        // Android draws its box inside a 40-point state circle.
+        CHOICE_STYLE.checkboxBox ? (
+          <View class={CHOICE_STYLE.checkboxBox}>
+            {chosen() ? (
+              <Glyph icon={IconCheck} size="sm" color="primary-foreground" />
+            ) : null}
+          </View>
+        ) : chosen() ? (
           <Glyph icon={IconCheck} size="sm" color="primary-foreground" />
         ) : null
       }
