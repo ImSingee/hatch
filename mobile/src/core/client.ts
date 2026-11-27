@@ -853,6 +853,14 @@ export class HatchApiClient {
       );
     return result as PendingMessagesResult;
   }
+  /** Minutes a hidden App keeps running before it stops (Desk preference). */
+  async backgroundAppMinutes(signal?: AbortSignal): Promise<number> {
+    const response = await this.rpcRequest(
+      (signal) => this.preferenceRpc.getDeskPreferences({}, { signal }),
+      signal,
+    );
+    return response.preferences?.backgroundAppMinutes ?? 5;
+  }
   async agentMessageMode(signal?: AbortSignal): Promise<AgentMessageMode> {
     const response = await this.rpcRequest(
       (signal) => this.preferenceRpc.getAgentPreferences({}, { signal }),

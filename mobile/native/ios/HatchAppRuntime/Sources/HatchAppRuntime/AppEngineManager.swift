@@ -199,7 +199,14 @@ public final class AppEngineManager {
             throw PlatformError(code: "failed_precondition", message: "This instance has no native App keys yet.")
         }
         for root in material.roots { try store.addRoot(root) }
-        if let revocations = material.revocations { try store.updateRevocations(revocations) }
+        // The store takes only a newer list (it refuses one it has already):
+        // apply each sequence once, and refuse to go on if a newer one fails.
+        let applied = directory.appendingPathComponent("trust/revocations-sequence")
+        let known = (try? String(contentsOf: applied, encoding: .utf8)).flatMap { Int($0) } ?? 0
+        if let revocations = material.revocations, material.revocationSequence > known {
+            try store.updateRevocations(revocations)
+            try String(material.revocationSequence).write(to: applied, atomically: true, encoding: .utf8)
+        }
         trustLoaded = true
         return store
     }

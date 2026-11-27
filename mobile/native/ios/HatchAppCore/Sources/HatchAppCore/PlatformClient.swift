@@ -47,7 +47,10 @@ public struct AppPackageInfo: Sendable, Equatable {
 public struct RuntimeTrust: Sendable, Equatable {
     public let initialized: Bool
     public let roots: [String]
+    /// The signed revocation list, and its sequence: a trust store accepts
+    /// only a list newer than the one it has.
     public let revocations: String?
+    public let revocationSequence: Int
 }
 
 /// Incremental SHA-256 (CryptoKit on iOS, MessageDigest on Android).
@@ -131,9 +134,10 @@ public final class PlatformClient: @unchecked Sendable {
     public func runtimeTrust() async throws -> RuntimeTrust {
         let trust = try await unary("hatch.platform.v1.AppService", "GetAppRuntimeTrust")["trust"] as? [String: Any]
         let roots = (trust?["roots"] as? [[String: Any]] ?? []).compactMap { $0["publicKey"] as? String }
-        let revocations = (trust?["revocations"] as? [String: Any])?["signed"] as? String
+        let list = trust?["revocations"] as? [String: Any]
         return RuntimeTrust(
-            initialized: trust?["initialized"] as? Bool ?? false, roots: roots, revocations: revocations)
+            initialized: trust?["initialized"] as? Bool ?? false, roots: roots, revocations: list?["signed"] as? String,
+            revocationSequence: (list?["sequence"] as? NSNumber)?.intValue ?? 0)
     }
 
     /// Minutes a hidden App keeps running (`GetDeskPreferences`).

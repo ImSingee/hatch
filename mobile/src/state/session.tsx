@@ -15,6 +15,7 @@ import {
 import { AppState } from 'react-native';
 import { canonicalizeInstanceUrl, type HatchApiClient } from '../core';
 import { createNativeClient, createNativeVault } from '../core/native';
+import { appRuntime } from '../native/app-runtime';
 import { endConversationLifetimes } from './conversation-lifetime';
 import { pushRegistrar } from './push-registrar';
 
@@ -65,6 +66,8 @@ export function SessionProvider({ children }: PropsWithChildren) {
         return;
       currentInstance = null;
       currentRevision++;
+      // Native Apps hold the session's credential: they stop with it.
+      appRuntime.configure(null, null);
       setOrigin(null);
       setEpoch(currentRevision);
       await queryClient.cancelQueries();
@@ -157,6 +160,7 @@ export function SessionProvider({ children }: PropsWithChildren) {
       }
       // The identity changes here; work started under the previous one ends.
       endConversationLifetimes();
+      appRuntime.configure(null, null);
       currentInstance = next;
       currentRevision++;
       setOrigins(recent);

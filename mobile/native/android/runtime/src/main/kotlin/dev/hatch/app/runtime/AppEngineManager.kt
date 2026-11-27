@@ -238,7 +238,15 @@ object AppEngineManager {
             throw PlatformException("failed_precondition", message = "This instance has no native App keys yet.")
         }
         for (root in material.roots) check(store.addRoot(root)) { "The instance's root key is not valid." }
-        material.revocations?.let { check(store.updateRevocations(it)) { "The instance's revocation list is not valid." } }
+        // The store takes only a newer list (it refuses one it has already):
+        // apply each sequence once, and refuse to go on if a newer one fails.
+        val applied = File(directory, "trust/revocations-sequence")
+        val known = runCatching { applied.readText().trim().toInt() }.getOrDefault(0)
+        val revocations = material.revocations
+        if (revocations != null && material.revocationSequence > known) {
+            check(store.updateRevocations(revocations)) { "The instance's revocation list is not valid." }
+            applied.writeText(material.revocationSequence.toString())
+        }
         trustLoaded = true
         return store
     }
@@ -321,10 +329,21 @@ object AppEngineManager {
         containers[appId] = container
         val view = engine.view
         if (view.parent !== container) {
-            (view.parent as? ViewGroup)?.removeView(view)
+            release(view)
             container.addView(view, ViewGroup.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT))
         }
         updateVisibility()
+    }
+
+    /**
+     * Takes an engine's view out of its old container. A container in a screen
+     * that is animating out keeps a removed child as "disappearing" (still its
+     * parent) until the animation ends: end that for this view at once.
+     */
+    private fun release(view: NshView) {
+        val old = view.parent as? ViewGroup ?: return
+        old.removeView(view)
+        old.endViewTransition(view)
     }
 
     /**
@@ -382,7 +401,7 @@ object AppEngineManager {
         engine.listener = null
         // Off the current dispatch: the view may be inside a detaching container.
         main.post {
-            (engine.view.parent as? ViewGroup)?.removeView(engine.view)
+            release(engine.view)
             engine.view.destroy()
         }
     }

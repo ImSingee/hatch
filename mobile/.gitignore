@@ -12,3 +12,5 @@ expo-env.d.ts
 *.key
 *.mobileprovision
 credentials.json
+# Gradle outputs of the local Expo modules.
+/modules/*/android/build/

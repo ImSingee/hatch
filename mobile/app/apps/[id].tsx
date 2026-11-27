@@ -1,14 +1,22 @@
 import { useQuery } from '@tanstack/react-query';
-import { Stack, useLocalSearchParams } from 'expo-router';
-import { useId, useRef, useState } from 'react';
-import { Platform, View } from 'react-native';
+import {
+  Stack,
+  router,
+  useFocusEffect,
+  useLocalSearchParams,
+} from 'expo-router';
+import { useCallback, useId, useRef, useState } from 'react';
+import { BackHandler, Platform, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import {
   appDestination,
   type BrowserDestination,
   type DeepLink,
 } from '../../src/core';
+import { appRuntime } from '../../src/native/app-runtime';
 import { openSurfaceLink } from '../../src/state/deep-links';
+import { useNativeAppRuntime } from '../../src/state/native-apps';
+import { NativeAppSurface } from '../../src/ui/native-app-surface';
 import { SecureSurface, type SurfaceHandle } from '../../src/ui/secure-surface';
 import { useSession } from '../../src/state/session';
 import { VerticalBarProbe } from '../../src/ui/fold-probe';
@@ -50,6 +58,28 @@ export default function AppScreen() {
     enabled: Boolean(api && linked.id),
   });
   const appSlug = slug || app.data?.slug;
+  // A `native` App runs on the phone's runtime; every other in a WebView.
+  const native =
+    appRuntime.available && app.data?.runtime === 'native' ? app.data : null;
+  const [nativeTitle, setNativeTitle] = useState<string | null>(null);
+  useNativeAppRuntime();
+  // Android's back gesture goes back in the App first, then leaves the screen.
+  useFocusEffect(
+    useCallback(() => {
+      if (!native || Platform.OS !== 'android') return;
+      const appId = native.id;
+      const subscription = BackHandler.addEventListener(
+        'hardwareBackPress',
+        () => {
+          void appRuntime.handleBack(appId).then((handled) => {
+            if (!handled && router.canGoBack()) router.back();
+          });
+          return true;
+        },
+      );
+      return () => subscription.remove();
+    }, [native]),
+  );
   let destination: BrowserDestination | null = null;
   let invalid: unknown = null;
   try {
@@ -62,7 +92,8 @@ export default function AppScreen() {
   const handoff = useQuery({
     queryKey: [origin, 'browser-handoff', 'app', id, screen, epoch, attempt],
     queryFn: ({ signal }) => api!.createHandoff(signal),
-    enabled: Boolean(api && destination),
+    // Started with the App's details, as before; a `native` App ignores it.
+    enabled: Boolean(api && destination && !native),
     retry: false,
     staleTime: Infinity,
     gcTime: 0,
@@ -72,6 +103,7 @@ export default function AppScreen() {
   const retry = () => {
     linked.retry();
     void app.refetch();
+    if (native) appRuntime.reload(native.id);
     setAttempt((value) => value + 1);
   };
   // A link to this App's own route moves this page there as a step in its
@@ -83,12 +115,13 @@ export default function AppScreen() {
       (link.instance ?? origin) === origin &&
       target.kind === 'app' &&
       target.slug === appSlug
-    )
-      surface.current?.showRoute(target.hash ?? '');
-    else openSurfaceLink(link);
+    ) {
+      if (native) appRuntime.navigate(native.id, target.hash ?? '');
+      else surface.current?.showRoute(target.hash ?? '');
+    } else openSurfaceLink(link);
   };
   const data = handoff.data;
-  const name = label || app.data?.name || 'App';
+  const name = nativeTitle || label || app.data?.name || 'App';
   return (
     <SafeAreaView
       style={{ flex: 1, backgroundColor: c.card }}
@@ -129,6 +162,12 @@ export default function AppScreen() {
             action={{ label: 'Try again', onPress: retry }}
           />
         </View>
+      ) : native ? (
+        <NativeAppSurface
+          appId={native.id}
+          route={entryHash}
+          onTitle={setNativeTitle}
+        />
       ) : !data || !destination ? (
         <Busy label={`Opening ${name}`} />
       ) : (

@@ -141,7 +141,10 @@ describe('instance and credential boundaries', () => {
       .mockResolvedValueOnce(
         json({
           resources: [
-            { ...app, view: { currentVersion: 3 } },
+            {
+              ...app,
+              view: { currentVersion: 3, frontend: { runtime: 'native' } },
+            },
             // A first deployment that failed leaves nothing to open.
             {
               ...app,
@@ -160,10 +163,14 @@ describe('instance and credential boundaries', () => {
     const { client, vault } = setup(fetcher);
     await vault.set(origin, 'fixture-token');
     expect(await client.apps()).toEqual([
-      { ...app, live: true },
-      { ...app, id: 'app-2', status: 'failed', live: false },
+      { ...app, live: true, runtime: 'native' },
+      { ...app, id: 'app-2', status: 'failed', live: false, runtime: null },
     ]);
-    expect(await client.app(app.id)).toEqual({ ...app, live: false });
+    expect(await client.app(app.id)).toEqual({
+      ...app,
+      live: false,
+      runtime: null,
+    });
     expect(await client.sessions(app.id)).toEqual([]);
     expect(await client.createSession()).toEqual({ id: session.id });
     expect(await client.session(session.id)).toEqual({

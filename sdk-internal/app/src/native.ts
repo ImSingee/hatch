@@ -70,6 +70,20 @@ export function initialRoute(): string {
   return typeof route === 'string' ? route : '';
 }
 
+/**
+ * The build number of the signed package this App runs, as the phone app
+ * names it: it grows with every deploy and rollback (a rolled-back version is
+ * a newer build of older code). Null where the shell does not say (the web
+ * player). Use it, not NSH's `appInfo().build`, which is the build the bundle
+ * was compiled with and stays 1.
+ */
+export function packageBuild(): number | null {
+  const build = host.params.packageBuild;
+  return typeof build === 'number' && Number.isSafeInteger(build) && build > 0
+    ? build
+    : null;
+}
+
 /** Tell the shell the App's current route, so deep links and reloads work. */
 export function setRoute(route: string): void {
   void callHost('hatch.nav.setRoute', { route }).catch(() => undefined);

@@ -28,15 +28,15 @@ draws every colour, radius, font and shadow from the signed-in user's theme (see
 below) and reads weights, sizes, tile fills and motion from
 `packages/hatch-design-tokens/tokens.json`. It uses the workspace like this:
 
-| Screen                 | Data                                             | Shows                                                                                        |
-| ---------------------- | ------------------------------------------------ | -------------------------------------------------------------------------------------------- |
-| Home (`dashboard` tab) | `GetWorkspace`, `ListApps`, the dashboard canvas | One dashboard's widgets in a sheet, page dots to switch dashboard, then the pinned Apps grid |
-| Widgets                | the dashboard canvas                             | The same dashboard at full height; opened from Home with "All widgets"                       |
-| Apps                   | `ListApps`                                       | Every App as a tile, searchable, by name or by latest change                                 |
-| App page               | `GetApp`, `GetWorkspace`                         | Icon, name, status, Open, and a link to the web management page                              |
-| App                    | the App's `/app/:slug/embed/` page               | The App itself, in an authenticated WebView                                                  |
-| Agent                  | the `AgentService` session RPCs                  | Conversations; beside the open one when the width allows                                     |
-| Me (`more` tab)        | local preferences                                | Every section, notifications, Tabs & start page, the instance                                |
+| Screen                 | Data                                                                     | Shows                                                                                              |
+| ---------------------- | ------------------------------------------------------------------------ | -------------------------------------------------------------------------------------------------- |
+| Home (`dashboard` tab) | `GetWorkspace`, `ListApps`, the dashboard canvas                         | One dashboard's widgets in a sheet, page dots to switch dashboard, then the pinned Apps grid       |
+| Widgets                | the dashboard canvas                                                     | The same dashboard at full height; opened from Home with "All widgets"                             |
+| Apps                   | `ListApps`                                                               | Every App as a tile, searchable, by name or by latest change                                       |
+| App page               | `GetApp`, `GetWorkspace`                                                 | Icon, name, status, Open, and a link to the web management page                                    |
+| App                    | `GetApp`; `native`: `GetAppPackage`; `web`: the `/app/:slug/embed/` page | The App itself: a `native` App on the phone's NSH runtime, a `web` App in an authenticated WebView |
+| Agent                  | the `AgentService` session RPCs                                          | Conversations; beside the open one when the width allows                                           |
+| Me (`more` tab)        | local preferences                                                        | Every section, notifications, Tabs & start page, the instance                                      |
 
 The tab bar is the system one. By default it holds Home, Apps, Agent and Me;
 which sections sit in it, their order and the start page are the user's choice

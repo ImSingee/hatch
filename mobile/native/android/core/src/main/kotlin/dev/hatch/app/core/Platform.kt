@@ -112,7 +112,13 @@ data class AppPackageInfo(
     val keyId: String,
 )
 
-data class RuntimeTrust(val initialized: Boolean, val roots: List<String>, val revocations: String?)
+/** What packages are verified with; a trust store accepts only a revocation list newer than its own. */
+data class RuntimeTrust(
+    val initialized: Boolean,
+    val roots: List<String>,
+    val revocations: String?,
+    val revocationSequence: Int,
+)
 
 /** Incremental SHA-256 (MessageDigest at runtime). */
 interface PackageHasher {
@@ -288,6 +294,7 @@ class PlatformClient(
             initialized = trust?.get("initialized") == true,
             roots = (trust?.get("roots") as? List<*>)?.mapNotNull { (it as? Map<*, *>)?.get("publicKey") as? String } ?: emptyList(),
             revocations = (trust?.get("revocations") as? Map<*, *>)?.get("signed") as? String,
+            revocationSequence = int((trust?.get("revocations") as? Map<*, *>)?.get("sequence")) ?: 0,
         )
     }
 
