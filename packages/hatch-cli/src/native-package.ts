@@ -1,6 +1,6 @@
 /** Download a native App's signed package and print the runtime trust. */
 import { createHash, randomUUID } from 'node:crypto';
-import { lstat, mkdir, rename, rm, writeFile } from 'node:fs/promises';
+import { link, lstat, mkdir, rename, rm, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import type { RuntimeTrustView } from './client';
 import {
@@ -82,15 +82,32 @@ async function exists(file: string): Promise<boolean> {
   );
 }
 
-/** Write `bytes` to `file` in one rename, so no reader sees half of it. */
-async function writeWhole(file: string, bytes: Uint8Array): Promise<void> {
+/**
+ * Write `bytes` to `file` whole, so no reader sees half of it. Without
+ * `replace` an existing file is never overwritten, also one another process
+ * created while the package downloaded (`output_exists`).
+ */
+async function writeWhole(
+  file: string,
+  bytes: Uint8Array,
+  replace: boolean,
+): Promise<void> {
   const staged = path.join(
     path.dirname(file),
     `.${path.basename(file)}.${randomUUID()}.tmp`,
   );
   try {
     await writeFile(staged, bytes, { flag: 'wx' });
-    await rename(staged, file);
+    if (replace) await rename(staged, file);
+    else
+      await link(staged, file).catch((error: NodeJS.ErrnoException) => {
+        if (error.code !== 'EEXIST') throw error;
+        throw new CliError(
+          'output_exists',
+          `${file} already exists; pass --force to replace it.`,
+          6,
+        );
+      });
   } finally {
     await rm(staged, { force: true });
   }
@@ -134,7 +151,7 @@ export async function runNativePackage(
   const { command, flags } = parseNativePackageCommand(args, offset);
   if (command.kind === 'package') {
     const target = command.out === '-' ? null : local(flags, command.out);
-    // Checked before the download, and again by the final rename's target.
+    // Checked before the download too, so a refusal costs no download.
     if (target && !command.force && (await exists(target)))
       throw new CliError(
         'output_exists',
@@ -157,7 +174,7 @@ export async function runNativePackage(
       process.stdout.write(result.bytes);
       return;
     }
-    await writeWhole(target, result.bytes);
+    await writeWhole(target, result.bytes, command.force);
     const view = { ...result.package, path: target };
     process.stdout.write(
       flags.json
@@ -175,7 +192,7 @@ export async function runNativePackage(
     for (const [name, content] of Object.entries(trustFiles(trust))) {
       const file = path.join(dir, name);
       // A file left by an earlier run is replaced.
-      await writeWhole(file, Buffer.from(content, 'utf8'));
+      await writeWhole(file, Buffer.from(content, 'utf8'), true);
       written.push(file);
     }
   }

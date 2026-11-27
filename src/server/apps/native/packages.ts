@@ -184,28 +184,39 @@ async function pruneOlder(dir: string, build: number): Promise<void> {
 export async function liveNativePackage(
   appId: string,
 ): Promise<LiveNativePackage> {
-  const live = await liveInput(appId);
-  const key = activeReleaseKeyFiles(await ensureSigningKeys());
-  const dir = appNativePackagesDir(appId);
-  const file = path.join(
-    dir,
-    `${live.build}-${live.deploymentId}-${key.id}.nshpkg`,
-  );
-  await ensurePackage(appId, file, live, key);
-  const bytes = await fs.readFile(file);
-  await pruneOlder(dir, live.build);
-  return {
-    appId,
-    deploymentId: live.deploymentId,
-    version: live.version,
-    build: live.build,
-    nshVersion: live.nshVersion,
-    sha256: createHash('sha256').update(bytes).digest('hex'),
-    size: bytes.length,
-    keyId: key.id,
-    bytecode: live.bytecode,
-    bytes,
-  };
+  for (let attempt = 1; ; attempt++) {
+    const live = await liveInput(appId);
+    const key = activeReleaseKeyFiles(await ensureSigningKeys());
+    const dir = appNativePackagesDir(appId);
+    const file = path.join(
+      dir,
+      `${live.build}-${live.deploymentId}-${key.id}.nshpkg`,
+    );
+    await ensurePackage(appId, file, live, key);
+    let bytes: Buffer;
+    try {
+      bytes = await fs.readFile(file);
+    } catch (error) {
+      // A newer activation (here or on another process) pruned this build
+      // between packing and reading: serve what is live now.
+      if ((error as NodeJS.ErrnoException).code === 'ENOENT' && attempt < 5)
+        continue;
+      throw error;
+    }
+    await pruneOlder(dir, live.build);
+    return {
+      appId,
+      deploymentId: live.deploymentId,
+      version: live.version,
+      build: live.build,
+      nshVersion: live.nshVersion,
+      sha256: createHash('sha256').update(bytes).digest('hex'),
+      size: bytes.length,
+      keyId: key.id,
+      bytecode: live.bytecode,
+      bytes,
+    };
+  }
 }
 
 /**
