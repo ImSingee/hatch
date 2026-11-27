@@ -397,7 +397,9 @@ source and deploy again. Other ends of a deployment exit 6 with its code:
 `toolchain_mismatch` (upgrade the CLI), `app_build_invalid` (the platform
 refused the package), `COMMIT_NOT_ON_MASTER` (a rollback took the commit off
 `master` before it was released), `superseded`, `canceled`, `builder_lost`,
-`artifact_timeout`, `resource_generation_conflict` or `release_failed`.
+`artifact_timeout`, `resource_generation_conflict`,
+`platform_toolchain_unavailable` (the platform cannot sign native packages;
+its operator installs `hatch-nshpkg`) or `release_failed`.
 `BUILDER_UNAVAILABLE` and `BUILDER_OFFLINE` (exit 6) refuse a Builder
 deployment before it is created; deploy with `--local`. A
 source tree over 512 MiB or 100,000 files is refused (the platform checks it

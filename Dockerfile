@@ -138,6 +138,8 @@ ENV HATCH_BUILD_TOOLCHAIN_DIR=/app
 COPY --from=tailscale /hatch-tailscale /app/bin/hatch-tailscale
 # Signs native App packages (src/server/apps/native/nshpkg.ts finds it here).
 COPY --from=nshpkg /build/target/release/hatch-nshpkg /app/bin/hatch-nshpkg
+# It must run on this image's libc, not only where it was built.
+RUN /app/bin/hatch-nshpkg version | grep -q '"nshPackage":"0.7.0"'
 
 # Runtime needs: the built server, the full dependency tree (esbuild bundling,
 # tsc type checks and buf/protoc-gen-es codegen happen on every deploy, and
