@@ -1071,7 +1071,7 @@ Children side by side; a row of buttons stacks on a narrow card.
 
 ##### Card.Grid
 
-Equal columns.
+Equal columns; four become two on a narrow card.
 
 | Prop       | Type          | Description              |
 | ---------- | ------------- | ------------------------ |
