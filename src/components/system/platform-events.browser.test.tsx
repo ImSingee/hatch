@@ -1,4 +1,8 @@
-import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import {
+  QueryClient,
+  QueryClientProvider,
+  useQueryClient,
+} from '@tanstack/react-query';
 import { useState, useSyncExternalStore, type ReactNode } from 'react';
 import { afterEach, expect, test, vi } from 'vitest';
 import { render as renderBare } from 'vitest-browser-react';
@@ -114,6 +118,7 @@ test('reconnects as the new user and drops the old user’s data when the accoun
   expect(queryClient.getQueryData(['dashboards'])).toBeUndefined();
 
   // The same user coming back keeps the cache.
+  // (Asserted below: nothing rendered for "other" showed owner's data.)
   queryClient.setQueryData(['dashboards'], ['other-dashboard']);
   session.set(null);
   await vi.waitFor(() =>
@@ -122,6 +127,40 @@ test('reconnects as the new user and drops the old user’s data when the accoun
   session.set('other');
   await vi.waitFor(() => expect(FakeEventSource.instances).toHaveLength(3));
   expect(queryClient.getQueryData(['dashboards'])).toEqual(['other-dashboard']);
+});
+
+/** Records what each render shows, and for whom. */
+const seen: { user: string | null; dashboards: unknown }[] = [];
+function CacheProbe() {
+  const client = useQueryClient();
+  const user = useSyncExternalStore(session.subscribe, session.get);
+  seen.push({ user, dashboards: client.getQueryData(['dashboards']) });
+  return null;
+}
+
+test('never renders the previous account’s data for the new one', async () => {
+  installEventSource();
+  seen.length = 0;
+  await render(
+    <PlatformEventsProvider>
+      <CacheProbe />
+    </PlatformEventsProvider>,
+  );
+  queryClient.setQueryData(['dashboards'], ['owner-dashboard']);
+  session.set(null);
+  await vi.waitFor(() =>
+    expect(FakeEventSource.instances[0]!.close).toHaveBeenCalledOnce(),
+  );
+  session.set('other');
+  await vi.waitFor(() => expect(FakeEventSource.instances).toHaveLength(2));
+  await vi.waitFor(() =>
+    expect(seen.some((render) => render.user === 'other')).toBe(true),
+  );
+  expect(
+    seen.filter(
+      (render) => render.user === 'other' && render.dashboards !== undefined,
+    ),
+  ).toEqual([]);
 });
 
 function SubscriptionProbe({ name }: { name: string }) {

@@ -1,5 +1,12 @@
 import { useQueryClient } from '@tanstack/react-query';
-import { createContext, useContext, useEffect, useMemo, useRef } from 'react';
+import {
+  createContext,
+  useContext,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from 'react';
 import { authClient } from '~auth/client';
 import { themeQueries } from '~queries/theme';
 import { useEventCallback } from '~hooks/use-latest-committed';
@@ -110,17 +117,28 @@ export function PlatformEventsProvider({
   // Better Auth broadcast and when the tab becomes visible), so the stream
   // follows the session's user.
   const userId = authClient.useSession().data?.user.id ?? null;
-  const streamUser = useRef<string | null>(null);
+  // The user whose data the query cache may hold. Children render only for
+  // that user: when another account signs in, they show nothing until the
+  // previous account's data is gone (a blank frame, never their data).
+  const [cacheUser, setCacheUser] = useState<string | null>(null);
+  const cacheOwner = useRef<string | null>(null);
+  const ready = !userId || cacheUser === null || cacheUser === userId;
 
   useEffect(() => {
     // Signed out, here or in another tab: nothing to stream.
     if (!userId) return;
-    // Another account signed in: none of the previous user's data may stay
-    // on screen, including the pins and dashboards that are not keyed by
-    // user. Active queries refetch as the new user.
-    if (streamUser.current && streamUser.current !== userId)
-      void queryClient.resetQueries();
-    streamUser.current = userId;
+    let cancelled = false;
+    // Another account signed in: none of the previous user's data may stay,
+    // including the pins and dashboards that are not keyed by user. Queries
+    // refetch as the new user once the children mount again.
+    const switched =
+      cacheOwner.current !== null && cacheOwner.current !== userId;
+    cacheOwner.current = userId;
+    void (switched ? queryClient.resetQueries() : Promise.resolve()).then(
+      () => {
+        if (!cancelled) setCacheUser(userId);
+      },
+    );
     const source = new EventSource('/api/events');
     const onPlatformEvent = (rawEvent: Event) => {
       const event = parsePlatformEvent(rawEvent as MessageEvent<string>);
@@ -142,6 +160,7 @@ export function PlatformEventsProvider({
     source.addEventListener('resync', onResync);
 
     return () => {
+      cancelled = true;
       source.removeEventListener('platform', onPlatformEvent);
       source.removeEventListener('resync', onResync);
       source.close();
@@ -150,7 +169,7 @@ export function PlatformEventsProvider({
 
   return (
     <PlatformEventsContext.Provider value={context}>
-      {children}
+      {ready ? children : null}
     </PlatformEventsContext.Provider>
   );
 }
