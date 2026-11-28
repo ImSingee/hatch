@@ -3,6 +3,7 @@ import { router, useIsFocused, useLocalSearchParams } from 'expo-router';
 import * as WebBrowser from 'expo-web-browser';
 import { useState } from 'react';
 import { RefreshControl, ScrollView, View } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import type { AppSummary } from '../../src/core';
 import { useSession } from '../../src/state/session';
 import { useLinkedId } from '../../src/state/use-linked-id';
@@ -34,12 +35,19 @@ export default function ManageAppScreen() {
   const shown = useLinkedId(id, slug).id ?? undefined;
   const show = (app: AppSummary) =>
     router.setParams({ id: app.id, slug: app.slug });
+  const c = usePalette();
+  // The list too keeps clear of a side inset (the vertical bar, a notch).
   return (
-    <ListDetail
-      list={<AppSwitcher current={shown} onSelect={show} undeployed />}
+    <SafeAreaView
+      style={{ flex: 1, backgroundColor: c.ground }}
+      edges={['left', 'right']}
     >
-      <ManageApp key={id} id={id} slug={slug} />
-    </ListDetail>
+      <ListDetail
+        list={<AppSwitcher current={shown} onSelect={show} undeployed />}
+      >
+        <ManageApp key={id} id={id} slug={slug} />
+      </ListDetail>
+    </SafeAreaView>
   );
 }
 

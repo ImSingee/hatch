@@ -48,7 +48,9 @@ export function useNativeAppRuntime() {
     },
     enabled: Boolean(api && origin && appRuntime.available),
     staleTime: Infinity,
-    gcTime: 0,
+    // Kept for the session (its key holds the instance and epoch): an App
+    // reopened later finds the runtime configured, its engine still running.
+    gcTime: Infinity,
     retry: 1,
     refetchOnWindowFocus: false,
     refetchOnReconnect: false,
