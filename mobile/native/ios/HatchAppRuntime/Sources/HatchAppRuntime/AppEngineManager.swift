@@ -424,7 +424,8 @@ public final class AppEngineManager {
 
     /// Stops and starts `appId` again at its current route.
     public func reload(_ appId: String) {
-        let listener = engines[appId]?.listener
+        // A stopped App's page still listens: its listener outlives the engine.
+        let listener = engines[appId]?.listener ?? listeners[appId]?.listener
         let container = containers[appId]
         stop(appId)
         open(appId, listener: listener)
