@@ -18,11 +18,6 @@ pub mod keychain {
     const NOT_FOUND: i32 = -25300;
 
     pub fn get(origin: &str) -> Result<Option<String>, String> {
-        // TEMPORARY (developer runs only, remove before merging).
-        #[cfg(debug_assertions)]
-        if let Ok(token) = std::env::var("HATCH_DEV_SESSION_TOKEN") {
-            return Ok(Some(token));
-        }
         match get_generic_password(KEYCHAIN_SERVICE, origin) {
             Ok(bytes) => String::from_utf8(bytes)
                 .map(Some)

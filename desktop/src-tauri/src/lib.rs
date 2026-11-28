@@ -279,12 +279,6 @@ async fn restore(app: AppHandle, origin: String, token: String, flow: Flow) {
                 .lock()
                 .unwrap()
                 .take()
-                .or_else(|| {
-                    // Developer runs may open somewhere else first.
-                    cfg!(any(debug_assertions, feature = "probes"))
-                        .then(|| std::env::var("HATCH_DEV_START_PATH").ok())
-                        .flatten()
-                })
                 .unwrap_or_else(|| START_PATH.to_owned());
             let Ok(destination) = Url::parse(&origin).and_then(|base| base.join(&path)) else {
                 return;
