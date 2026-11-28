@@ -11,9 +11,22 @@ export const FALLBACK_MAX_TOKENS = 8192;
 /** What a catalog entry says about a chat model, before any override. */
 export type CatalogLimits = {
   reasoning?: boolean;
+  nativeWebSearch?: boolean;
   contextWindow?: number;
   maxTokens?: number;
 };
+
+export function supportsNativeWebSearch(apiType: string): boolean {
+  return apiType === 'anthropic-messages' || apiType === 'openai-responses';
+}
+
+export function resolveNativeWebSearch(
+  override: boolean | null | undefined,
+  catalog: boolean | undefined,
+  apiType: string,
+): boolean {
+  return supportsNativeWebSearch(apiType) && (override ?? catalog ?? false);
+}
 
 /**
  * The catalog's max output as Hatch uses it. Some catalogs list a max output

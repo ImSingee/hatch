@@ -5,7 +5,7 @@
  */
 import { z } from 'zod';
 
-export const CATALOG_SCHEMA_VERSION = 1;
+export const CATALOG_SCHEMA_VERSION = 2;
 
 /** API types Hatch can run the Agent with (mirrors `ProviderApiType`). */
 export const CATALOG_API_TYPES = [
@@ -61,6 +61,7 @@ export const catalogModelSchema = z.object({
   description: z.string().max(1000).optional(),
   releasedAt: z.string().max(40).optional(),
   reasoning: z.boolean(),
+  nativeWebSearch: z.literal(true).optional(),
   /**
    * Levels the model accepts, in pi order. Empty for non-reasoning models.
    * `off` is listed only when the model can answer without thinking.

@@ -6,8 +6,64 @@ import {
   type AssistantBlock,
   type ChatMessage,
   type ToolResultMessage,
+  expandNativeWebSearches,
+  pairToolResults,
   successfullyDeployedAppIds,
 } from './types';
+
+describe('persisted provider web search', () => {
+  it('pairs search steps and errors in reply order without changing the stored message', () => {
+    const history: ChatMessage[] = [
+      {
+        role: 'assistant',
+        content: [
+          { type: 'thinking', thinking: 'Look it up.' },
+          { type: 'text', text: 'The answer.' },
+        ],
+        nativeWebSearches: [
+          {
+            id: 'search',
+            name: 'web_search',
+            contentIndex: 1,
+            args: { query: 'weather' },
+            sources: [{ url: 'https://example.test' }],
+          },
+          {
+            id: 'page',
+            name: 'web_fetch',
+            contentIndex: 1,
+            args: { url: 'https://example.test' },
+            sources: [],
+            error: 'failed',
+          },
+        ],
+      },
+    ];
+    const expanded = expandNativeWebSearches(history);
+    expect(groupTurns(expanded)).toMatchObject([
+      {
+        kind: 'assistant',
+        blocks: [
+          { type: 'thinking' },
+          { type: 'toolCall', id: 'search', arguments: { query: 'weather' } },
+          { type: 'toolCall', id: 'page', name: 'web_fetch' },
+          { type: 'text', text: 'The answer.' },
+        ],
+      },
+    ]);
+    const results = pairToolResults(expanded);
+    expect(results.get('search')?.content[0].text).toContain(
+      'https://example.test',
+    );
+    expect(results.get('page')).toMatchObject({
+      isError: true,
+      content: [{ text: 'failed' }],
+    });
+    expect(history[0]).toMatchObject({
+      content: [{ type: 'thinking' }, { type: 'text' }],
+    });
+  });
+});
 
 describe('successfullyDeployedAppIds', () => {
   it('keeps successful deploys in call order and drops failed or incomplete calls', () => {

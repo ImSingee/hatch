@@ -3,13 +3,14 @@
  * Server Functions and the public RPCs share these rules.
  *
  * A model refers to a catalog entry (`catalogRef`) for its metadata; the
- * reasoning, context window and max tokens columns override it when set.
+ * reasoning, context window, max tokens and native search columns override it when set.
  * Passing `null` for one of them clears the override, so the catalog value
  * applies again.
  */
 import { and, eq, sql } from 'drizzle-orm';
 import { db, schema } from '~/db';
 import type { AgentModelKind, ProviderApiType } from '~/db/schema';
+import { supportsNativeWebSearch } from '~/lib/model-limits';
 import { AppError } from '~server/errors';
 import { imageDriverFor } from '~server/images/drivers';
 import { catalogModelByRef, matchCatalogModel } from '~server/model-catalog';
@@ -33,6 +34,7 @@ type ModelFields = {
    */
   catalogRef?: string | null;
   reasoning?: boolean | null;
+  nativeWebSearch?: boolean | null;
   contextWindow?: number | null;
   maxTokens?: number | null;
   enabled?: boolean;
@@ -135,14 +137,29 @@ function checkCatalogRef(ref: string, kind: AgentModelKind): string {
 function rejectChatFieldsForImage(kind: AgentModelKind, input: ModelFields) {
   if (
     kind === 'image' &&
-    [input.reasoning, input.contextWindow, input.maxTokens].some(
-      (value) => value !== undefined && value !== null,
-    )
+    [
+      input.reasoning,
+      input.contextWindow,
+      input.maxTokens,
+      input.nativeWebSearch,
+    ].some((value) => value !== undefined && value !== null)
   )
+    throw new AppError('Image models have no chat model settings.', 400, {
+      code: 'providers.imageModelChatFields',
+    });
+}
+
+function checkNativeWebSearch(
+  apiType: ProviderApiType,
+  value: ModelFields['nativeWebSearch'],
+) {
+  if (value === true && !supportsNativeWebSearch(apiType))
     throw new AppError(
-      'Image models have no reasoning, context window or max tokens.',
+      'This provider API does not support native web search.',
       400,
-      { code: 'providers.imageModelChatFields' },
+      {
+        code: 'providers.nativeWebSearchUnsupported',
+      },
     );
 }
 
@@ -173,6 +190,7 @@ export async function createProviderModel(
     });
   const modelId = checkModelId(input.kind, input.modelId);
   rejectChatFieldsForImage(input.kind, input);
+  checkNativeWebSearch(provider.apiType, input.nativeWebSearch);
   const duplicate = await executor.query.agentModels.findFirst({
     where: { providerId: provider.id, modelId, kind: input.kind },
     columns: { id: true },
@@ -208,6 +226,8 @@ export async function createProviderModel(
       description: checkDescription(input.description ?? ''),
       catalogRef,
       reasoning: input.kind === 'chat' ? (input.reasoning ?? null) : null,
+      nativeWebSearch:
+        input.kind === 'chat' ? (input.nativeWebSearch ?? null) : null,
       contextWindow:
         input.kind === 'chat'
           ? (checkPositive('contextWindow', input.contextWindow) ?? null)
@@ -243,6 +263,7 @@ export async function updateProviderModel(
   const provider = await loadProvider(db, current.providerId);
   const kind = input.kind ?? current.kind;
   rejectChatFieldsForImage(kind, input);
+  checkNativeWebSearch(provider.apiType, input.nativeWebSearch);
   if (kind === 'image' && kind !== current.kind) {
     if (!canGenerateImages(provider.apiType))
       throw new AppError('This provider cannot generate images.', 400, {
@@ -286,6 +307,8 @@ export async function updateProviderModel(
   if (input.description !== undefined)
     patch.description = checkDescription(input.description);
   if (input.reasoning !== undefined) patch.reasoning = input.reasoning;
+  if (input.nativeWebSearch !== undefined)
+    patch.nativeWebSearch = input.nativeWebSearch;
   if (input.contextWindow !== undefined)
     patch.contextWindow = checkPositive('contextWindow', input.contextWindow);
   if (input.maxTokens !== undefined)
@@ -294,6 +317,7 @@ export async function updateProviderModel(
   if (kind === 'image') {
     // Image models have no chat metadata.
     patch.reasoning = null;
+    patch.nativeWebSearch = null;
     patch.contextWindow = null;
     patch.maxTokens = null;
   }

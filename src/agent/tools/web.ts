@@ -308,6 +308,7 @@ function domains(values: string[] | undefined): string[] | undefined {
 
 export function createWebTools(options: {
   tavilyApiKey?: string | null;
+  nativeWebSearch?: boolean;
   fetchImpl?: FetchImplementation;
 }): AgentTool[] {
   const apiKey = options.tavilyApiKey?.trim() || undefined;
@@ -464,5 +465,5 @@ export function createWebTools(options: {
     },
   });
 
-  return [webSearch, webFetch];
+  return options.nativeWebSearch ? [webFetch] : [webSearch, webFetch];
 }

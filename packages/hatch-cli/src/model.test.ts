@@ -115,6 +115,32 @@ describe('model command arguments', () => {
       ['model', 'update', 'm1', '--reset', 'reasoning', '--reset-all'],
       ['model', 'update', 'm1', '--reset', 'max-tokens', '--max-tokens', '5'],
       ['model', 'update', 'm1', '--reset-all', '--no-reasoning'],
+      [
+        'model',
+        'update',
+        'm1',
+        '--native-web-search',
+        '--no-native-web-search',
+      ],
+      [
+        'model',
+        'update',
+        'm1',
+        '--reset',
+        'native-web-search',
+        '--no-native-web-search',
+      ],
+      [
+        'model',
+        'add',
+        '--provider',
+        'p1',
+        '--model-id',
+        'x',
+        '--kind',
+        'image',
+        '--native-web-search',
+      ],
       ['model', 'update', 'm1', '--enable', '--disable'],
       ['model', 'enable'],
       ['model', 'remove', 'm1'],
@@ -189,7 +215,12 @@ describe('model command arguments', () => {
       kind: 'update',
       id: 'm1',
       description: '',
-      resetFields: ['reasoning', 'context_window', 'max_tokens'],
+      resetFields: [
+        'reasoning',
+        'context_window',
+        'max_tokens',
+        'native_web_search',
+      ],
     });
     expect(
       command(
@@ -235,6 +266,28 @@ describe('model command arguments', () => {
       enabled: false,
       page: { limit: 0, cursor: undefined },
     });
+  });
+
+  it('sets, turns off and resets built-in search explicitly', () => {
+    expect(
+      command(
+        'model',
+        'add',
+        '--provider',
+        'p1',
+        '--model-id',
+        'x',
+        '--native-web-search',
+      ),
+    ).toMatchObject({ kind: 'add', nativeWebSearch: true });
+    expect(command('model', 'update', 'm1', '--no-native-web-search')).toEqual({
+      kind: 'update',
+      id: 'm1',
+      nativeWebSearch: false,
+    });
+    expect(
+      command('model', 'update', 'm1', '--reset', 'native-web-search'),
+    ).toEqual({ kind: 'update', id: 'm1', resetFields: ['native_web_search'] });
   });
 
   it("orders one provider's models", () => {

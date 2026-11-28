@@ -11,6 +11,7 @@ import { tmpdir } from 'node:os';
 import path from 'node:path';
 import type { AgentMessage } from '@earendil-works/pi-agent-core';
 import {
+  createAssistantMessageEventStream,
   createModels,
   getCurrentSystemPrompt,
   getCurrentTools,
@@ -114,6 +115,7 @@ async function runWithResponses(
     apiType: 'openai-responses',
     model: faux.getModel() as ResolvedModel['model'],
     thinkingLevel: 'medium',
+    nativeWebSearch: false,
   };
 
   return runAgentTurn({
@@ -134,6 +136,195 @@ async function runWithResponses(
 }
 
 describe('runAgentTurn terminal outcomes', () => {
+  it.each([true, undefined])(
+    'uses the right web tools and persists hosted search steps (native: %s)',
+    async (enabled) => {
+      const models = createModels();
+      const model = {
+        ...fauxProvider({ provider: 'native-test' }).getModel(),
+        api: 'anthropic-messages' as const,
+      };
+      const startBlock = (index: number, content_block: unknown) => ({
+        type: 'content_block_start',
+        index,
+        content_block,
+      });
+      const requests: unknown[] = [];
+      const stream = vi
+        .spyOn(models, 'streamSimple')
+        .mockImplementation((_model, context, options) => {
+          const output = createAssistantMessageEventStream();
+          void (async () => {
+            const tools = getCurrentTools(context.messages).map((tool) => ({
+              ...tool,
+              type: 'function',
+            }));
+            const messages = context.messages
+              .filter((message) => message.role === 'assistant')
+              .map((message) => ({
+                role: message.role,
+                content: message.content,
+              }));
+            const payload = { tools, messages };
+            requests.push(
+              (await options?.onPayload?.(payload, model)) ?? payload,
+            );
+            const pause = enabled && requests.length === 1;
+            if (pause) {
+              for (const raw of [
+                startBlock(0, {
+                  type: 'server_tool_use',
+                  name: 'web_search',
+                  id: 'srvtoolu_test',
+                  input: {},
+                }),
+                {
+                  type: 'content_block_delta',
+                  index: 0,
+                  delta: {
+                    type: 'input_json_delta',
+                    partial_json: '{"query":"Hatch"}',
+                  },
+                },
+                { type: 'content_block_stop', index: 0 },
+              ])
+                await options?.onProviderStreamEvent?.(raw, model);
+            } else if (enabled) {
+              await options?.onProviderStreamEvent?.(
+                startBlock(0, {
+                  type: 'web_search_tool_result',
+                  tool_use_id: 'srvtoolu_test',
+                  content: [
+                    {
+                      type: 'web_search_result',
+                      url: 'https://hatch.example.test',
+                      title: 'Hatch',
+                      encrypted_content: 'opaque',
+                      page_age: null,
+                    },
+                  ],
+                }),
+                model,
+              );
+            }
+            const message: AssistantMessage = {
+              role: 'assistant',
+              content: pause ? [] : [{ type: 'text', text: 'Search complete' }],
+              api: model.api,
+              provider: model.provider,
+              model: model.id,
+              timestamp: Date.now(),
+              stopReason: 'stop',
+              ...(pause ? { rawStopReason: 'pause_turn' } : {}),
+              usage: {
+                input: 0,
+                output: 0,
+                cacheRead: 0,
+                cacheWrite: 0,
+                totalTokens: 0,
+                cost: {
+                  input: 0,
+                  output: 0,
+                  cacheRead: 0,
+                  cacheWrite: 0,
+                  total: 0,
+                },
+              },
+            };
+            output.push({ type: 'done', reason: 'stop', message });
+          })();
+          return output;
+        });
+      const events: AgentStreamEvent[] = [];
+      const picked = {
+        providerId: model.provider,
+        providerName: 'Native Test',
+        apiType: model.api,
+        model,
+        thinkingLevel: 'off',
+        ...(enabled ? { nativeWebSearch: true } : {}),
+      } as ResolvedModel;
+      const result = await runAgentTurn({
+        appUrl: 'https://hatch.example.test',
+        priorMessages: [],
+        sessionId: `native-test-${enabled}`,
+        userText: 'Look up Hatch',
+        models,
+        picked,
+        platform: stubPlatform,
+        signal: new AbortController().signal,
+        emit: (event) => events.push(event),
+      });
+      expect(result.error).toBeUndefined();
+      expect(requests[0]).toMatchObject({
+        tools: expect.arrayContaining([
+          expect.objectContaining({ name: 'web_fetch', type: 'function' }),
+        ]),
+      });
+      const clientSearch = expect.arrayContaining([
+        expect.objectContaining({ name: 'web_search', type: 'function' }),
+      ]);
+      const noClientSearch = expect.not.arrayContaining([
+        expect.objectContaining({ name: 'web_search', type: 'function' }),
+      ]);
+      expect(stream).toHaveBeenCalledTimes(enabled ? 2 : 1);
+      expect(stream.mock.calls[1]?.[2]?.disableContinuation).toBe(
+        enabled ? true : undefined,
+      );
+      expect(requests[0]).toMatchObject({
+        tools: enabled ? noClientSearch : clientSearch,
+      });
+      const replayed = {
+        messages: [
+          {
+            role: 'assistant',
+            content: [{ type: 'server_tool_use', input: { query: 'Hatch' } }],
+          },
+        ],
+      };
+      expect(requests.slice(1)).toMatchObject(enabled ? [replayed] : []);
+      const nativeEvents = [
+        { type: 'tool_start', name: 'web_search', args: { query: 'Hatch' } },
+        {
+          type: 'tool_end',
+          name: 'web_search',
+          isError: false,
+          output: expect.stringContaining('https://hatch.example.test'),
+        },
+      ];
+      expect(
+        events.filter(
+          (event) => event.type === 'tool_start' || event.type === 'tool_end',
+        ),
+      ).toMatchObject(enabled ? nativeEvents : []);
+      const pausedMessages = enabled
+        ? [
+            {
+              role: 'assistant',
+              content: [],
+              nativeWebSearches: [
+                {
+                  contentIndex: 0,
+                  name: 'web_search',
+                  args: { query: 'Hatch' },
+                  sources: [{ url: 'https://hatch.example.test' }],
+                },
+              ],
+            },
+          ]
+        : [];
+      expect(result.messages).toMatchObject([
+        { role: 'user' },
+        ...pausedMessages,
+        {
+          role: 'assistant',
+          content: [{ type: 'text', text: 'Search complete' }],
+        },
+      ]);
+      expect(result.messages.at(-1)).not.toHaveProperty('nativeWebSearches');
+    },
+  );
+
   it.each([
     ...['search_depth', 'topic', 'time_range'].map((field) => ({
       name: 'web_search',
@@ -1151,6 +1342,7 @@ describe('runAgentTurn steer messages', () => {
         apiType: 'openai-responses',
         model: faux.getModel() as ResolvedModel['model'],
         thinkingLevel: 'medium',
+        nativeWebSearch: false,
       },
       platform: stubPlatform,
       signal: new AbortController().signal,

@@ -140,6 +140,98 @@ describe('providers from the catalog', () => {
     });
     expect(linked.catalogRef).toBe(`anthropic/${opusId}`);
   });
+
+  it('overrides native web search and follows the catalog again when cleared', async () => {
+    const provider = await createProvider({
+      catalogProviderId: 'anthropic',
+      apiKey: 'k',
+      models: [],
+    });
+    const row = await createProviderModel({
+      providerId: provider.id,
+      kind: 'chat',
+      modelId: opusId,
+      nativeWebSearch: false,
+    });
+    expect(await getModelView(row.id)).toMatchObject({
+      overrides: { nativeWebSearch: false },
+      chat: {
+        nativeWebSearch: false,
+        catalogValues: { nativeWebSearch: true },
+        overridden: ['nativeWebSearch'],
+      },
+    });
+    await updateProviderModel({ id: row.id, nativeWebSearch: true });
+    expect(await getModelView(row.id)).toMatchObject({
+      overrides: { nativeWebSearch: true },
+      chat: { nativeWebSearch: true, overridden: [] },
+    });
+    await updateProviderModel({ id: row.id, nativeWebSearch: null });
+    expect(await getModelView(row.id)).toMatchObject({
+      overrides: { nativeWebSearch: null },
+      chat: { nativeWebSearch: true, overridden: [] },
+    });
+  });
+
+  it('never enables native search for completions, even with matching catalog metadata', async () => {
+    const provider = await createProvider({
+      name: 'Gateway',
+      apiType: 'openai-completions',
+      baseUrl: 'https://gateway.test',
+      apiKey: 'k',
+      models: [],
+    });
+    const input = {
+      providerId: provider.id,
+      kind: 'chat' as const,
+      modelId: opusId,
+    };
+    await expect(
+      createProviderModel({ ...input, nativeWebSearch: true }),
+    ).rejects.toMatchObject({
+      code: 'providers.nativeWebSearchUnsupported',
+    });
+    const row = await createProviderModel(input);
+    await expect(
+      updateProviderModel({ id: row.id, nativeWebSearch: true }),
+    ).rejects.toMatchObject({
+      code: 'providers.nativeWebSearchUnsupported',
+    });
+    expect(await getModelView(row.id)).toMatchObject({
+      catalogRef: `anthropic/${opusId}`,
+      chat: {
+        nativeWebSearch: false,
+        catalogValues: { nativeWebSearch: true },
+        overridden: [],
+      },
+    });
+  });
+
+  it('rejects native search settings for image models and clears them when converting a chat model', async () => {
+    const provider = await createProvider({
+      catalogProviderId: 'openai',
+      apiKey: 'k',
+      models: [],
+    });
+    const input = { providerId: provider.id, modelId: 'custom-model' };
+    await expect(
+      createProviderModel({ ...input, kind: 'image', nativeWebSearch: false }),
+    ).rejects.toMatchObject({
+      code: 'providers.imageModelChatFields',
+    });
+    const chat = await createProviderModel({
+      ...input,
+      kind: 'chat',
+      nativeWebSearch: true,
+    });
+    const image = await updateProviderModel({ id: chat.id, kind: 'image' });
+    expect(image).toMatchObject({ kind: 'image', nativeWebSearch: null });
+    await expect(
+      updateProviderModel({ id: image.id, nativeWebSearch: true }),
+    ).rejects.toMatchObject({
+      code: 'providers.imageModelChatFields',
+    });
+  });
 });
 
 describe('max output from the catalog', () => {
@@ -160,6 +252,7 @@ describe('max output from the catalog', () => {
       name: model.name,
       catalogRef: `${providerId}/${model.id}`,
       reasoning: null,
+      nativeWebSearch: null,
       contextWindow: null,
       maxTokens: null,
     };

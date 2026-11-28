@@ -14,6 +14,7 @@ import { anthropicMessagesApi } from '@earendil-works/pi-ai/api/anthropic-messag
 import { openAICompletionsApi } from '@earendil-works/pi-ai/api/openai-completions.lazy';
 import { openAIResponsesApi } from '@earendil-works/pi-ai/api/openai-responses.lazy';
 import type { RunModelConfig } from './protocol';
+import { resolveNativeWebSearch } from '~/lib/model-limits';
 
 type ProviderApiType = RunModelConfig['apiType'];
 
@@ -24,6 +25,7 @@ export type ResolvedModel = {
   apiType: ProviderApiType;
   model: Model<ProviderApiType>;
   thinkingLevel: RunModelConfig['thinkingLevel'];
+  nativeWebSearch: boolean;
 };
 
 function apiImpl(apiType: ProviderApiType) {
@@ -94,6 +96,11 @@ export function buildRunModels(config: RunModelConfig): {
       apiType: config.apiType,
       model,
       thinkingLevel: config.thinkingLevel,
+      nativeWebSearch: resolveNativeWebSearch(
+        config.model.nativeWebSearch,
+        undefined,
+        config.apiType,
+      ),
     },
   };
 }

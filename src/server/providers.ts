@@ -120,6 +120,7 @@ const createModelSchema = z.object({
   description: text(1000).optional(),
   catalogRef: text(400).nullable().optional(),
   reasoning: z.boolean().nullable().optional(),
+  nativeWebSearch: z.boolean().nullable().optional(),
   contextWindow: positive.nullable().optional(),
   maxTokens: positive.nullable().optional(),
 });
@@ -143,6 +144,7 @@ const updateModelSchema = z.object({
   catalogRef: text(400).nullable().optional(),
   /** Null clears an override so the catalog value applies. */
   reasoning: z.boolean().nullable().optional(),
+  nativeWebSearch: z.boolean().nullable().optional(),
   contextWindow: positive.nullable().optional(),
   maxTokens: positive.nullable().optional(),
   enabled: z.boolean().optional(),

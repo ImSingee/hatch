@@ -45,6 +45,7 @@ message CatalogModel {
   optional string default_thinking_level = 10;
   optional uint32 context_window = 11;
   optional uint32 max_tokens = 12;
+  optional bool native_web_search = 13;
 }
 
 message ListCatalogProvidersRequest {

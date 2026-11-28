@@ -33,6 +33,11 @@ import {
 } from './composer-content';
 import type { AgentStreamEvent } from './events';
 import { convertToLlm } from './llm-messages';
+import {
+  MAX_NATIVE_SEARCH_CONTINUATIONS,
+  withNativeWebSearch,
+} from './native-web-search';
+import { nativeWebSearchOutput } from './native-web-search-results';
 import type { SteerMessage } from './protocol';
 import { SKILLS_DIR } from './paths';
 import type { PlatformClient } from './platform-client';
@@ -341,10 +346,18 @@ export async function runAgentTurn(
   // the transcript derives the (possibly compacted) model context from it.
   const transcript = Transcript.load(priorMessages);
 
+  const thinkingLevel = picked.model.reasoning ? picked.thinkingLevel : 'off';
+  const nativeSearchApi =
+    picked.nativeWebSearch &&
+    (picked.apiType === 'anthropic-messages' ||
+      (picked.apiType === 'openai-responses' && thinkingLevel !== 'minimal'))
+      ? picked.apiType
+      : undefined;
   const skills = await loadAgentSkills(env);
   const tools = createTools(env, {
     commandCredentials: opts.commandCredentials,
     platform: opts.platform,
+    nativeWebSearch: nativeSearchApi !== undefined,
     ...(opts.tavilyApiKey ? { tavilyApiKey: opts.tavilyApiKey } : {}),
     ...(opts.ask ? { ask: opts.ask } : {}),
     ...(opts.requestEnv ? { requestEnv: opts.requestEnv } : {}),
@@ -369,7 +382,6 @@ export async function runAgentTurn(
     }
   }
 
-  const thinkingLevel = picked.model.reasoning ? picked.thinkingLevel : 'off';
   const systemPrompt = buildSystemPrompt(opts.appUrl, skills);
   // The prompt and the tool declarations travel as the leading system message
   // of every request. It is rebuilt for each run and never stored.
@@ -410,7 +422,21 @@ export async function runAgentTurn(
   });
   // A request the provider rejects for context length is compacted and
   // re-sent in place, so the turn keeps the tool work it already did.
-  const streamModels = withOverflowRecovery(models, {
+  const nativeModels = nativeSearchApi
+    ? withNativeWebSearch(models, nativeSearchApi, {
+        onSearchStart: ({ id, name, args }) =>
+          emit({ type: 'tool_start', id, name, args }),
+        onSearchEnd: (search) =>
+          emit({
+            type: 'tool_end',
+            id: search.id,
+            name: search.name,
+            isError: search.error !== undefined,
+            output: clip(nativeWebSearchOutput(search)),
+          }),
+      })
+    : models;
+  const streamModels = withOverflowRecovery(nativeModels, {
     contextWindow: picked.model.contextWindow,
     signal,
     recover: async () =>
@@ -655,6 +681,20 @@ export async function runAgentTurn(
     });
   };
 
+  let pauseContinuations = 0;
+  const finishTurn: AgentLoopConfig['finishTurn'] = ({ message }) => {
+    if (
+      message.rawStopReason !== 'pause_turn' ||
+      message.stopReason === 'error' ||
+      message.stopReason === 'aborted'
+    )
+      return;
+    if (pauseContinuations >= MAX_NATIVE_SEARCH_CONTINUATIONS)
+      return { action: 'end' };
+    pauseContinuations++;
+    return { action: 'continue' };
+  };
+
   const runLoop = async (): Promise<AgentMessage[]> => {
     const prompt = userMessage(
       formatAttachmentPrompt(userText, opts.attachments ?? []),
@@ -678,6 +718,7 @@ export async function runAgentTurn(
             return modelContext();
           },
           afterToolCall,
+          ...(nativeSearchApi === 'anthropic-messages' ? { finishTurn } : {}),
           getSteeringMessages,
         },
         sink,
@@ -706,6 +747,19 @@ export async function runAgentTurn(
       throw new Error('Agent run completed without an assistant message.');
     }
     const messages = await buildTranscript();
+
+    if (
+      nativeSearchApi === 'anthropic-messages' &&
+      assistant.rawStopReason === 'pause_turn' &&
+      assistant.stopReason !== 'error' &&
+      assistant.stopReason !== 'aborted'
+    ) {
+      return {
+        messages,
+        error:
+          'The provider kept pausing web search after three continuations.',
+      };
+    }
 
     // Provider/stream failures end the loop with an assistant message instead
     // of a rejection. Propagate those terminal reasons to the runner while

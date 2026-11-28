@@ -284,12 +284,14 @@ const providerModel = (value: ProviderModel | undefined) => {
     chat: model.chat
       ? {
           reasoning: model.chat.reasoning,
+          nativeWebSearch: model.chat.nativeWebSearch,
           thinkingLevels: model.chat.thinkingLevels,
           defaultThinkingLevel: model.chat.defaultThinkingLevel,
           contextWindow: model.chat.contextWindow,
           maxTokens: model.chat.maxTokens,
           overridden: model.chat.overridden,
           reasoningOverride: model.chat.reasoningOverride ?? null,
+          nativeWebSearchOverride: model.chat.nativeWebSearchOverride ?? null,
           contextWindowOverride: model.chat.contextWindowOverride ?? null,
           maxTokensOverride: model.chat.maxTokensOverride ?? null,
         }
@@ -334,6 +336,7 @@ const catalogModel = (model: CatalogModel) => ({
   description: model.description ?? null,
   releasedAt: model.releasedAt ?? null,
   reasoning: model.reasoning,
+  nativeWebSearch: model.nativeWebSearch ?? false,
   thinkingLevels: model.thinkingLevels,
   defaultThinkingLevel: model.defaultThinkingLevel ?? null,
   contextWindow: model.contextWindow ?? null,
@@ -1002,6 +1005,7 @@ export function cliClient(transport: Transport) {
         catalogRef?: string;
         noCatalog?: boolean;
         reasoning?: boolean;
+        nativeWebSearch?: boolean;
         contextWindow?: number;
         maxTokens?: number;
       }) => providerModel((await models.createModel(input)).model),
@@ -1013,6 +1017,7 @@ export function cliClient(transport: Transport) {
         catalogRef?: string;
         noCatalog?: boolean;
         reasoning?: boolean;
+        nativeWebSearch?: boolean;
         contextWindow?: number;
         maxTokens?: number;
         resetFields?: string[];

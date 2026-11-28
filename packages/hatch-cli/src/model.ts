@@ -31,6 +31,7 @@ const RESET_FIELDS = {
   reasoning: 'reasoning',
   'context-window': 'context_window',
   'max-tokens': 'max_tokens',
+  'native-web-search': 'native_web_search',
 } as const;
 type ResetName = keyof typeof RESET_FIELDS;
 type ResetField = (typeof RESET_FIELDS)[ResetName];
@@ -38,6 +39,7 @@ type ResetField = (typeof RESET_FIELDS)[ResetName];
 /** Chat metadata a model may override; unset fields follow the catalog. */
 type ChatSpec = {
   reasoning?: boolean;
+  nativeWebSearch?: boolean;
   contextWindow?: number;
   maxTokens?: number;
 };
@@ -138,6 +140,8 @@ const CHAT_SPEC_OPTIONS: OptionSpec = {
   'max-tokens': { type: 'string' },
   reasoning: { type: 'boolean' },
   'no-reasoning': { type: 'boolean' },
+  'native-web-search': { type: 'boolean' },
+  'no-native-web-search': { type: 'boolean' },
 };
 const FIELD_OPTIONS: OptionSpec = {
   'model-id': { type: 'string' },
@@ -162,10 +166,16 @@ function catalogLink(flags: Flags): CatalogLink {
 
 function chatSpec(flags: Flags): ChatSpec {
   const reasoning = switchFlag(flags, 'reasoning', 'no-reasoning');
+  const nativeWebSearch = switchFlag(
+    flags,
+    'native-web-search',
+    'no-native-web-search',
+  );
   const contextWindow = countFlag(flags, 'context-window');
   const maxTokens = countFlag(flags, 'max-tokens');
   return {
     ...(reasoning === undefined ? {} : { reasoning }),
+    ...(nativeWebSearch === undefined ? {} : { nativeWebSearch }),
     ...(contextWindow === undefined ? {} : { contextWindow }),
     ...(maxTokens === undefined ? {} : { maxTokens }),
   };
@@ -206,11 +216,12 @@ function resetFields(flags: Flags, spec: ChatSpec): ResetField[] | undefined {
     (field) =>
       (field === 'reasoning' && spec.reasoning !== undefined) ||
       (field === 'context-window' && spec.contextWindow !== undefined) ||
-      (field === 'max-tokens' && spec.maxTokens !== undefined),
+      (field === 'max-tokens' && spec.maxTokens !== undefined) ||
+      (field === 'native-web-search' && spec.nativeWebSearch !== undefined),
   );
   if (setAndReset.length)
     throw invalid(
-      `Cannot both set and reset ${setAndReset.map((field) => (field === 'reasoning' ? '--reasoning/--no-reasoning' : `--${field}`)).join(', ')}; drop the flag or the reset.`,
+      `Cannot both set and reset ${setAndReset.map((field) => (field === 'reasoning' || field === 'native-web-search' ? `--${field}/--no-${field}` : `--${field}`)).join(', ')}; drop the flag or the reset.`,
     );
   return fields.map((field) => RESET_FIELDS[field]);
 }

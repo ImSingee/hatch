@@ -50,11 +50,13 @@ const RESET_FIELDS = {
   reasoning: 'reasoning',
   context_window: 'contextWindow',
   max_tokens: 'maxTokens',
+  native_web_search: 'nativeWebSearch',
 } as const;
 const OVERRIDDEN_NAMES = {
   reasoning: 'reasoning',
   contextWindow: 'context_window',
   maxTokens: 'max_tokens',
+  nativeWebSearch: 'native_web_search',
 } as const;
 
 export function modelMessage(model: ModelView) {
@@ -72,6 +74,7 @@ export function modelMessage(model: ModelView) {
     chat: model.chat
       ? {
           reasoning: model.chat.reasoning,
+          nativeWebSearch: model.chat.nativeWebSearch,
           thinkingLevels: model.chat.thinkingLevels,
           defaultThinkingLevel: model.chat.defaultThinkingLevel,
           contextWindow: model.chat.contextWindow,
@@ -80,6 +83,7 @@ export function modelMessage(model: ModelView) {
             (field) => OVERRIDDEN_NAMES[field],
           ),
           reasoningOverride: model.overrides.reasoning ?? undefined,
+          nativeWebSearchOverride: model.overrides.nativeWebSearch ?? undefined,
           contextWindowOverride: model.overrides.contextWindow ?? undefined,
           maxTokensOverride: model.overrides.maxTokens ?? undefined,
         }
@@ -111,6 +115,7 @@ function catalogModelMessage(providerId: string, model: CatalogModel) {
     description: model.description,
     releasedAt: model.releasedAt,
     reasoning: model.reasoning,
+    nativeWebSearch: model.nativeWebSearch,
     thinkingLevels: model.thinkingLevels,
     defaultThinkingLevel: model.defaultThinkingLevel,
     contextWindow: model.contextWindow,
@@ -278,6 +283,7 @@ export function registerModelServices(router: ConnectRouter): void {
         description: input.description,
         catalogRef: catalogRefInput(input.catalogRef, input.noCatalog),
         reasoning: input.reasoning,
+        nativeWebSearch: input.nativeWebSearch,
         contextWindow: input.contextWindow,
         maxTokens: input.maxTokens,
       });
@@ -304,6 +310,11 @@ export function registerModelServices(router: ConnectRouter): void {
         true,
         'max_tokens and reset_fields "max_tokens"',
       );
+      exclusive(
+        reset.has('nativeWebSearch') && input.nativeWebSearch !== undefined,
+        true,
+        'native_web_search and reset_fields "native_web_search"',
+      );
       await updateProviderModel({
         id: input.id,
         modelId: input.modelId,
@@ -311,6 +322,9 @@ export function registerModelServices(router: ConnectRouter): void {
         description: input.description,
         catalogRef: catalogRefInput(input.catalogRef, input.noCatalog),
         reasoning: reset.has('reasoning') ? null : input.reasoning,
+        nativeWebSearch: reset.has('nativeWebSearch')
+          ? null
+          : input.nativeWebSearch,
         contextWindow: reset.has('contextWindow') ? null : input.contextWindow,
         maxTokens: reset.has('maxTokens') ? null : input.maxTokens,
         enabled: input.enabled,

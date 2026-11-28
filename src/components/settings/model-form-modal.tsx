@@ -18,6 +18,8 @@ import { toast } from 'sonner';
 import {
   FALLBACK_CONTEXT_WINDOW,
   resolveLimits,
+  resolveNativeWebSearch,
+  supportsNativeWebSearch,
   type CatalogLimits,
 } from '~/lib/model-limits';
 import { type PlainTranslationKey, useI18n } from '~i18n';
@@ -33,7 +35,7 @@ import {
 import { ModelSearchInput } from './model-search-input';
 import classes from './providers-panel.module.css';
 
-type ReasoningChoice = 'catalog' | 'on' | 'off';
+type ToggleChoice = 'catalog' | 'on' | 'off';
 
 type Values = {
   kind: ProviderModel['kind'];
@@ -43,7 +45,8 @@ type Values = {
   /** Empty follows the catalog. */
   contextWindow: number | '';
   maxTokens: number | '';
-  reasoning: ReasoningChoice;
+  reasoning: ToggleChoice;
+  nativeWebSearch: ToggleChoice;
 };
 
 const KIND_LABELS: Record<ProviderModel['kind'], PlainTranslationKey> = {
@@ -51,7 +54,7 @@ const KIND_LABELS: Record<ProviderModel['kind'], PlainTranslationKey> = {
   image: 'providers.model.kind.image',
 };
 
-function reasoningChoice(value: boolean | null): ReasoningChoice {
+function toggleChoice(value: boolean | null): ToggleChoice {
   return value === null ? 'catalog' : value ? 'on' : 'off';
 }
 
@@ -91,7 +94,8 @@ export function ModelFormModal({
       description: model.description,
       contextWindow: model.overrides.contextWindow ?? '',
       maxTokens: model.overrides.maxTokens ?? '',
-      reasoning: reasoningChoice(model.overrides.reasoning),
+      reasoning: toggleChoice(model.overrides.reasoning),
+      nativeWebSearch: toggleChoice(model.overrides.nativeWebSearch),
     },
     validate: {
       modelId: (v) => (v.trim() ? null : t('providers.form.required')),
@@ -102,6 +106,7 @@ export function ModelFormModal({
     },
   });
   const image = form.values.kind === 'image';
+  const nativeWebSearchSupported = supportsNativeWebSearch(provider.apiType);
   const ref = catalogRef === undefined ? model.catalogRef : catalogRef;
   const linked = ref !== null && (catalogRef !== undefined || model.inCatalog);
   // The entry the form will save: the stored one until another is chosen.
@@ -138,6 +143,15 @@ export function ModelFormModal({
                   values.reasoning === 'catalog'
                     ? null
                     : values.reasoning === 'on',
+                ...(nativeWebSearchSupported ||
+                values.nativeWebSearch === 'catalog'
+                  ? {
+                      nativeWebSearch:
+                        values.nativeWebSearch === 'catalog'
+                          ? null
+                          : values.nativeWebSearch === 'on',
+                    }
+                  : {}),
               }
             : {}),
         },
@@ -155,7 +169,12 @@ export function ModelFormModal({
   });
 
   const resetAll = () =>
-    form.setValues({ contextWindow: '', maxTokens: '', reasoning: 'catalog' });
+    form.setValues({
+      contextWindow: '',
+      maxTokens: '',
+      reasoning: 'catalog',
+      nativeWebSearch: 'catalog',
+    });
 
   const followLabel =
     limits.reasoning === undefined
@@ -331,6 +350,28 @@ export function ModelFormModal({
                 ]}
                 {...form.getInputProps('reasoning')}
               />
+              {nativeWebSearchSupported && (
+                <Select
+                  label={t('providers.model.nativeWebSearch')}
+                  description={t('providers.model.nativeWebSearchDescription')}
+                  allowDeselect={false}
+                  data={[
+                    {
+                      value: 'catalog',
+                      label: resolveNativeWebSearch(
+                        null,
+                        limits.nativeWebSearch,
+                        provider.apiType,
+                      )
+                        ? t('providers.model.followCatalogOn')
+                        : t('providers.model.followCatalogOff'),
+                    },
+                    { value: 'on', label: t('providers.model.on') },
+                    { value: 'off', label: t('providers.model.off') },
+                  ]}
+                  {...form.getInputProps('nativeWebSearch')}
+                />
+              )}
             </>
           )}
           <Group justify="space-between" mt="xs">

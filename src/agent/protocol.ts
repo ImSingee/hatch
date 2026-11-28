@@ -213,6 +213,7 @@ export const runModelConfigSchema = z.object({
     id: z.string().min(1),
     name: z.string().min(1),
     reasoning: z.boolean(),
+    nativeWebSearch: z.boolean().optional(),
     /** Legacy wire metadata; Runners always enable text and image input. */
     input: z.array(z.enum(['text', 'image'])),
     contextWindow: z.number().int().positive(),

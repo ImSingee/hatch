@@ -415,21 +415,21 @@ const definitions: readonly CliCommandDefinition[] = [
     usage:
       'model list [--kind chat|image] [--provider <provider-id>] [--enabled | --disabled] [--limit <n>] [--cursor <cursor>]',
     description:
-      'List the models under every provider in provider order: id, provider, provider model id, name, kind (chat runs the Agent, image generates images), description, enabled, catalogRef, inCatalog and, for chat models, chat with reasoning, thinkingLevels, defaultThinkingLevel, contextWindow, maxTokens and the overrides that differ from the catalog. --kind, --provider and --enabled/--disabled filter. --limit (1-100) prints one page and a nextCursor to pass as --cursor. Never prints API keys.',
+      'List the models under every provider in provider order: id, provider, provider model id, name, kind (chat runs the Agent, image generates images), description, enabled, catalogRef, inCatalog and, for chat models, chat with reasoning, thinkingLevels, defaultThinkingLevel, contextWindow, maxTokens, nativeWebSearch and the overrides that differ from the catalog. --kind, --provider and --enabled/--disabled filter. --limit (1-100) prints one page and a nextCursor to pass as --cursor. Never prints API keys.',
   },
   {
     path: ['model', 'add'],
     usage:
-      'model add --provider <provider-id> --model-id <model-id> [--kind chat|image] [--name <text>] [--description <text>] [--catalog-ref <catalog-provider-id>/<model-id> | --no-catalog] [--context-window <n>] [--max-tokens <n>] [--reasoning | --no-reasoning]',
+      'model add --provider <provider-id> --model-id <model-id> [--kind chat|image] [--name <text>] [--description <text>] [--catalog-ref <catalog-provider-id>/<model-id> | --no-catalog] [--context-window <n>] [--max-tokens <n>] [--reasoning | --no-reasoning] [--native-web-search | --no-native-web-search]',
     description:
-      "Add a model to a provider; its API key is used. --model-id is what is sent to the provider. --kind defaults to chat. Metadata comes from the catalog entry with the same model id under the provider's catalog preset unless --catalog-ref names another entry (from model catalog list) or --no-catalog takes none. --context-window, --max-tokens and --reasoning/--no-reasoning override the catalog for a chat model. --name defaults to the catalog name, then the model id. Prints the model with its id.",
+      "Add a model to a provider; its API key is used. --model-id is what is sent to the provider. --kind defaults to chat. Metadata comes from the catalog entry with the same model id under the provider's catalog preset unless --catalog-ref names another entry (from model catalog list) or --no-catalog takes none. --context-window, --max-tokens, --reasoning/--no-reasoning and --native-web-search/--no-native-web-search override the catalog for a chat model. Built-in web search requires Anthropic Messages or OpenAI Responses. --name defaults to the catalog name, then the model id. Prints the model with its id.",
   },
   {
     path: ['model', 'update'],
     usage:
-      'model update <model-id> [--model-id <model-id>] [--name <text>] [--description <text> | --clear-description] [--catalog-ref <ref> | --no-catalog] [--context-window <n>] [--max-tokens <n>] [--reasoning | --no-reasoning] [--reset reasoning,context-window,max-tokens | --reset-all] [--enable | --disable]',
+      'model update <model-id> [--model-id <model-id>] [--name <text>] [--description <text> | --clear-description] [--catalog-ref <ref> | --no-catalog] [--context-window <n>] [--max-tokens <n>] [--reasoning | --no-reasoning] [--native-web-search | --no-native-web-search] [--reset reasoning,context-window,max-tokens,native-web-search | --reset-all] [--enable | --disable]',
     description:
-      'Change a model; omitted fields stay unchanged and at least one is required. <model-id> is the id model list prints; --model-id changes the id sent to the provider. --no-catalog detaches it from the catalog. --reset clears the listed overrides (repeatable or comma-separated) so the catalog value applies again, --reset-all clears all three; a field cannot be both set and reset. Prints the model.',
+      'Change a model; omitted fields stay unchanged and at least one is required. <model-id> is the id model list prints; --model-id changes the id sent to the provider. --no-catalog detaches it from the catalog. --reset clears the listed overrides (repeatable or comma-separated) so the catalog value applies again, --reset-all clears all four; a field cannot be both set and reset. Prints the model.',
   },
   {
     path: ['model', 'enable'],
@@ -466,7 +466,7 @@ const definitions: readonly CliCommandDefinition[] = [
     usage:
       'model catalog list [--provider <catalog-provider-id>] [--kind chat|image] [--search <text>] [--limit <1-200>] [--cursor <cursor>]',
     description:
-      'Search the built-in model catalog: ref (for model add --catalog-ref), provider, model id, name, kind, description, release date, reasoning, thinking levels, context window and max tokens. --search matches names and ids; every word must match. Prints total matches across pages; without --limit one page of 50, and a nextCursor to pass as --cursor while more follow.',
+      'Search the built-in model catalog: ref (for model add --catalog-ref), provider, model id, name, kind, description, release date, reasoning, thinking levels, context window, max tokens and nativeWebSearch. --search matches names and ids; every word must match. Prints total matches across pages; without --limit one page of 50, and a nextCursor to pass as --cursor while more follow.',
   },
   {
     path: ['model', 'catalog', 'status'],

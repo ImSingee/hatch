@@ -43,6 +43,7 @@ export const MAX_MODELS_PER_CREATE = 100;
 export type ModelChatSpec = Pick<
   ModelSpec,
   | 'reasoning'
+  | 'nativeWebSearch'
   | 'thinkingLevels'
   | 'defaultThinkingLevel'
   | 'contextWindow'
@@ -71,6 +72,7 @@ export type ModelView = {
   /** Stored overrides; null follows the catalog. */
   overrides: {
     reasoning: boolean | null;
+    nativeWebSearch: boolean | null;
     contextWindow: number | null;
     maxTokens: number | null;
   };
@@ -121,11 +123,13 @@ function modelView(provider: ProviderRow, model: ModelRow): ModelView {
         : null,
     overrides: {
       reasoning: model.reasoning,
+      nativeWebSearch: model.nativeWebSearch,
       contextWindow: model.contextWindow,
       maxTokens: model.maxTokens,
     },
     chat: spec && {
       reasoning: spec.reasoning,
+      nativeWebSearch: spec.nativeWebSearch,
       thinkingLevels: spec.thinkingLevels,
       defaultThinkingLevel: spec.defaultThinkingLevel,
       contextWindow: spec.contextWindow,
