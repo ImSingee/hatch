@@ -142,8 +142,13 @@ const CLOSED_REMEMBERED: usize = 256;
 /// Trust stores write one file; loads take turns.
 static TRUST: tokio::sync::Mutex<()> = tokio::sync::Mutex::const_new(());
 
+/// Reserves `key` unless it was closed. `reserve` and `forget` both hold
+/// `CLOSED` while they look at or change `OPEN` (always in that order), so a
+/// close that arrives while the open reserves either finds the reservation
+/// or leaves the tombstone the reservation then sees.
 fn reserve(key: &str) -> Result<(), &'static str> {
-    if CLOSED.lock().unwrap().iter().any(|closed| closed == key) {
+    let closed = CLOSED.lock().unwrap();
+    if closed.iter().any(|closed| closed == key) {
         return Err("cancelled");
     }
     let mut open = OPEN.lock().unwrap();
@@ -172,8 +177,8 @@ fn release(key: &str) {
 }
 
 fn forget(key: &str) {
-    release(key);
     let mut closed = CLOSED.lock().unwrap();
+    release(key);
     if closed.len() >= CLOSED_REMEMBERED {
         closed.pop_front();
     }
@@ -801,6 +806,28 @@ mod tests {
     fn a_surface_closed_before_it_opened_never_opens() {
         close("closed-first");
         assert_eq!(reserve("closed-first"), Err("cancelled"));
+    }
+
+    #[test]
+    fn a_close_racing_the_open_never_leaves_the_key_open() {
+        // Whichever of the two runs first, once both have run the key is not
+        // open: no engine starts for a surface that is gone.
+        for n in 0..2000 {
+            let key = format!("race-{n}");
+            let opening = {
+                let key = key.clone();
+                std::thread::spawn(move || {
+                    let _ = reserve(&key);
+                })
+            };
+            let closing = {
+                let key = key.clone();
+                std::thread::spawn(move || forget(&key))
+            };
+            opening.join().unwrap();
+            closing.join().unwrap();
+            assert!(!still_open(&key), "{key} stayed open after its close");
+        }
     }
 
     #[test]
