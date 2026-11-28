@@ -161,7 +161,7 @@ export function instanceLink(value: string, origin: string): DeepLink | null {
   }
   if (url.origin !== origin || url.username || url.password) return null;
   const segments = linkPathSegments(url.pathname);
-  const hash = linkFragment(url.hash);
+  const hash = linkFragment(url.hash.slice(1));
   if (!segments || hash === null) return null;
   const target = platformTarget(segments, hash, url.search || undefined);
   return target ? { instance: origin, target } : null;

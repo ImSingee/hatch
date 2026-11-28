@@ -19,6 +19,7 @@ import {
   ContentError,
   MAX_CONTENT_ISSUES,
   cardSourceTooLarge,
+  cardTreeTooDeep,
   compileCardJsonWith,
   compileCardMarkupWith,
   compileMarkdownWith,
@@ -106,6 +107,9 @@ export function compileCardTree(tree: unknown): CompiledCard {
   if (byteLength(JSON.stringify(tree) ?? '') > MAX_CARD_SOURCE_BYTES) {
     throw cardSourceTooLarge('the card tree');
   }
+  // Before the shape checks, which read the tree recursively.
+  const tooDeep = cardTreeTooDeep(tree);
+  if (tooDeep) throw new ContentError([tooDeep]);
   const parsed = jsonNodeSchema.safeParse(tree);
   if (!parsed.success) {
     throw new ContentError(

@@ -118,6 +118,8 @@ intended, or a Hatch deep link: the page's path on the instance after
 `hatch://`, such as `hatch://app/<slug>#/orders/42` or
 `hatch://agent/<id>`, optionally `?instance=<origin>` for a page on another
 instance. Phones open deep links natively; the web opens them on the instance.
+Everything after the first `#` is the fragment, as in a web address, so
+`hatch://app/<slug>##notes` opens the App with the fragment `#notes`.
 Deep links to `/api`, `/cli` or `/login`, with dot segments, or with an
 instance that is not a bare HTTPS origin are rejected with `400`, and so are
 relative URLs and schemes that only run inside the current document

@@ -180,7 +180,8 @@ uses:
 | Footnotes                                        | Shown as `[^label]` text                                              |
 
 The source is at most 16 KiB and must not be empty; the tree is held to the
-same limits as a card (200 elements, 8 levels).
+same limits as a card (200 elements, the `Document` root included, and 8
+levels).
 
 ## Card markup
 
@@ -206,7 +207,9 @@ Card markup is a strict subset of XML. The "CI failed" card:
   (`<![CDATA[ … ]]>`). Names are case-sensitive.
 - Attribute values are quoted with `"` or `'` and may not contain `<`. An
   attribute given twice is an error, and so is an attribute the component does
-  not have. An empty value (`tone=""`) counts as left out.
+  not have. An empty value (`tone=""`) counts as left out, and so does a text
+  value that is only whitespace (`summary=" "`): a required attribute given
+  that way is reported as missing.
 - A flag may be written bare (`mono`) or as `mono="true"` / `mono="false"`.
 - Entities: only `&amp;` `&lt;` `&gt;` `&quot;` `&apos;` and numeric references
   (`&#169;`, `&#xA9;`). A literal `&` must be written `&amp;`. Document types,
@@ -225,7 +228,8 @@ Markup is indented freely, so text is tidied the way HTML reads it:
 - In inline content (`Title`, `Text`, `Field`, `Step`, …) every run of
   spaces, tabs and line breaks becomes one space, trimmed at the start and
   end of the block and around `<br/>` (spaces inside `<b>`, `<a>` and other
-  inline marks are kept). Write `<br/>` for a line break.
+  inline marks are kept). Write `<br/>` for a line break. Text that a CDATA
+  section splits is tidied as one piece: `A <![CDATA[ ]]> B` reads `A B`.
 - Text-only content (`Badge`, `Option`, `Button`, `code`, …) collapses the
   same way and is trimmed.
 - Between blocks, whitespace is ignored; any other loose text is an error
@@ -240,8 +244,9 @@ Markup is indented freely, so text is tidied the way HTML reads it:
   no dedenting; the canonical markup writes text whose leading indentation
   or trailing line breaks matter that way, so it reads back unchanged.
 - In a JSON tree, a `\n` in inline content becomes a line break (other runs
-  of whitespace still become one space), and `Code` and `Markdown` text is
-  kept exactly, without dedenting.
+  of whitespace still become one space, also across adjacent strings, so
+  `["A ", " B"]` reads `A B`), and `Code` and `Markdown` text is kept exactly,
+  without dedenting.
 
 ### Limits
 
@@ -252,7 +257,9 @@ Markup is indented freely, so text is tidied the way HTML reads it:
   indented canonical markup `get` prints can always be sent back.
 - At most 200 elements, the root and the elements a `Markdown` block compiles
   to included.
-- At most 8 levels below the root.
+- At most 8 levels below the root. A JSON tree nested more than 64 levels
+  (as deep as the markup parser reads) is rejected before its shape is
+  checked, with the depth as its only problem.
 - Text inside one element at most 4000 characters, or the component's own
   limit in the catalog.
 
@@ -278,7 +285,8 @@ children.0.props.tone: <Text> tone must be one of dimmed, neutral, info, success
 Instead of markup, a sender may give the tree itself: in the App SDK and
 Channel push as an object, in the CLI and the `card_json` RPC field as JSON
 text (a `card` string whose first character is `{` is read as JSON). It goes
-through the same checks and normalization:
+through the same checks and normalization. Its root is `Card`; `Document`
+is only the root a Markdown notification compiles to.
 
 ```json
 {
