@@ -44,8 +44,7 @@ export function AgentScreen({ nested = false }: { nested?: boolean }) {
   const signal = useLifetimeSignal();
   // With room for both, the open conversation sits beside the list, its
   // edge on the fold; otherwise it is pushed over the list.
-  const { onLayout, onFolds, onHinge, split } =
-    useListDetail(conversationSplit);
+  const { onLayout, onFolds, split } = useListDetail(conversationSplit);
   const [selected, select] = useAgentSelection();
   const onOwnScreen = useConversationScreens();
   const open = (id: string, push = !split) => {
@@ -122,7 +121,6 @@ export function AgentScreen({ nested = false }: { nested?: boolean }) {
       <FoldContainer
         onLayout={onLayout}
         onFolds={onFolds}
-        onHinge={onHinge}
         style={{ flex: 1, flexDirection: 'row' }}
       >
         <View style={split ? { width: split.leading } : { flex: 1 }}>

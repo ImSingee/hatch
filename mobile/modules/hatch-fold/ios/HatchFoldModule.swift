@@ -13,15 +13,11 @@ import UIKit
 /// settled, and reports only changes.
 ///
 /// It also reports the edge where the system places the vertical bar (the
-/// navigation, tab and status bars of an iPhone Duo), from the view's traits,
-/// and the state of the hinge its display folds on.
+/// navigation, tab and status bars of an iPhone Duo), from the view's traits.
 final class HatchFoldView: ExpoView {
   let onFoldChange = EventDispatcher()
   let onVerticalBarChange = EventDispatcher()
-  let onHingeChange = EventDispatcher()
   private var reported: [[String: Double]]?
-  private var hinge = 0
-  private var reportedHinge: Int?
   private var reportedEdge: Int?
   private var geometry: NSKeyValueObservation?
   private var timer: Timer?
@@ -34,17 +30,6 @@ final class HatchFoldView: ExpoView {
     HatchObserveVerticalBarEdge(self) { [weak self] in
       self?.reportVerticalBar()
     }
-    HatchObserveHinge(self) { [weak self] status in
-      self?.hinge = status
-      self?.reportHinge()
-    }
-  }
-
-  private func reportHinge() {
-    guard window != nil, reportedHinge != hinge else { return }
-    reportedHinge = hinge
-    let names = [1: "closed", 2: "partlyOpen", 3: "open"]
-    onHingeChange(["hinge": names[hinge] ?? "none"])
   }
 
   deinit {
@@ -71,7 +56,6 @@ final class HatchFoldView: ExpoView {
     }
     report()
     reportVerticalBar()
-    reportHinge()
     watch(for: 1.5)
   }
 
@@ -133,7 +117,7 @@ public final class HatchFoldModule: Module {
   public func definition() -> ModuleDefinition {
     Name("HatchFold")
     View(HatchFoldView.self) {
-      Events("onFoldChange", "onVerticalBarChange", "onHingeChange")
+      Events("onFoldChange", "onVerticalBarChange")
     }
   }
 }
