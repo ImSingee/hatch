@@ -33,9 +33,12 @@ export function BesideLayout({ children }: PropsWithChildren) {
   const { onLayout, onFolds, width, split } = useFoldSplit(besideSplit);
   const [beside, setBeside] = useBesideApp();
   const front = useFrontApps();
-  // An App has one view: while the front shows it, it is not beside too.
-  const mounted = beside && !front.includes(beside.id) ? beside : null;
-  const shown = split && !mounted?.hidden ? mounted : null;
+  // While the front shows the App beside, the column steps aside. A native
+  // App has one view, which the front takes; a web App's page stays loaded
+  // here, off-screen, since the front has a page of its own.
+  const inFront = beside !== null && front.includes(beside.id);
+  const mounted = inFront && beside.runtime === 'native' ? null : beside;
+  const shown = split && !inFront && !mounted?.hidden ? mounted : null;
   // Hidden, or while the window is too narrow, a native App's engine runs on
   // without its view; a web App lives in its WebView, which stays mounted
   // off-screen, so the App keeps its page and what was typed into it.
