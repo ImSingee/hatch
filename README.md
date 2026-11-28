@@ -101,7 +101,9 @@ replica, such as the stable pod name and its ordinal PVC, or inject another
 identifier persisted with the volume. Do not use a Deployment pod hostname,
 because it changes when the pod is recreated.
 
-Models with built-in web search use their provider's search instead of Tavily.
+When built-in web search is enabled, the Agent uses the model provider’s
+search. It uses Tavily when built-in search is disabled or unavailable,
+including when an OpenAI Responses model runs at Minimal thinking effort.
 Page fetching always uses Tavily. To use your Tavily account and quota instead
 of keyless access, set `TAVILY_API_KEY` in `.env`
 and recreate the Agent Runner (`docker compose up -d --force-recreate agent`).
