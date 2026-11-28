@@ -67,6 +67,37 @@ describe('bundled catalog', () => {
 });
 
 describe('buildCatalog', () => {
+  it('marks native web search only for chat models from curated search providers', () => {
+    const searchable = {
+      id: 'searchable',
+      name: 'Searchable',
+      abilities: { toolCall: true, search: true },
+    };
+    const { catalog } = buildCatalog(
+      upstream({
+        anthropic: [searchable],
+        openai: [
+          searchable,
+          { ...searchable, id: 'searchable-image', type: 'image' },
+        ],
+        'kimi-coding': [searchable],
+      }),
+    );
+    for (const id of ['anthropic', 'openai']) {
+      expect(
+        catalog.models[id]
+          .filter((model) => model.nativeWebSearch)
+          .map((model) => model.id),
+      ).toEqual(['searchable']);
+    }
+    expect(
+      catalog.models['kimi-coding'].find((model) => model.id === 'searchable'),
+    ).toBeDefined();
+    expect(
+      catalog.models['kimi-coding'].some((model) => model.nativeWebSearch),
+    ).toBe(false);
+  });
+
   it('keeps chat models that call tools on the provider API', () => {
     const { catalog } = buildCatalog(
       upstream({

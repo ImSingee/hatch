@@ -43,13 +43,15 @@ message ChatModelSpec {
   string default_thinking_level = 3;
   uint32 context_window = 4;
   uint32 max_tokens = 5;
-  // Overrides that differ from the catalog: "reasoning", "context_window"
-  // or "max_tokens".
+  // Overrides that differ from the catalog: "reasoning", "context_window",
+  // "max_tokens" or "native_web_search".
   repeated string overridden = 6;
   // Stored overrides; unset follows the catalog.
   optional bool reasoning_override = 7;
   optional uint32 context_window_override = 8;
   optional uint32 max_tokens_override = 9;
+  bool native_web_search = 10;
+  optional bool native_web_search_override = 11;
 }
 
 message ListModelsRequest {
@@ -129,6 +131,7 @@ message CreateModelRequest {
   optional bool reasoning = 8;
   optional uint32 context_window = 9 [(buf.validate.field).uint32.gt = 0];
   optional uint32 max_tokens = 10 [(buf.validate.field).uint32.gt = 0];
+  optional bool native_web_search = 11;
 }
 
 message CreateModelResponse {
@@ -161,20 +164,22 @@ message UpdateModelRequest {
   optional uint32 context_window = 8 [(buf.validate.field).uint32.gt = 0];
   optional uint32 max_tokens = 9 [(buf.validate.field).uint32.gt = 0];
   // Overrides to clear so the catalog value applies again: "reasoning",
-  // "context_window", "max_tokens". A field cannot be both set and reset.
+  // "context_window", "max_tokens", "native_web_search". A field cannot be both set and reset.
   repeated string reset_fields = 10 [(buf.validate.field).repeated = {
-    max_items: 3
+    max_items: 4
     items: {
       string: {
         in: [
           "reasoning",
           "context_window",
-          "max_tokens"
+          "max_tokens",
+          "native_web_search"
         ]
       }
     }
   }];
   optional bool enabled = 11;
+  optional bool native_web_search = 12;
 }
 
 message UpdateModelResponse {

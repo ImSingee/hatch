@@ -25,6 +25,7 @@ export type CreateToolsOptions = {
   readOnlyRoots?: string[];
   sessionId?: string;
   tavilyApiKey?: string | null;
+  nativeWebSearch?: boolean;
 };
 
 export function createTools(
@@ -43,9 +44,10 @@ export function createTools(
     createCommandTool(env, options.sessionId, options.commandCredentials),
     createAttachmentTool(shared),
     createDeployedAppsTool(),
-    ...createWebTools(
-      options.tavilyApiKey ? { tavilyApiKey: options.tavilyApiKey } : {},
-    ),
+    ...createWebTools({
+      tavilyApiKey: options.tavilyApiKey,
+      nativeWebSearch: options.nativeWebSearch,
+    }),
   ];
   if (options.ask) tools.push(createAskTool(options.ask));
   if (options.requestEnv) {

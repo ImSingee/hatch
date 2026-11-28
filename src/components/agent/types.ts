@@ -7,6 +7,10 @@ import {
   composerDisplayText,
   type AgentComposerContentPart,
 } from '~agent/composer-content';
+import {
+  nativeWebSearchOutput,
+  type NativeWebSearch,
+} from '~agent/native-web-search-results';
 import type { PlainTranslationKey, useI18n } from '~i18n';
 
 type Translate = ReturnType<typeof useI18n>['t'];
@@ -67,6 +71,7 @@ export type ChatMessage =
   | {
       role: 'assistant';
       content: AssistantBlock[];
+      nativeWebSearches?: NativeWebSearch[];
       /** Persisted pi terminal state; optional for legacy/synthetic messages. */
       stopReason?: StopReason;
       /** Provider/runtime detail when `stopReason` is `error`. */
@@ -95,6 +100,50 @@ export type ChatMessage =
     };
 
 export type ToolResultMessage = Extract<ChatMessage, { role: 'toolResult' }>;
+
+export function expandNativeWebSearches(
+  messages: ChatMessage[],
+): ChatMessage[] {
+  if (
+    !messages.some(
+      (message) =>
+        message.role === 'assistant' && message.nativeWebSearches?.length,
+    )
+  )
+    return messages;
+  return messages.flatMap((message): ChatMessage[] => {
+    if (message.role !== 'assistant' || !message.nativeWebSearches?.length)
+      return [message];
+    const searches = [...message.nativeWebSearches].sort(
+      (a, b) => a.contentIndex - b.contentIndex,
+    );
+    const content: AssistantBlock[] = [];
+    const results: ToolResultMessage[] = [];
+    let offset = 0;
+    for (const search of searches) {
+      const index = Math.max(
+        offset,
+        Math.min(message.content.length, search.contentIndex),
+      );
+      content.push(...message.content.slice(offset, index), {
+        type: 'toolCall',
+        id: search.id,
+        name: search.name,
+        arguments: search.args,
+      });
+      offset = index;
+      results.push({
+        role: 'toolResult',
+        toolCallId: search.id,
+        toolName: search.name,
+        isError: search.error !== undefined,
+        content: [{ type: 'text', text: nativeWebSearchOutput(search) }],
+      });
+    }
+    content.push(...message.content.slice(offset));
+    return [{ ...message, content }, ...results];
+  });
+}
 
 /**
  * Map each tool-call id to its result message so a call and its output can be
@@ -248,7 +297,10 @@ export function toolDetail(
     name === 'run_command'
       ? pick('command')
       : name === 'web_search'
-        ? pick('query')
+        ? (pick('query') ??
+          (Array.isArray(args.queries) && typeof args.queries[0] === 'string'
+            ? { value: args.queries[0], ellipsis: 'end' as const }
+            : undefined))
         : name === 'web_fetch'
           ? pick('url')
           : (pick('id') ?? pick('path', 'start') ?? pick('name'));

@@ -706,6 +706,7 @@ export const agentModels = snakeCase.table('agent_models', {
    * built-in fallback when the model has no catalog entry).
    */
   reasoning: boolean(),
+  nativeWebSearch: boolean(),
   contextWindow: integer(),
   maxTokens: integer(),
   enabled: boolean().notNull().default(true),

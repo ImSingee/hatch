@@ -11,6 +11,7 @@ import { tmpdir } from 'node:os';
 import path from 'node:path';
 import type { AgentMessage } from '@earendil-works/pi-agent-core';
 import {
+  createAssistantMessageEventStream,
   createModels,
   getCurrentSystemPrompt,
   getCurrentTools,
@@ -114,6 +115,7 @@ async function runWithResponses(
     apiType: 'openai-responses',
     model: faux.getModel() as ResolvedModel['model'],
     thinkingLevel: 'medium',
+    nativeWebSearch: false,
   };
 
   return runAgentTurn({
@@ -134,6 +136,326 @@ async function runWithResponses(
 }
 
 describe('runAgentTurn terminal outcomes', () => {
+  it.each([
+    [true, 'pause_turn', false],
+    [true, 'tool_use', false],
+    [true, 'tool_use', true],
+    [undefined, undefined, false],
+  ] as const)(
+    'uses the right web tools and persists hosted search steps (native: %s, stop: %s, compacts: %s)',
+    async (enabled, stop, compacts) => {
+      const models = createModels();
+      const model = {
+        ...fauxProvider({ provider: 'native-test' }).getModel(),
+        api: 'anthropic-messages' as const,
+      };
+      const compact = vi
+        .spyOn(models, 'completeSimple')
+        .mockResolvedValue(fauxAssistantMessage('Compacted research'));
+      const startBlock = (index: number, content_block: unknown) => ({
+        type: 'content_block_start',
+        index,
+        content_block,
+      });
+      const requests: unknown[] = [];
+      const stream = vi
+        .spyOn(models, 'streamSimple')
+        .mockImplementation((_model, context, options) => {
+          const output = createAssistantMessageEventStream();
+          void (async () => {
+            const tools = getCurrentTools(context.messages).map((tool) => ({
+              ...tool,
+              type: 'function',
+            }));
+            const messages = context.messages
+              .filter((message) => message.role === 'assistant')
+              .map((message) => ({
+                role: message.role,
+                content: message.content,
+              }));
+            const clientResults = context.messages.filter(
+              (message) => message.role === 'toolResult',
+            );
+            const payload = { tools, messages, clientResults };
+            requests.push(
+              (await options?.onPayload?.(payload, model)) ?? payload,
+            );
+            const startingSearch = enabled && requests.length === 1;
+            const receivingSearch = enabled && requests.length === 2;
+            const forcesCompaction = compacts && receivingSearch;
+            const clientCall = {
+              type: 'tool_use',
+              name: 'write_file',
+              id: requests.length === 1 ? 'toolu_write' : 'toolu_write_after',
+              input: {
+                path: 'search.txt',
+                content: forcesCompaction ? 'x'.repeat(84_000) : 'Searching',
+              },
+            };
+            const usesClientTool =
+              stop === 'tool_use' && (startingSearch || receivingSearch);
+            if (startingSearch) {
+              for (const raw of [
+                startBlock(0, {
+                  type: 'server_tool_use',
+                  name: 'web_search',
+                  id: 'srvtoolu_test',
+                  input: {},
+                }),
+                {
+                  type: 'content_block_delta',
+                  index: 0,
+                  delta: {
+                    type: 'input_json_delta',
+                    partial_json: '{"query":"Hatch"}',
+                  },
+                },
+                { type: 'content_block_stop', index: 0 },
+              ])
+                await options?.onProviderStreamEvent?.(raw, model);
+            } else if (receivingSearch) {
+              await options?.onProviderStreamEvent?.(
+                startBlock(0, {
+                  type: 'web_search_tool_result',
+                  tool_use_id: 'srvtoolu_test',
+                  content: [
+                    {
+                      type: 'web_search_result',
+                      url: 'https://hatch.example.test',
+                      title: 'Hatch',
+                      encrypted_content: 'opaque',
+                      page_age: null,
+                    },
+                  ],
+                }),
+                model,
+              );
+            }
+            if (usesClientTool) {
+              await options?.onProviderStreamEvent?.(
+                startBlock(1, clientCall),
+                model,
+              );
+              await options?.onProviderStreamEvent?.(
+                { type: 'content_block_stop', index: 1 },
+                model,
+              );
+            }
+            const stopReason = usesClientTool ? 'toolUse' : 'stop';
+            const message: AssistantMessage = {
+              role: 'assistant',
+              content: usesClientTool
+                ? [
+                    fauxToolCall(clientCall.name, clientCall.input, {
+                      id: clientCall.id,
+                    }),
+                  ]
+                : startingSearch
+                  ? []
+                  : [{ type: 'text', text: 'Search complete' }],
+              api: model.api,
+              provider: model.provider,
+              model: model.id,
+              timestamp: Date.now(),
+              stopReason,
+              ...(startingSearch || usesClientTool
+                ? { rawStopReason: stop }
+                : {}),
+              usage: {
+                input: forcesCompaction ? model.contextWindow : 0,
+                output: 0,
+                cacheRead: 0,
+                cacheWrite: 0,
+                totalTokens: forcesCompaction ? model.contextWindow : 0,
+                cost: {
+                  input: 0,
+                  output: 0,
+                  cacheRead: 0,
+                  cacheWrite: 0,
+                  total: 0,
+                },
+              },
+            };
+            output.push({
+              type: 'done',
+              reason: stopReason,
+              message,
+            });
+          })();
+          return output;
+        });
+      const events: AgentStreamEvent[] = [];
+      const picked = {
+        providerId: model.provider,
+        providerName: 'Native Test',
+        apiType: model.api,
+        model,
+        thinkingLevel: 'off',
+        ...(enabled ? { nativeWebSearch: true } : {}),
+      } as ResolvedModel;
+      const result = await runAgentTurn({
+        appUrl: 'https://hatch.example.test',
+        priorMessages: [],
+        sessionId: `native-test-${enabled}-${stop}-${compacts}`,
+        userText: 'Look up Hatch',
+        models,
+        picked,
+        platform: stubPlatform,
+        signal: new AbortController().signal,
+        emit: (event) => events.push(event),
+      });
+      expect(result.error).toBeUndefined();
+      expect(compact).toHaveBeenCalledTimes(compacts ? 1 : 0);
+      expect(requests[0]).toMatchObject({
+        tools: expect.arrayContaining([
+          expect.objectContaining({ name: 'web_fetch', type: 'function' }),
+        ]),
+      });
+      const clientSearch = expect.arrayContaining([
+        expect.objectContaining({ name: 'web_search', type: 'function' }),
+      ]);
+      const noClientSearch = expect.not.arrayContaining([
+        expect.objectContaining({ name: 'web_search', type: 'function' }),
+      ]);
+      expect(stream).toHaveBeenCalledTimes(
+        stop === 'tool_use' ? 3 : enabled ? 2 : 1,
+      );
+      expect(stream.mock.calls[1]?.[2]?.disableContinuation).toBe(
+        enabled ? true : undefined,
+      );
+      expect(requests[0]).toMatchObject({
+        tools: enabled ? noClientSearch : clientSearch,
+      });
+      const replayed = {
+        messages: [
+          {
+            role: 'assistant',
+            content: [
+              { type: 'server_tool_use', input: { query: 'Hatch' } },
+              ...(stop === 'tool_use'
+                ? [{ type: 'tool_use', id: 'toolu_write' }]
+                : []),
+            ],
+          },
+        ],
+        clientResults:
+          stop === 'tool_use'
+            ? [
+                {
+                  role: 'toolResult',
+                  toolCallId: 'toolu_write',
+                  isError: false,
+                },
+              ]
+            : [],
+      };
+      const replayedResult = {
+        messages: [
+          ...replayed.messages,
+          {
+            role: 'assistant',
+            content: [
+              {
+                type: 'web_search_tool_result',
+                tool_use_id: 'srvtoolu_test',
+                content: [
+                  {
+                    url: 'https://hatch.example.test',
+                    encrypted_content: 'opaque',
+                  },
+                ],
+              },
+              { type: 'tool_use', id: 'toolu_write_after' },
+            ],
+          },
+        ],
+        clientResults: [
+          ...replayed.clientResults,
+          {
+            role: 'toolResult',
+            toolCallId: 'toolu_write_after',
+            isError: false,
+          },
+        ],
+      };
+      expect(requests.slice(1)).toMatchObject(
+        compacts
+          ? [
+              replayed,
+              {
+                messages: [
+                  {
+                    role: 'assistant',
+                    content: [{ type: 'tool_use', id: 'toolu_write_after' }],
+                  },
+                ],
+                clientResults: [replayedResult.clientResults[1]],
+              },
+            ]
+          : stop === 'tool_use'
+            ? [replayed, replayedResult]
+            : enabled
+              ? [replayed]
+              : [],
+      );
+      const nativeEvents = [
+        { type: 'tool_start', name: 'web_search', args: { query: 'Hatch' } },
+        {
+          type: 'tool_end',
+          name: 'web_search',
+          isError: false,
+          output: expect.stringContaining('https://hatch.example.test'),
+        },
+      ];
+      expect(
+        events.filter(
+          (event) =>
+            (event.type === 'tool_start' || event.type === 'tool_end') &&
+            event.name === 'web_search',
+        ),
+      ).toMatchObject(enabled ? nativeEvents : []);
+      const pausedMessages = enabled
+        ? [
+            {
+              role: 'assistant',
+              content:
+                stop === 'tool_use'
+                  ? [{ type: 'toolCall', id: 'toolu_write' }]
+                  : [],
+              nativeWebSearches: [
+                {
+                  contentIndex: 0,
+                  name: 'web_search',
+                  args: { query: 'Hatch' },
+                  sources: [{ url: 'https://hatch.example.test' }],
+                },
+              ],
+            },
+            ...(stop === 'tool_use'
+              ? [
+                  { role: 'toolResult', toolCallId: 'toolu_write' },
+                  {
+                    role: 'assistant',
+                    content: [{ type: 'toolCall', id: 'toolu_write_after' }],
+                  },
+                  { role: 'toolResult', toolCallId: 'toolu_write_after' },
+                ]
+              : []),
+          ]
+        : [];
+      expect(result.messages).toMatchObject([
+        { role: 'user' },
+        ...pausedMessages,
+        ...(compacts ? [{ role: 'compactionSummary', firstKeptIndex: 3 }] : []),
+        {
+          role: 'assistant',
+          content: [{ type: 'text', text: 'Search complete' }],
+        },
+      ]);
+      expect(result.messages.at(-1)).not.toHaveProperty('nativeWebSearches');
+    },
+  );
+
   it.each([
     ...['search_depth', 'topic', 'time_range'].map((field) => ({
       name: 'web_search',
@@ -1151,6 +1473,7 @@ describe('runAgentTurn steer messages', () => {
         apiType: 'openai-responses',
         model: faux.getModel() as ResolvedModel['model'],
         thinkingLevel: 'medium',
+        nativeWebSearch: false,
       },
       platform: stubPlatform,
       signal: new AbortController().signal,

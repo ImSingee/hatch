@@ -13,6 +13,7 @@ const catalogHit = {
     name: 'Claude Big',
     kind: 'chat' as const,
     reasoning: true,
+    nativeWebSearch: true,
     thinkingLevels: ['low', 'medium', 'high'],
     contextWindow: 1_000_000,
     maxTokens: 900_000,
@@ -46,9 +47,15 @@ const model: ProviderModel = {
   catalogRef: null,
   inCatalog: false,
   catalogLabel: null,
-  overrides: { reasoning: null, contextWindow: null, maxTokens: null },
+  overrides: {
+    reasoning: null,
+    contextWindow: null,
+    maxTokens: null,
+    nativeWebSearch: null,
+  },
   chat: {
     reasoning: false,
+    nativeWebSearch: false,
     thinkingLevels: [],
     defaultThinkingLevel: 'off',
     contextWindow: 128_000,
@@ -61,10 +68,30 @@ const model: ProviderModel = {
 const provider = {
   id: 'provider-1',
   name: 'Local',
+  apiType: 'anthropic-messages',
   canGenerateImages: false,
   imageModelSuggestions: [],
   models: [model],
 } as unknown as ProviderWithModels;
+
+test('explains that OpenAI Responses still uses Tavily at Minimal thinking effort', async () => {
+  const screen = await render(
+    <QueryClientProvider client={new QueryClient()}>
+      <MantineProvider>
+        <ModelFormModal
+          opened
+          onClose={vi.fn<() => void>()}
+          provider={{ ...provider, apiType: 'openai-responses' }}
+          model={model}
+        />
+      </MantineProvider>
+    </QueryClientProvider>,
+  );
+
+  await expect
+    .element(screen.getByRole('combobox', { name: 'Built-in web search' }))
+    .toHaveAccessibleDescription(/Minimal thinking effort.*uses Tavily/);
+});
 
 test('blank fields describe the catalog entry chosen in the form', async () => {
   const screen = await render(
@@ -94,12 +121,17 @@ test('blank fields describe the catalog entry chosen in the form', async () => {
   await expect
     .element(screen.getByLabelText('Reasoning', { exact: true }).first())
     .toHaveValue('Follow catalog (on)');
+  const nativeSearch = screen
+    .getByLabelText('Built-in web search', { exact: true })
+    .first();
+  await expect.element(nativeSearch).toHaveValue('Follow catalog (on)');
 
   // A typed context window moves the cap with it.
   await screen.getByRole('textbox', { name: 'Context window' }).fill('200000');
   await expect.element(screen.getByText('Catalog: 100,000')).toBeVisible();
 
   await screen.getByRole('button', { name: 'Unlink' }).click();
+  await expect.element(nativeSearch).toHaveValue('Follow catalog (off)');
   await expect.element(screen.getByText('Blank uses 128,000')).toBeVisible();
   await expect.element(screen.getByText('Blank uses 8,192')).toBeVisible();
 });

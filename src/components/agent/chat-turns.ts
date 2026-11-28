@@ -20,11 +20,28 @@ export type RenderTurn =
       errorMessage?: string;
     };
 
+function mergeAdjacentText(content: AssistantBlock[]): AssistantBlock[] {
+  const blocks: AssistantBlock[] = [];
+  for (const block of content) {
+    const previous = blocks.at(-1);
+    if (previous?.type === 'text' && block.type === 'text') {
+      blocks[blocks.length - 1] = {
+        type: 'text',
+        text: previous.text + block.text,
+      };
+    } else {
+      blocks.push(block);
+    }
+  }
+  return blocks;
+}
+
 /**
  * Collapse one agent reply — which the backend may split across several
  * assistant + tool-result messages — into a single turn. Tool-result messages
  * are dropped because they are merged into their call rows by `pairToolResults`.
- * Blocks keep their order, so the reply's last text stays its final answer.
+ * Adjacent text in one message stays together, as it does while streaming.
+ * Steps and message boundaries still separate process prose from the answer.
  * A compaction marker joins the reply it happened in as one more step.
  */
 export function groupTurns(messages: ChatMessage[]): RenderTurn[] {
@@ -60,7 +77,7 @@ export function groupTurns(messages: ChatMessage[]): RenderTurn[] {
     ) {
       const blocks: AssistantBlock[] =
         message.role === 'assistant'
-          ? message.content
+          ? mergeAdjacentText(message.content)
           : [
               {
                 type: 'compaction',

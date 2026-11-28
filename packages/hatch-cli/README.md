@@ -685,9 +685,13 @@ catalog). `model add` matches a catalog entry by model id under the
 provider's preset unless `--catalog-ref` (a `ref` from `model catalog list`)
 or `--no-catalog` says otherwise; `--context-window`, `--max-tokens` and
 `--reasoning`/`--no-reasoning` override catalog metadata of a chat model.
+`--native-web-search` / `--no-native-web-search` override built-in web search
+on Anthropic Messages and OpenAI Responses models. Matched catalog models with
+`nativeWebSearch` enabled use provider search by default; if a gateway does not
+support it, use `hatch model update <model-id> --no-native-web-search`.
 `model update` keeps omitted fields; `--reset` (comma-separated or repeated:
-`reasoning`, `context-window`, `max-tokens`) clears overrides so the catalog
-applies again and `--reset-all` clears all three. `model enable` / `disable`
+`reasoning`, `context-window`, `max-tokens`, `native-web-search`) clears overrides
+so the catalog applies again and `--reset-all` clears all four. `model enable` / `disable`
 toggle whether a model is offered; `model remove --yes` deletes one.
 `model reorder --provider <provider-id>` orders that provider's models the
 same way (every listed id must be one of its models) and prints its model
@@ -708,7 +712,8 @@ without all of `--name`, `--api-type` and `--base-url`, an unknown
 `--catalog` with `--clear-catalog`, `--catalog-ref` with `--no-catalog` or not
 shaped `<catalog-provider>/<model-id>`, chat metadata flags with `--kind
 image`, `--context-window` or `--max-tokens` outside 1 to 4294967295,
-`--reasoning` with `--no-reasoning`, an unknown or repeated `--reset` field,
+`--reasoning` with `--no-reasoning`, `--native-web-search` with
+`--no-native-web-search`, an unknown or repeated `--reset` field,
 `--reset` with `--reset-all`, a field that is both set and reset, an update
 with nothing to change, `remove` without `--yes`, a catalog `--limit` outside
 1 to 200, a `--cursor` that is not a printed `nextCursor`, and a

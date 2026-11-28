@@ -361,6 +361,12 @@ stays session-only (see Known gaps). No Agent Tool is added.
 `provider list`, `provider catalog`, `provider fetch-models` and
 `model catalog list` all page with `--limit`/`--cursor`.
 
+For built-in web search, `model add` and `model update` accept
+`--native-web-search` or `--no-native-web-search`; `model update --reset
+native-web-search` follows the catalog again. `model list` reports the
+effective value and stored override, and `model catalog list` reports the
+model's catalog value.
+
 A provider that cannot be reached, refuses the model list or answers
 something other than JSON is reported as `BAD_REQUEST` with the provider's
 message (exit 2), because the fix is in the provider's settings. Changing a

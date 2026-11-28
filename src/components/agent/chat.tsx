@@ -64,7 +64,11 @@ import {
   type ModelChoice,
 } from './model-value';
 import { StreamingBubble } from './streaming-bubble';
-import { type ChatMessage, pairToolResults } from './types';
+import {
+  type ChatMessage,
+  expandNativeWebSearches,
+  pairToolResults,
+} from './types';
 import {
   hasVisibleStreamOutput,
   stopAgentAutoRetryRequest,
@@ -370,8 +374,15 @@ export function Chat({ sessionId }: { sessionId: string }) {
   // skips re-rendering the whole history; only the live `StreamingBubble` below
   // re-renders per delta. (Re-rendering the entire transcript on every token
   // was pegging the browser's main thread and freezing the UI mid-run.)
-  const toolResults = useMemo(() => pairToolResults(messages), [messages]);
-  const turns = useMemo(() => groupTurns(messages), [messages]);
+  const renderMessages = useMemo(
+    () => expandNativeWebSearches(messages),
+    [messages],
+  );
+  const toolResults = useMemo(
+    () => pairToolResults(renderMessages),
+    [renderMessages],
+  );
+  const turns = useMemo(() => groupTurns(renderMessages), [renderMessages]);
   // User turns whose reply the transcript already holds.
   const answeredTurns = useMemo(
     () =>

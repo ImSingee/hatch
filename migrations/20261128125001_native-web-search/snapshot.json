@@ -1,0 +1,42 @@
+{
+  "type": "diff",
+  "version": "10",
+  "dialect": "postgres",
+  "id": "35e9130d-2132-417f-8a1e-b95e061095a8",
+  "prevIds": ["7d460ea2-db65-4f73-b041-454ec1c8808d"],
+  "footprints": [
+    {
+      "statementType": "add_column",
+      "statementTarget": [
+        "column",
+        "public",
+        "agent_models",
+        "native_web_search"
+      ],
+      "writes": [
+        "s|col|public.agent_models.native_web_search",
+        "n|col|public.agent_models.native_web_search",
+        "e|col|public.agent_models.native_web_search"
+      ],
+      "reads": ["n|tbl|public.agent_models", "n|sch|public"]
+    }
+  ],
+  "deltas": [
+    {
+      "op": "create",
+      "row": {
+        "schema": "public",
+        "table": "agent_models",
+        "name": "native_web_search",
+        "type": "boolean",
+        "typeSchema": null,
+        "notNull": false,
+        "dimensions": 0,
+        "default": null,
+        "generated": null,
+        "identity": null,
+        "entityType": "columns"
+      }
+    }
+  ]
+}

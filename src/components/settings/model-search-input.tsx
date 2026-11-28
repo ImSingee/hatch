@@ -113,6 +113,7 @@ export function ModelSearchInput({
           ? {
               limits: {
                 reasoning: hit.model.reasoning,
+                nativeWebSearch: hit.model.nativeWebSearch,
                 contextWindow: hit.model.contextWindow,
                 maxTokens: hit.model.maxTokens,
               },

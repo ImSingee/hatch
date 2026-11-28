@@ -427,6 +427,62 @@ test('keeps a running reply open through every phase and folds its process once 
     .toBeVisible();
 });
 
+test('keeps a native search answer split across provider text blocks visible after reload', async () => {
+  const prompt: ChatMessage = { role: 'user', content: 'Find Artemis II.' };
+  const messages: ChatMessage[] = [
+    prompt,
+    {
+      role: 'assistant',
+      stopReason: 'stop',
+      content: [
+        { type: 'text', text: 'I’ll look up the mission.' },
+        { type: 'text', text: '**Title:** ' },
+        { type: 'text', text: 'Artemis II' },
+        {
+          type: 'text',
+          text: ': NASA’s first crewed lunar flyby in 50 years.',
+        },
+      ],
+      nativeWebSearches: [
+        {
+          id: 'native:anthropic-messages:search',
+          name: 'web_search',
+          contentIndex: 1,
+          args: { query: 'Artemis II' },
+          sources: [{ url: 'https://www.nasa.gov/mission/artemis-ii/' }],
+        },
+      ],
+    },
+  ];
+  const completedAt = Date.now();
+  fixtures.session = snapshot({
+    messages: messages as SessionSnapshot['messages'],
+    runs: [
+      runOne(completedAt - 1000, messages, {
+        status: 'completed',
+        completedAt: iso(completedAt),
+      }),
+    ],
+  });
+
+  const { screen } = await renderChat();
+  const header = screen.getByRole('button', { name: /^Worked .* · 1 step$/ });
+  await expect.element(header).toHaveAttribute('aria-expanded', 'false');
+  await expect
+    .element(screen.getByText('Title:', { exact: true }))
+    .toBeVisible();
+  await expect
+    .element(screen.getByText(/Artemis II: NASA’s first crewed lunar flyby/))
+    .toBeVisible();
+  await expect
+    .element(screen.getByText('I’ll look up the mission.'))
+    .not.toBeVisible();
+  await header.click();
+  await expect
+    .element(screen.getByText('I’ll look up the mission.'))
+    .toBeVisible();
+});
+
 test('shows history with run-bound defaults and keeps essential actions outside', async () => {
   const base = Date.parse('2026-10-12T09:00:00.000Z');
   fixtures.apps = [

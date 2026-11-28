@@ -357,7 +357,7 @@ describe('platform -> runner messages', () => {
         slug: 'digest',
       },
     ];
-    const message = parseHubMessage({
+    const input = {
       type: 'run.start',
       runId: 'r1',
       sessionId: 's1',
@@ -384,7 +384,8 @@ describe('platform -> runner messages', () => {
         },
         thinkingLevel: 'xhigh',
       },
-    });
+    };
+    const message = parseHubMessage(input);
     if (message.type !== 'run.start') throw new Error('wrong type');
     expect(message.model.thinkingLevel).toBe('xhigh');
     expect(message.model.model.thinkingLevelMap).toEqual({
@@ -393,6 +394,16 @@ describe('platform -> runner messages', () => {
     });
     expect(message.model.model.id).toBe('m1');
     expect(message.composerContent).toEqual(composerContent);
+    expect(message.model.model).not.toHaveProperty('nativeWebSearch');
+    expect(
+      parseHubMessage({
+        ...input,
+        model: {
+          ...input.model,
+          model: { ...input.model.model, nativeWebSearch: true },
+        },
+      }),
+    ).toMatchObject({ model: { model: { nativeWebSearch: true } } });
   });
 
   it('parses run.answer and defaults selectedOptionIds', () => {

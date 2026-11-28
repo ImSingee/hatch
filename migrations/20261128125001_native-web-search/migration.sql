@@ -1,0 +1,1 @@
+ALTER TABLE "agent_models" ADD COLUMN "native_web_search" boolean;

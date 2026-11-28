@@ -35,6 +35,7 @@ export function chatModelConfig(
       id: model.modelId,
       name: model.name,
       reasoning: spec.reasoning,
+      nativeWebSearch: spec.nativeWebSearch,
       // Keep the wire field for existing Runners; it is not configurable.
       input: ['text', 'image'],
       contextWindow: spec.contextWindow,

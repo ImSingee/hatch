@@ -21,12 +21,14 @@ export type CuratedProvider = {
   recommended: string[];
   /** Image models are offered only where an image driver is verified. */
   images?: boolean;
+  nativeWebSearch?: true;
 };
 
 /** Gallery order: featured vendors first, then gateways and others. */
 export const CURATED_PROVIDERS: readonly CuratedProvider[] = [
   {
     id: 'anthropic',
+    nativeWebSearch: true,
     apiType: 'anthropic-messages',
     baseUrl: 'https://api.anthropic.com',
     featured: true,
@@ -34,6 +36,7 @@ export const CURATED_PROVIDERS: readonly CuratedProvider[] = [
   },
   {
     id: 'openai',
+    nativeWebSearch: true,
     apiType: 'openai-responses',
     baseUrl: 'https://api.openai.com/v1',
     featured: true,

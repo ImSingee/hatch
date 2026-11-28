@@ -170,6 +170,7 @@ function compatOf(
 function chatModel(
   model: RawModel,
   apiType: CatalogProvider['apiType'],
+  nativeWebSearch?: true,
 ): CatalogModel {
   const levels = thinkingLevelsOf(model);
   const reasoning =
@@ -190,6 +191,8 @@ function chatModel(
     description: clip(model.description, 1000),
     releasedAt: clip(model.releasedAt, 40),
     reasoning,
+    nativeWebSearch:
+      nativeWebSearch && model.abilities?.search === true ? true : undefined,
     thinkingLevels,
     defaultThinkingLevel,
     contextWindow: model.contextWindow,
@@ -273,7 +276,7 @@ export function buildCatalog(raw: unknown): CatalogBuildResult {
           model.api === undefined ? apiType : model.api;
         if (modelApi !== apiType || model.abilities?.toolCall !== true)
           continue;
-        list.push(chatModel(model, apiType));
+        list.push(chatModel(model, apiType, curated.nativeWebSearch));
       } else if (type === 'image' && curated.images) {
         list.push(imageModel(model));
       } else {

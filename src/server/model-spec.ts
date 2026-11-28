@@ -24,6 +24,7 @@ import {
 import {
   cappedCatalogMaxTokens,
   resolveLimits,
+  resolveNativeWebSearch,
   type CatalogLimits,
 } from '~/lib/model-limits';
 
@@ -46,6 +47,7 @@ export type ModelSpecRow = {
   name: string;
   catalogRef: string | null;
   reasoning: boolean | null;
+  nativeWebSearch: boolean | null;
   contextWindow: number | null;
   maxTokens: number | null;
 };
@@ -54,6 +56,7 @@ export type ModelSpec = {
   /** `catalog` when `catalogRef` resolves; `custom` otherwise. */
   source: 'catalog' | 'custom';
   reasoning: boolean;
+  nativeWebSearch: boolean;
   /** Levels the picker offers, in order. Empty when `reasoning` is false. */
   thinkingLevels: AgentThinkingLevel[];
   defaultThinkingLevel: AgentThinkingLevel;
@@ -61,7 +64,9 @@ export type ModelSpec = {
   maxTokens: number;
   cost?: ModelCost;
   /** Fields whose override differs from the catalog value. */
-  overridden: Array<'reasoning' | 'contextWindow' | 'maxTokens'>;
+  overridden: Array<
+    'reasoning' | 'contextWindow' | 'maxTokens' | 'nativeWebSearch'
+  >;
   /**
    * The catalog entry's own values, before overrides and before the max
    * output cap; `resolveLimits` turns them into what a blank field uses.
@@ -151,6 +156,7 @@ export function resolveModelSpec(
 
   const catalogValues: CatalogLimits = {
     reasoning: catalog?.reasoning,
+    nativeWebSearch: catalog?.nativeWebSearch,
     contextWindow: catalog?.contextWindow,
     maxTokens: catalog?.maxTokens,
   };
@@ -188,6 +194,11 @@ export function resolveModelSpec(
   };
 
   const overridden: ModelSpec['overridden'] = [];
+  const nativeWebSearch = resolveNativeWebSearch(
+    row.nativeWebSearch,
+    catalogValues.nativeWebSearch,
+    apiType,
+  );
   if (row.reasoning !== null && row.reasoning !== catalogValues.reasoning)
     overridden.push('reasoning');
   if (
@@ -201,10 +212,17 @@ export function resolveModelSpec(
       cappedCatalogMaxTokens(catalogValues.maxTokens, contextWindow)
   )
     overridden.push('maxTokens');
+  if (
+    row.nativeWebSearch !== null &&
+    nativeWebSearch !==
+      resolveNativeWebSearch(null, catalogValues.nativeWebSearch, apiType)
+  )
+    overridden.push('nativeWebSearch');
 
   return {
     source: catalog ? 'catalog' : 'custom',
     reasoning,
+    nativeWebSearch,
     thinkingLevels,
     defaultThinkingLevel: pickDefault(
       thinkingLevels,
