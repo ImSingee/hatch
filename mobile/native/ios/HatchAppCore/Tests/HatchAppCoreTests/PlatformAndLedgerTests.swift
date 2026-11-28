@@ -198,7 +198,8 @@ final class FakeTrustStore: TrustStore {
         return FakeTrustStore(sequence: sequence, state: state, failSave: failSave)
     }
 
-    func addRoot(_ publicKey: String) throws { roots.append(publicKey) }
+    /// Like NSH, a root it already trusts is not added twice.
+    func addRoot(_ publicKey: String) throws { if !roots.contains(publicKey) { roots.append(publicKey) } }
 
     func updateRevocations(_ json: String) throws {
         let parts = json.split(separator: ":")
@@ -275,11 +276,120 @@ final class TrustRefreshTests: XCTestCase {
         XCTAssertEqual(d.recorded(), "7")
     }
 
-    func testRootsAreAddedOncePerStore() throws {
-        let refresh = try Dir().refresh()
-        let store = FakeTrustStore()
-        try refresh.refresh(store, material: material(1), reopen: { FakeTrustStore() }) { FakeTrustStore() }
-        try refresh.refresh(store, material: material(1), reopen: { FakeTrustStore() }) { FakeTrustStore() }
+    func testEveryStoreItChecksWithTrustsTheRoots() throws {
+        let d = try Dir()
+        var probes: [FakeTrustStore] = []
+        let store = FakeTrustStore(state: d.state, failSave: true)
+        var reopened: [FakeTrustStore] = []
+        XCTAssertThrowsError(
+            try d.refresh().refresh(
+                store, material: material(3),
+                reopen: { FakeTrustStore.opened(d.state, failSave: true).also { reopened.append($0) } }
+            ) { FakeTrustStore().also { probes.append($0) } })
         XCTAssertEqual(store.roots, ["root"])
+        XCTAssertEqual(probes.single?.roots, ["root"])
+        XCTAssertEqual(reopened.single?.roots, ["root"])
+    }
+}
+
+extension FakeTrustStore {
+    func also(_ body: (FakeTrustStore) -> Void) -> FakeTrustStore {
+        body(self)
+        return self
+    }
+}
+
+extension Array {
+    var single: Element? { count == 1 ? first : nil }
+}
+
+@MainActor
+final class TrustDirectoryTests: XCTestCase {
+    private var dir: URL!
+    private var state: URL!
+    private var opened: [FakeTrustStore] = []
+    private var failSave = false
+
+    override func setUp() async throws {
+        dir = FileManager.default.temporaryDirectory.appendingPathComponent("trust-dir-\(UUID().uuidString)")
+        try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        state = dir.appendingPathComponent("nsh-trust.json")
+        opened = []
+        failSave = false
+    }
+
+    private func directory() -> TrustDirectory<FakeTrustStore> {
+        TrustDirectory(
+            refresh: TrustRefresh(marker: dir.appendingPathComponent("sequence"), state: state),
+            open: { [unowned self] in
+                let store = FakeTrustStore.opened(state, failSave: failSave)
+                opened.append(store)
+                return store
+            },
+            fresh: { FakeTrustStore() })
+    }
+
+    private func material(_ sequence: Int) -> RuntimeTrust {
+        RuntimeTrust(initialized: true, roots: ["root"], revocations: "signed:\(sequence)", revocationSequence: sequence)
+    }
+
+    func testSessionsShareOneStoreThatTrustsTheRoots() async throws {
+        let trust = directory()
+        let first = try await trust.use(material: material(1), active: { true }) { $0 }
+        // Another session for the same instance (signed in again): the same store.
+        let second = try await trust.use(material: material(1), active: { true }) { $0 }
+        XCTAssertTrue(first === second)
+        XCTAssertEqual(opened.count, 1)
+        XCTAssertEqual(first.roots, ["root"])
+    }
+
+    func testAStoreOpenedAgainToSaveAListTrustsTheRoots() async throws {
+        let trust = directory()
+        failSave = true
+        do {
+            _ = try await trust.use(material: material(4), active: { true }) { $0 }
+            XCTFail("a list that was not saved must not open")
+        } catch {}
+        failSave = false
+        let used = try await trust.use(material: material(4), active: { true }) { $0 }
+        XCTAssertTrue(used === opened.last)
+        XCTAssertEqual(used.roots, ["root"])
+        XCTAssertEqual(FakeTrustStore.opened(state).sequence, 4)
+    }
+
+    func testASessionThatEndedNeitherRefreshesNorUsesTheStore() async throws {
+        let trust = directory()
+        var used = false
+        do {
+            try await trust.use(material: material(1), active: { false }) { _ in used = true }
+            XCTFail("an ended session must not use the store")
+        } catch let error as PlatformError {
+            XCTAssertEqual(error.code, "unauthenticated")
+        }
+        XCTAssertFalse(used)
+        XCTAssertTrue(opened.isEmpty)
+    }
+
+    func testWorkOnTheStoreNeverOverlaps() async throws {
+        let trust = directory()
+        var order: [String] = []
+        var release: CheckedContinuation<Void, Never>?
+        // A retired session still verifying a package…
+        let first = Task {
+            try await trust.use(material: material(1), active: { true }) { _ in
+                await withCheckedContinuation { release = $0 }
+                order.append("first done")
+            }
+        }
+        while release == nil { await Task.yield() }
+        // …and the new session for the same instance, with a newer list.
+        let second = Task { try await trust.use(material: material(2), active: { true }) { _ in order.append("second") } }
+        for _ in 0..<20 { await Task.yield() }
+        XCTAssertEqual(order, [])
+        release?.resume()
+        try await first.value
+        try await second.value
+        XCTAssertEqual(order, ["first done", "second"])
+        XCTAssertEqual(FakeTrustStore.opened(state).sequence, 2)
     }
 }
