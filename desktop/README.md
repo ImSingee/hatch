@@ -94,11 +94,11 @@ web view (`src-tauri/src/native/`):
   to it.
 
 The app uses NSH's crates at exactly the platform's release (`=0.7.0`), with
-one line of the macOS backend changed so an embedded view draws a JS App
-inside itself instead of opening a window of its own:
-`src-tauri/vendor/nsh-platform-macos/HATCH-VENDOR.md` says what and why, and
-`pnpm nsh:vendor:check` proves the rest is the published crate. They need Rust
-1.97 or later.
+an upstream fix merged after 0.7.2 applied to the macOS backend, so an
+embedded view draws a JS App inside itself instead of opening a window of its
+own: `src-tauri/vendor/nsh-platform-macos/HATCH-VENDOR.md` says what and why,
+and `pnpm nsh:vendor:check` proves the copy is the published crate plus
+exactly that upstream change. They need Rust 1.97 or later.
 
 ## What the window may load
 
