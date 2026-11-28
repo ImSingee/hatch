@@ -20,7 +20,6 @@ import {
   foldSplit,
   listDetailSplit,
   tilesPerRow,
-  type Hinge,
   type Split,
 } from './fold-split';
 
@@ -68,19 +67,18 @@ export const listDetail = {
 
 /**
  * Measures a container and splits it into a list and its detail (see
- * `listDetailSplit`): by width where the display lies flat, on the fold
- * where it is folded part way. Sizes come from the container, never the
+ * `listDetailSplit`): on the fold where the system reports one, else by
+ * width. Sizes come from the container, never the
  * screen, so a window beside another app or a narrow pane gets one column.
  */
 export function useListDetail(
   options: Omit<
     Parameters<typeof listDetailSplit>[0],
-    'width' | 'fold' | 'hinge' | 'rtl'
+    'width' | 'fold' | 'rtl'
   > = listDetail,
 ) {
   const [width, setWidth] = useState(0);
   const [folds, setFolds] = useState<FoldRect[]>([]);
-  const [hinge, setHinge] = useState<Hinge>('none');
   const onLayout = useCallback(
     (event: LayoutChangeEvent) => setWidth(event.nativeEvent.layout.width),
     [],
@@ -89,23 +87,20 @@ export function useListDetail(
     ...options,
     width,
     fold: crossingFold(folds, width),
-    hinge,
     rtl: I18nManager.isRTL,
   });
-  return { onLayout, onFolds: setFolds, onHinge: setHinge, width, split };
+  return { onLayout, onFolds: setFolds, width, split };
 }
 
 /** A container that measures itself and the fold across it. */
 export function FoldContainer({
   onLayout,
   onFolds,
-  onHinge,
   style,
   children,
 }: PropsWithChildren<{
   onLayout: (event: LayoutChangeEvent) => void;
   onFolds: (folds: FoldRect[]) => void;
-  onHinge?: (hinge: Hinge) => void;
   style?: StyleProp<ViewStyle>;
 }>) {
   return (
@@ -113,7 +108,7 @@ export function FoldContainer({
       {children}
       {/* Last: native tabs look for a page's scroll view along first children.
           It is transparent and never takes touches. */}
-      <FoldProbe onFolds={onFolds} onHinge={onHinge} />
+      <FoldProbe onFolds={onFolds} />
     </View>
   );
 }
@@ -130,12 +125,11 @@ export function ListDetail({
   /** The list, shown only beside the detail. */
   list: ReactNode;
 }>) {
-  const { onLayout, onFolds, onHinge, width, split } = useListDetail();
+  const { onLayout, onFolds, width, split } = useListDetail();
   return (
     <FoldContainer
       onLayout={onLayout}
       onFolds={onFolds}
-      onHinge={onHinge}
       style={{ flex: 1, flexDirection: 'row' }}
     >
       {split ? <View style={{ width: split.leading }}>{list}</View> : null}

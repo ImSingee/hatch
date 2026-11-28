@@ -82,47 +82,37 @@ describe('listDetailSplit', () => {
   // The inner display of an iPhone Duo, inside its vertical bar.
   const inner = { width: 827, fold: { x: 435.5, width: 40 } };
 
-  it('gives the list a third of a flat display, across its fold', () => {
-    expect(listDetailSplit({ ...list, ...inner, hinge: 'open' })).toEqual({
-      leading: 270,
-      gutter: 16,
-      trailing: 541,
-    });
-    // No hinge reported (an older system): the same.
-    expect(listDetailSplit({ ...list, ...inner, hinge: 'none' })).toEqual(
-      listDetailSplit({ ...list, ...inner, hinge: 'open' }),
-    );
-  });
-
-  it('splits on the fold while the display is folded part way', () => {
-    const split = listDetailSplit({ ...list, ...inner, hinge: 'partlyOpen' })!;
+  it('splits on a reported fold, flat or folded part way', () => {
+    // The system keeps the fold free of content, so it is the gutter.
+    const split = listDetailSplit({ ...list, ...inner })!;
     expect(split).toEqual({ leading: 435.5, gutter: 40, trailing: 351.5 });
     expect(split.leading + split.gutter).toBe(475.5);
   });
 
   it('keeps the list within its limits', () => {
     // A wide tablet: the list stops at its widest.
-    expect(
-      listDetailSplit({ ...list, width: 1366, fold: null, hinge: 'none' }),
-    ).toEqual({ leading: 360, gutter: 16, trailing: 990 });
+    expect(listDetailSplit({ ...list, width: 1366, fold: null })).toEqual({
+      leading: 360,
+      gutter: 16,
+      trailing: 990,
+    });
     // A narrow pane: the list never goes below its narrowest.
-    expect(
-      listDetailSplit({ ...list, width: 680, fold: null, hinge: 'none' }),
-    ).toEqual({ leading: 260, gutter: 16, trailing: 404 });
+    expect(listDetailSplit({ ...list, width: 680, fold: null })).toEqual({
+      leading: 260,
+      gutter: 16,
+      trailing: 404,
+    });
   });
 
   it('lets the detail cover the list when either would be too narrow', () => {
     // Beside another app, or the outer display.
-    expect(
-      listDetailSplit({ ...list, width: 660, fold: null, hinge: 'none' }),
-    ).toBeNull();
-    // Folded part way, the detail side of the fold is too narrow.
+    expect(listDetailSplit({ ...list, width: 660, fold: null })).toBeNull();
+    // The detail side of the fold is too narrow.
     expect(
       listDetailSplit({
         ...list,
         width: 640,
         fold: { x: 400, width: 0 },
-        hinge: 'partlyOpen',
       }),
     ).toBeNull();
   });
@@ -133,7 +123,6 @@ describe('listDetailSplit', () => {
         ...list,
         width: 900,
         fold: { x: 420, width: 0 },
-        hinge: 'partlyOpen',
         rtl: true,
       }),
     ).toEqual({ leading: 472, gutter: 16, trailing: 412 });

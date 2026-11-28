@@ -26,7 +26,7 @@ export default function ChatScreen() {
   useShowsConversation(id);
   // Opened from the conversation list on a compact width: once the list and
   // this conversation fit side by side again, the list shows it beside itself.
-  const { onLayout, onFolds, onHinge, split } = useListDetail(returnSplit);
+  const { onLayout, onFolds, split } = useListDetail(returnSplit);
   const returns = from === fromConversationList && Boolean(split);
   useEffect(() => {
     if (returns && focused && router.canGoBack()) router.back();
@@ -34,12 +34,7 @@ export default function ChatScreen() {
   return (
     // Measured inside the side insets, as the list measures its own layout.
     <SafeAreaView edges={['left', 'right']} style={{ flex: 1 }}>
-      <FoldContainer
-        onLayout={onLayout}
-        onFolds={onFolds}
-        onHinge={onHinge}
-        style={{ flex: 1 }}
-      >
+      <FoldContainer onLayout={onLayout} onFolds={onFolds} style={{ flex: 1 }}>
         <Conversation key={id} id={id} />
       </FoldContainer>
     </SafeAreaView>

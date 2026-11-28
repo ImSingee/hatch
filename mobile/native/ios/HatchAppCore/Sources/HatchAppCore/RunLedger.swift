@@ -22,7 +22,9 @@ public final class RunLedger {
     /// Running Apps in the order they were started.
     public private(set) var running: [String] = []
     private var shownAt: [String: Int] = [:]
-    private var hiddenAt: [String: Date] = [:]
+    /// When each App left the screen, on a clock that neither jumps with the
+    /// wall clock nor stops while the device sleeps.
+    private var hiddenAt: [String: ContinuousClock.Instant] = [:]
     private var visible: Set<String> = []
     private var remembered: [String: String] = [:]
     private var routes: [String: String] = [:]
@@ -55,7 +57,7 @@ public final class RunLedger {
     /// Starts `app` (it is about to be shown) and returns the Apps to stop
     /// for it, least recently shown first. Their routes are remembered.
     @discardableResult
-    public func start(_ app: String, route: String, now: Date = Date()) -> [String] {
+    public func start(_ app: String, route: String, now: ContinuousClock.Instant = .now) -> [String] {
         if isRunning(app) { return [] }
         var victims: [String] = []
         while running.count >= limit {
@@ -101,7 +103,7 @@ public final class RunLedger {
 
     /// Which Apps are on screen now. One that leaves the screen starts its
     /// background time; one that comes back is stamped as shown.
-    public func setVisible(_ apps: Set<String>, now: Date = Date()) {
+    public func setVisible(_ apps: Set<String>, now: ContinuousClock.Instant = .now) {
         for app in running {
             if apps.contains(app) {
                 hiddenAt[app] = nil
@@ -116,13 +118,13 @@ public final class RunLedger {
     /// Stops every App that has waited off screen for the background time,
     /// and returns them with when the next waiting App is due (nil when
     /// none waits).
-    public func stopWaiting(now: Date = Date()) -> (stopped: [String], nextDue: Date?) {
+    public func stopWaiting(now: ContinuousClock.Instant = .now) -> (stopped: [String], nextDue: ContinuousClock.Instant?) {
         let expired = running.filter { app in
             guard let since = hiddenAt[app] else { return false }
-            return since.addingTimeInterval(backgroundTimeout) <= now
+            return since + .seconds(backgroundTimeout) <= now
         }
         for app in expired { stopped(app) }
-        let next = running.compactMap { hiddenAt[$0]?.addingTimeInterval(backgroundTimeout) }.min()
+        let next = running.compactMap { hiddenAt[$0].map { $0 + .seconds(backgroundTimeout) } }.min()
         return (expired, next)
     }
 }

@@ -86,40 +86,36 @@ export function columnHalves<T>(items: readonly T[]): [T[], T[]] {
   return [items.slice(0, half), items.slice(half)];
 }
 
-/** The hinge a display folds on: `none` where there is none or it is unknown. */
-export type Hinge = 'none' | 'closed' | 'partlyOpen' | 'open';
-
 export type ListDetailInput = {
   /** Container width. */
   width: number;
   /** The fold crossing the container, if any. */
   fold: Fold | null;
-  /** The state of the hinge the display folds on. */
-  hinge: Hinge;
   /** Space between the list and the detail. */
   gap: number;
   /** Narrowest acceptable list. */
   minList: number;
   /** Widest list, however wide the container. */
   maxList: number;
-  /** Narrowest acceptable detail on a flat display. */
+  /** Narrowest acceptable detail without a fold. */
   minDetail: number;
-  /** The list's share of the width, where the display lies flat. */
+  /** The list's share of the width, without a fold. */
   share: number;
   /** Right-to-left layout puts the list on the right. */
   rtl?: boolean;
 };
 
 /**
- * A list beside its detail. Flat, the list takes `share` of the width (about
- * a third), within its limits; a display folded part way splits on its fold,
- * one side each, as two pages of a book. `null` when either side would be too
- * narrow: then the detail covers the list.
+ * A list beside its detail. Where the system reports a fold across the
+ * container (an iPhone Duo, flat or folded part way), they split on it, one
+ * side each, with the gutter covering it: the system keeps that region free
+ * of content. Without a fold the list takes `share` of the width (about a
+ * third), within its limits. `null` when either side would be too narrow:
+ * then the detail covers the list.
  */
 export function listDetailSplit({
   width,
   fold,
-  hinge,
   gap,
   minList,
   maxList,
@@ -128,14 +124,14 @@ export function listDetailSplit({
   rtl = false,
 }: ListDetailInput): Split | null {
   if (!(width > 0)) return null;
-  if (fold && hinge === 'partlyOpen') {
+  if (fold) {
     const gutter = Math.max(gap, fold.width);
     const center = fold.x + fold.width / 2;
     const left = center - gutter / 2;
     const right = width - center - gutter / 2;
     const [list, detail] = rtl ? [right, left] : [left, right];
-    // Each page of the book is narrower than a flat detail: both only need
-    // to be as wide as a list.
+    // Each side of the fold is narrower than a detail without one: both only
+    // need to be as wide as a list.
     if (list < minList || detail < minList) return null;
     return { leading: list, gutter, trailing: detail };
   }

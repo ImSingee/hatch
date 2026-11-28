@@ -16,11 +16,4 @@ FOUNDATION_EXPORT NSInteger HatchVerticalBarEdge(UIView *view);
 FOUNDATION_EXPORT void HatchObserveVerticalBarEdge(UIView *view,
                                                    void (^handler)(void));
 
-/// Calls `handler` with the state of the hinge that `view`'s display folds on:
-/// 0 when there is none (or the SDK or system cannot tell), 1 closed, 2 partly
-/// open, 3 open as far as it goes. Called with the current state first, then
-/// on every change. Does nothing on SDKs and systems without hinges.
-FOUNDATION_EXPORT void HatchObserveHinge(UIView *view,
-                                         void (^handler)(NSInteger status));
-
 NS_ASSUME_NONNULL_END

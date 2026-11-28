@@ -64,9 +64,9 @@ final class HatchAppView: ExpoView, AppEngineListener {
 final class HostDelegate: AppEngineHostDelegate {
     weak var module: HatchAppViewModule?
 
-    func engineManager(openApp slug: String, route: String) -> Bool {
+    func engineManager(openApp slug: String, route: String, origin: String) -> Bool {
         guard let module else { return false }
-        module.sendEvent("onOpenApp", ["slug": slug, "route": route])
+        module.sendEvent("onOpenApp", ["slug": slug, "route": route, "origin": origin])
         return true
     }
 
@@ -93,6 +93,11 @@ public final class HatchAppViewModule: Module {
 
         AsyncFunction("configure") { (origin: String?, token: String?) in
             MainActor.assumeIsolated { AppEngineManager.shared.configure(origin: origin.flatMap(URL.init(string:)), token: token) }
+        }.runOnQueue(.main)
+        AsyncFunction("forgetStorage") { (origin: String) in
+            MainActor.assumeIsolated {
+                if let url = URL(string: origin) { AppEngineManager.shared.forgetStorage(origin: url) }
+            }
         }.runOnQueue(.main)
         AsyncFunction("setBackgroundMinutes") { (minutes: Int) in
             MainActor.assumeIsolated { AppEngineManager.shared.setBackgroundMinutes(minutes) }
