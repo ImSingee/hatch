@@ -86,6 +86,8 @@ const config: ExpoConfig = {
   android: { package: 'app.hatch.mobile' },
   plugins: [
     './plugins/with-private-networking.cjs',
+    // Hatch's native App runtime (mobile/native) and its pinned NSH SDK.
+    './plugins/with-hatch-native-runtime.cjs',
     [
       'expo-font',
       {

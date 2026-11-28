@@ -5,8 +5,9 @@
  *
  * An NSH native host reports its OS itself (`platform.os`). The web player
  * always reports `"web"`, so a shell that hosts it in a native app (the
- * Mobile app's WebView) names its platform in `host.params.platform`; a
- * browser names none and keeps the web look, on phones too.
+ * Mobile app's WebView, the macOS app) names its platform in
+ * `host.params.platform`; a browser names none and keeps the web look, on
+ * phones and Macs too.
  */
 
 /** The platform an App runs on. */
@@ -19,15 +20,28 @@ export type HostPlatform =
   | 'web';
 
 /**
- * The habits the components follow: iOS, Android (Material 3), or the
- * Desk's own look (DESIGN.md) on the web and, until they get their own, on
- * macOS, Windows and Linux. Colours, the accent, the radii scale, icons and
- * content stay the theme's on every look.
+ * The habits the components follow: iOS, Android (Material 3), macOS,
+ * Windows (Windows 11's Fluent), or the Desk's own look (DESIGN.md) on the
+ * web and on Linux. Colours, the accent, the radii scale, icons and content
+ * stay the theme's on every look.
  */
-export type Look = 'ios' | 'android' | 'web';
+export type Look = 'ios' | 'android' | 'macos' | 'windows' | 'web';
 
-/** The platforms a web shell may name in `host.params.platform`. */
-const SHELL_PLATFORMS: readonly string[] = ['ios', 'android'];
+/** The touch looks: iOS and Android. */
+export type MobileLook = 'ios' | 'android';
+
+/** The pointer looks of a desktop OS: macOS and Windows. */
+export type DesktopLook = 'macos' | 'windows';
+
+/** The platforms a web shell may name in `host.params.platform`: the Mobile
+ * app's WebView (`ios`, `android`), the macOS app (`macos`) and a Windows
+ * shell (`windows`). */
+const SHELL_PLATFORMS: readonly string[] = [
+  'ios',
+  'android',
+  'macos',
+  'windows',
+];
 
 /** The platform from NSH's OS and the shell's launch parameters. */
 export function resolvePlatform(
@@ -49,7 +63,12 @@ export function resolvePlatform(
 
 /** The look of a platform. */
 export function lookOf(platform: string): Look {
-  return platform === 'ios' || platform === 'android' ? platform : 'web';
+  return platform === 'ios' ||
+    platform === 'android' ||
+    platform === 'macos' ||
+    platform === 'windows'
+    ? platform
+    : 'web';
 }
 
 type ThemeDocument = {
@@ -58,29 +77,36 @@ type ThemeDocument = {
 
 /** The theme's default face (`tokens.fonts.sans`) and the first family of
  * its `system` stack (`theme/build.ts`): both mean "no face of its own", so
- * on iOS and Android the App takes the platform's font. */
+ * on a platform look the App takes the platform's font. */
 const PLATFORM_DEFAULT_FACES = ['Nunito', 'PingFang SC'];
 
 /** The platform's own font, with the CJK faces after it. */
 const PLATFORM_SANS: Record<Exclude<Look, 'web'>, string> = {
-  // SF Pro: the system font, which WebKit and NSH's iOS host draw for
+  // SF Pro: the system font, which WebKit and NSH's Apple hosts draw for
   // `system-ui`.
   ios: 'system-ui, -apple-system, PingFang SC, sans-serif',
   android: 'Roboto, Noto Sans SC, system-ui, sans-serif',
+  macos: 'system-ui, -apple-system, PingFang SC, sans-serif',
+  windows:
+    'Segoe UI Variable, Segoe UI, Microsoft YaHei UI, system-ui, sans-serif',
 };
 
 /** The radii of a platform's signature shapes, which the theme's radius
- * scale does not set: iOS's sheet corner and Material's bottom sheet. */
+ * scale does not set: iOS's sheet corner and Material's bottom sheet.
+ * Desktops have no bottom sheet and keep the theme's (the window radius). */
 const PLATFORM_RADII: Record<Exclude<Look, 'web'>, Record<string, string>> = {
   ios: { 'radius-sheet': '24px' },
   android: { 'radius-sheet': '28px' },
+  macos: {},
+  windows: {},
 };
 
 /**
  * The theme an App applies on `look`. On iOS and Android it gains the
- * platform's signature radii, and a theme without a face of its own draws
- * with the platform's font (SF Pro, Roboto); a face the theme names stays.
- * The web takes the theme as it is.
+ * platform's signature radii; on every platform look a theme without a face
+ * of its own draws with the platform's font (SF Pro, Roboto, Segoe UI
+ * Variable); a face the theme names stays. The web takes the theme as it
+ * is.
  */
 export function platformTheme<T extends ThemeDocument>(
   theme: T,

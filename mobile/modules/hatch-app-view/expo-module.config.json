@@ -1,0 +1,5 @@
+{
+  "platforms": ["apple", "android"],
+  "apple": { "modules": ["HatchAppViewModule"] },
+  "android": { "modules": ["dev.hatch.appview.HatchAppViewModule"] }
+}

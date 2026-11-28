@@ -13,7 +13,6 @@
 //! with `{"error":{"code","message"}}`, a usage error exits 2, anything else
 //! exits 1. Secret keys are read from files and never printed.
 
-use std::collections::BTreeSet;
 use std::fs;
 use std::io::Write as _;
 use std::os::unix::fs::{OpenOptionsExt as _, PermissionsExt as _};
@@ -92,29 +91,21 @@ fn main() -> ExitCode {
     }
 }
 
-/// `--name value` pairs, `--switch` flags and positional arguments.
+/// `--name value` pairs and positional arguments.
 struct Flags {
     values: Vec<(String, String)>,
-    switches: BTreeSet<String>,
     positional: Vec<String>,
 }
-
-const SWITCHES: &[&str] = &["drop-bytecode"];
 
 impl Flags {
     fn parse(args: &[String]) -> Result<Flags> {
         let mut flags = Flags {
             values: Vec::new(),
-            switches: BTreeSet::new(),
             positional: Vec::new(),
         };
         let mut iter = args.iter();
         while let Some(arg) = iter.next() {
             if let Some(name) = arg.strip_prefix("--") {
-                if SWITCHES.contains(&name) {
-                    flags.switches.insert(name.to_owned());
-                    continue;
-                }
                 let value = iter
                     .next()
                     .ok_or_else(|| Failure::Usage(format!("--{name} needs a value")))?;
@@ -143,10 +134,6 @@ impl Flags {
 
     fn path(&self, name: &str) -> Result<PathBuf> {
         self.required(name).map(PathBuf::from)
-    }
-
-    fn has(&self, name: &str) -> bool {
-        self.switches.contains(name)
     }
 }
 
@@ -344,8 +331,8 @@ fn mismatch(field: &str, expected: &str, got: &str) -> Failure {
 /// `--root`), checks it is exactly the App the platform expects and writes
 /// its files as a package input to `--out` (a new directory), with the
 /// capabilities from `--capabilities` (which the package must declare
-/// exactly). `--drop-bytecode` leaves the bytecode out: bytecode is trusted
-/// input to a shell, so it is kept only from a build the platform trusts.
+/// exactly). Its bytecode is kept: shells load it as trusted input, and the
+/// platform trusts whoever may deploy the App with it.
 fn extract(flags: &Flags) -> Result<Value> {
     let bytes = read(&flags.path("package")?)?;
     let root = PublicKey::from_base64(read_text(&flags.path("root")?)?.trim())
@@ -476,8 +463,7 @@ fn extract(flags: &Flags) -> Result<Value> {
         Ok(())
     };
     put("bundle.js", "source", package.source.as_bytes())?;
-    let keep_bytecode = !flags.has("drop-bytecode");
-    let bytecode = package.bytecode().filter(|_| keep_bytecode);
+    let bytecode = package.bytecode();
     if let Some(bytecode) = bytecode {
         put("bundle.nshc", "bytecode", bytecode)?;
     }

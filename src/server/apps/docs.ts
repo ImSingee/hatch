@@ -38,14 +38,20 @@ export type AppDocContent = {
   content: string;
 };
 
-type CurrentDeployment = {
+export type CurrentDeployment = {
   appId: string;
   version: number;
   deploymentId: string;
   manifest: NormalizedManifest;
 };
 
-async function currentDeployment(appId: string): Promise<CurrentDeployment> {
+/**
+ * The App's live deployment, with its manifest URLs projected for the App.
+ * Archived or never-deployed Apps conflict; they publish no docs.
+ */
+export async function currentDeployment(
+  appId: string,
+): Promise<CurrentDeployment> {
   const app = await db.query.apps.findFirst({
     where: { id: appId },
     columns: { id: true, slug: true, status: true, currentDeploymentId: true },

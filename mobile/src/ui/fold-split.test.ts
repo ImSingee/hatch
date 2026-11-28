@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { crossingFold, foldSplit } from './fold-split';
+import { crossingFold, foldSplit, listDetailSplit } from './fold-split';
 
 const base = { gap: 16, minColumn: 320 };
 
@@ -68,5 +68,63 @@ describe('crossingFold', () => {
     expect(
       crossingFold([{ x: 400, y: 0, width: 10, height: 600 }], 800),
     ).toEqual({ x: 400, width: 10 });
+  });
+});
+
+describe('listDetailSplit', () => {
+  const list = {
+    gap: 16,
+    minList: 260,
+    maxList: 360,
+    minDetail: 400,
+    share: 1 / 3,
+  };
+  // The inner display of an iPhone Duo, inside its vertical bar.
+  const inner = { width: 827, fold: { x: 435.5, width: 40 } };
+
+  it('splits on a reported fold, flat or folded part way', () => {
+    // The system keeps the fold free of content, so it is the gutter.
+    const split = listDetailSplit({ ...list, ...inner })!;
+    expect(split).toEqual({ leading: 435.5, gutter: 40, trailing: 351.5 });
+    expect(split.leading + split.gutter).toBe(475.5);
+  });
+
+  it('keeps the list within its limits', () => {
+    // A wide tablet: the list stops at its widest.
+    expect(listDetailSplit({ ...list, width: 1366, fold: null })).toEqual({
+      leading: 360,
+      gutter: 16,
+      trailing: 990,
+    });
+    // A narrow pane: the list never goes below its narrowest.
+    expect(listDetailSplit({ ...list, width: 680, fold: null })).toEqual({
+      leading: 260,
+      gutter: 16,
+      trailing: 404,
+    });
+  });
+
+  it('lets the detail cover the list when either would be too narrow', () => {
+    // Beside another app, or the outer display.
+    expect(listDetailSplit({ ...list, width: 660, fold: null })).toBeNull();
+    // The detail side of the fold is too narrow.
+    expect(
+      listDetailSplit({
+        ...list,
+        width: 640,
+        fold: { x: 400, width: 0 },
+      }),
+    ).toBeNull();
+  });
+
+  it('puts the list on the right-hand side of the fold for right-to-left', () => {
+    expect(
+      listDetailSplit({
+        ...list,
+        width: 900,
+        fold: { x: 420, width: 0 },
+        rtl: true,
+      }),
+    ).toEqual({ leading: 472, gutter: 16, trailing: 412 });
   });
 });

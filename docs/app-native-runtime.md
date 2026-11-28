@@ -219,9 +219,19 @@ the deployment with `app_build_invalid`: a Builder cannot give an App a
 capability its commit does not. The files are kept unsigned in the
 deployment's immutable artifact (`native-package/`, never served) with the
 platform's capabilities, which every package signed from them carries.
-Shells load bytecode as trusted input, so it is kept only from a build the
-platform trusts like itself, its Builder; a `--local` build's package keeps
-its source only.
+
+**Bytecode.** The package input keeps the build's bytecode, whether a
+Builder built it or the `hatch` CLI of a `--local` deploy did and uploaded
+it. Hatch is self-hosted: the users who can deploy an App, and whoever runs
+the `hatch` CLI with their credentials (their Agent included), are trusted,
+as the Builder is (see
+[What a build is trusted with](app-builds.md#what-a-build-is-trusted-with)).
+So shells load the bytecode of either build as trusted input, and need not
+compile the source. Capabilities are not taken from the build: a package
+always declares the ones the platform derived from the committed manifest.
+A `--local` deployment built while the platform still dropped the bytecode
+of `--local` builds keeps a source-only input, so its packages stay source
+only, also after a rollback to it; deploying again includes the bytecode.
 
 **Activation counter and repacking.** `apps.activation_seq` grows by one in
 the transaction that makes a deployment live, deploy or rollback. A signed
@@ -350,11 +360,14 @@ the bridge to authorize what web App code can reach. The grant is exactly these 
   (an update notice, say) is delivered when the App subscribes; a navigation
   that arrives before the App starts becomes its start route instead.
 - Start parameters (`host.params`): `{ route, platform? }`. `platform` is
-  `ios` or `android` when the web player runs inside the Mobile app: its
-  WebView opens `/app/<slug>/embed/?platform=<os>` and the player passes the
-  value on (any other value is dropped). `@hatch/ui` takes that platform's
-  look from it; NSH's own `platform.os` wins in a native NSH host, and a
-  browser (phones included) keeps the web look.
+  `ios` or `android` when the web player runs inside the Mobile app (its
+  WebView opens `/app/<slug>/embed/?platform=<os>`), and `macos` inside the
+  macOS app (the desk's App surfaces add `?platform=macos` when the page
+  runs under its `HatchDesktop` user agent token); `windows` is accepted for
+  a Windows shell. The player passes the value on (any other value is
+  dropped). `@hatch/ui` takes that platform's look from it; NSH's own
+  `platform.os` wins in a native NSH host, and a browser (phones and Macs
+  included) keeps the web look.
 
 Apps do not call these names directly. `@hatch/app/native` wraps them:
 `followShellTheme`, `initialRoute`, `setRoute`, `onNavigate`, `setTitle`,

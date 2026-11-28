@@ -19,6 +19,7 @@ import {
   extraPermissionsView,
 } from '~/extra-permissions';
 import { normalizedManifestFor } from './apps/access';
+import { type AppAccessOverview, appAccessOverview } from './apps/app-access';
 import {
   APP_DOC_ID_RE,
   frontendRuntime,
@@ -509,6 +510,8 @@ export type AppOps = {
     dbName: string | null;
     schemaHash: string | null;
   };
+  /** Apps this one reaches and Apps that reach it (live deployments). */
+  appAccess: AppAccessOverview;
 };
 
 export const getAppOps = createServerFn({ method: 'GET' })
@@ -532,6 +535,7 @@ export const getAppOps = createServerFn({ method: 'GET' })
         storage: { enabled: false },
         kv: { enabled: false },
         dataTable: { enabled: false, dbName: null, schemaHash: null },
+        appAccess: { outgoing: [], incoming: [] },
       };
     }
     const caps = app.capabilities;
@@ -576,6 +580,7 @@ export const getAppOps = createServerFn({ method: 'GET' })
         dbName: app.dataDbName ?? null,
         schemaHash: app.dataSchemaHash ?? null,
       },
+      appAccess: await appAccessOverview(id),
     };
   });
 

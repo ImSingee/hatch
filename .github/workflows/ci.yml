@@ -163,3 +163,23 @@ jobs:
         run: |
           go test ./...
           CGO_ENABLED=0 go build -trimpath .
+
+  mobile-native:
+    name: Mobile native runtime core
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      # The core of the phone runtimes (mobile/native): the host bridge, the
+      # platform client and the run rules, without NSH. The engine tests
+      # need the iOS Simulator or an Android device: scripts/test-ios.sh and
+      # scripts/test-android.sh run them locally.
+      - name: Swift core
+        working-directory: mobile/native/ios/HatchAppCore
+        run: swift test
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: 21
+      - name: Kotlin core
+        working-directory: mobile/native/android
+        run: ./gradlew --no-daemon :hatch-app-core:test

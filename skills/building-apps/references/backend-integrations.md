@@ -92,6 +92,10 @@ platform credentials and other Apps' data.
 
 ## Invoking a deployed backend
 
+Another App's backend reaches this one through `appAccess` and
+`@hatch/app/apps`, not with these commands; see
+[Reaching other Apps](app-access.md).
+
 Use the current CLI profile or complete environment credentials to call a deployed
 App method without local generated stubs:
 
@@ -168,7 +172,10 @@ Select the platform auth mode in the top-level manifest block:
   credentials (Better Auth Cookie/Bearer session, user API key in `x-api-key`,
   or live Run JWT in Bearer). The platform verifies them and signs the forwarded
   raw body with `HATCH_SIGNING_SECRET`; verify the HMAC over
-  `<timestamp>.<exact raw body bytes>` (empty bytes for GET/HEAD).
+  `<timestamp>.<exact raw body bytes>` (empty bytes for GET/HEAD). A request
+  another App relays through `appAccess` is signed over its method and path
+  instead; use `verifyPlatformRequest` from `@hatch/app/apps`, which accepts
+  both (see [Reaching other Apps](app-access.md)).
 - `none`: no platform authentication and no platform signature. Invalid incoming
   Authorization/x-api-key values are ignored and stripped. The App must verify
   its own provider signature or dedicated private token; possession of a
@@ -182,8 +189,10 @@ or third-party authentication. Use a dedicated nonreserved header such as
 Removed values are not copied to another header.
 
 When other services call this webhook, describe its request contract in an
-external doc (see External docs in the `building-apps` Skill). Skip the doc when
-the webhook only serves the App itself, as in the media case below.
+external doc (see External docs in the `building-apps` Skill). The webhook has
+no proto, so unlike RPC methods it gets no generated reference; the doc is its
+only description. Skip the doc when the webhook only serves the App itself, as
+in the media case below.
 
 ## Serving media from a webhook
 

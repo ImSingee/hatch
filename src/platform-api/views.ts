@@ -58,6 +58,54 @@ export const appDocView = z.object({
   bytes: z.number().int(),
   sha256: str,
 });
+const appAccessLists = {
+  rpc: z.array(str),
+  dataTables: z.object({ read: z.array(str), write: z.array(str) }).strict(),
+  tasks: z.array(str),
+  webhook: z.array(str),
+};
+const appAccessGrantView = z
+  .object({ app: str, alias: str.optional(), ...appAccessLists })
+  .strict();
+const appAccessItem = z.object({ name: str, present: z.boolean() }).strict();
+const appAccessItems = {
+  rpc: z.array(appAccessItem),
+  dataTables: z
+    .object({
+      read: z.array(appAccessItem),
+      write: z.array(appAccessItem),
+    })
+    .strict(),
+  tasks: z.array(appAccessItem),
+  webhook: z.array(appAccessItem),
+};
+const appAccessOverview = z
+  .object({
+    outgoing: z.array(
+      z
+        .object({
+          appId: str,
+          alias: nullable,
+          slug: nullable,
+          name: nullable,
+          targetStatus: z.enum(['ready', 'missing', 'archived', 'undeployed']),
+          ...appAccessItems,
+        })
+        .strict(),
+    ),
+    incoming: z.array(
+      z
+        .object({
+          appId: str,
+          alias: nullable,
+          slug: str,
+          name: str,
+          ...appAccessItems,
+        })
+        .strict(),
+    ),
+  })
+  .strict();
 export const appManifestViewSchema = z.object({
   id: str,
   name: str,
@@ -177,6 +225,7 @@ export const appManifestViewSchema = z.object({
     .optional(),
   docs: z.array(appDocView).optional(),
   keyboard: z.object({ reserve: z.array(str) }).optional(),
+  appAccess: z.array(appAccessGrantView).optional(),
 });
 const networkView = z
   .object({
@@ -261,6 +310,7 @@ export const appDetailSchema = appSummarySchema
             schemaHash: nullable,
           })
           .strict(),
+        appAccess: appAccessOverview,
       })
       .strict(),
     deployments: z.array(

@@ -167,6 +167,24 @@ describe('App task runs', () => {
     });
   });
 
+  it('tells a run which App started it through the access relay', async () => {
+    const { runId } = await startTaskRun(APP, 'digest', {
+      trigger: 'app',
+      actor: 'app:caller-app',
+      input: { repo: 'a/b' },
+    });
+    await until(() => launches.length === 1);
+    expect(launches[0].options.env).toEqual({
+      HATCH_RUN_ID: runId,
+      HATCH_TASK: 'digest',
+      HATCH_CALLER_APP: 'caller-app',
+    });
+    launches[0].finish({
+      response: { status: 200, body: '{}', truncated: false },
+    });
+    await until(async () => (await statusOf(runId)) === 'succeeded');
+  });
+
   it('sends defaults and a signed request, and persists steps before the result', async () => {
     const { runId } = await startTaskRun(APP, 'digest', {
       trigger: 'manual',

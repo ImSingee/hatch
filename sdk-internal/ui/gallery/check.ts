@@ -2,9 +2,11 @@
  * Drives the gallery in the web player and fails on anything the runtime
  * reports: an error, or a class it cannot resolve (`[nsh] unknown classes`),
  * which is how a class from a lookup table that names no token shows up.
- * Every section is shown and every popup opened, on each platform (the web,
- * and iOS and Android as the Mobile app names them) in each layout and accent,
- * and a screenshot of each is written: the catalogue screenshot suite.
+ * Every section is shown and every popup opened, on each platform (the web;
+ * iOS and Android as the Mobile app names them; macOS as the macOS app names
+ * it, and Windows) in each layout and accent, and a screenshot of each is
+ * written: the catalogue screenshot suite. macOS and Windows are drawn in the
+ * desktop layouts only.
  *
  *   node_modules/.bin/tsx sdk-internal/ui/gallery/check.ts <out-dir> [url]
  *
@@ -17,9 +19,10 @@ import sharp from 'sharp';
 
 const out = path.resolve(process.argv[2] ?? 'gallery-shots');
 /** The platforms the gallery is drawn as: the web player in a browser, and
- * as the Mobile app's WebView names iOS and Android (`?platform=`). Web
+ * as a shell names iOS, Android, macOS and Windows (`?platform=`). Web
  * screenshots keep their names; the others start with the platform. */
-const platforms = ['web', 'ios', 'android'] as const;
+const platforms = ['web', 'ios', 'android', 'macos', 'windows'] as const;
+const desktops: readonly Platform[] = ['macos', 'windows'];
 type Platform = (typeof platforms)[number];
 const base = process.argv[3] ?? 'http://127.0.0.1:8791/';
 const accents = ['indigo', 'teal', 'clay', 'violet'] as const;
@@ -48,7 +51,7 @@ const sections = [
 ];
 
 /** `ONLY=phone-390:teal` limits a run to one layout and accent;
- * `PLATFORMS=ios,android` to some platforms. */
+ * `PLATFORMS=macos,windows` to some platforms. */
 const only = process.env.ONLY?.split(':');
 const onlyPlatforms = process.env.PLATFORMS?.split(',');
 
@@ -285,12 +288,24 @@ async function settle(page: Page, heading: string): Promise<void> {
   problems.push(`page "${heading}" kept moving after 3 s`);
 }
 
-/** The surface every page is drawn on: `surface-window` on the web, the
- * theme's ground (`background`) on iOS and Android. */
+/** The surface every page is drawn on: `surface-window` on the web and the
+ * desktops, the theme's ground (`background`) on iOS and Android. */
 const PAGE_SURFACE: Record<Platform, { r: number; g: number; b: number }> = {
   web: { r: 250, g: 249, b: 246 },
   ios: { r: 237, g: 235, b: 230 },
   android: { r: 237, g: 235, b: 230 },
+  macos: { r: 250, g: 249, b: 246 },
+  windows: { r: 250, g: 249, b: 246 },
+};
+
+/** Where a wide pane's content starts: after the sidebar (240 points on the
+ * web, 232 on macOS) or Fluent's navigation pane (248) and its edge. */
+const CONTENT_LEFT: Record<Platform, number> = {
+  web: 241,
+  ios: 241,
+  android: 241,
+  macos: 241,
+  windows: 252,
 };
 
 /**
@@ -304,10 +319,10 @@ async function coversPane(
   platform: Platform,
 ): Promise<void> {
   const WINDOW = PAGE_SURFACE[platform];
-  const left = layout.width >= 720 ? 241 : 0;
+  const left = layout.width >= 720 ? CONTENT_LEFT[platform] : 0;
   // Below the tab row at the top of a narrow desktop pane: its icon button
   // is 44 or 48 points tall on iOS and Android.
-  const top = platform === 'web' ? 60 : 80;
+  const top = platform === 'ios' || platform === 'android' ? 80 : 60;
   const height = layout.height - top - (layout.touch ? 90 : 20);
   const png = await page.screenshot({
     clip: { x: left, y: top, width: 3, height },
@@ -461,6 +476,42 @@ async function keyboard(page: Page, prefix: string): Promise<string[]> {
   return order;
 }
 
+/** macOS hides and shows the sidebar from the button in the pages' title
+ * rows; the section tabs leave and come back with it. */
+async function sidebarToggle(page: Page, prefix: string): Promise<void> {
+  await section(page, 'Basics');
+  await page.getByRole('button', { name: 'Hide sidebar', exact: true }).click();
+  await page.waitForTimeout(300);
+  await shot(page, `${prefix}-sidebar-hidden`);
+  if (await page.getByRole('tab', { name: 'Inputs', exact: true }).isVisible())
+    problems.push(`${prefix}: the sections stayed after hiding the sidebar`);
+  await page.getByRole('button', { name: 'Show sidebar', exact: true }).click();
+  await page.getByRole('tab', { name: 'Inputs', exact: true }).waitFor();
+  await page.waitForTimeout(300);
+  await shot(page, `${prefix}-sidebar-shown`);
+}
+
+/** Heights of the desktop controls, in points, for the record. */
+async function controlHeights(page: Page): Promise<string[]> {
+  const measure = async (role: 'button' | 'combobox' | 'tab', name: string) => {
+    const box = await page
+      .getByRole(role, { name, exact: true })
+      .first()
+      .boundingBox();
+    return `${role} "${name}": ${box ? Math.round(box.height) : 'missing'}`;
+  };
+  await section(page, 'Inputs');
+  const found = [
+    await measure('button', 'Add plant'),
+    await measure('button', 'Search'),
+    await measure('combobox', 'Plot'),
+    await measure('tab', 'Inputs'),
+  ];
+  await section(page, 'Data');
+  found.push(await measure('button', 'North bed, 12 plants'));
+  return found;
+}
+
 async function main(): Promise<void> {
   fs.mkdirSync(out, { recursive: true });
   const browser = await chromium.launch();
@@ -468,6 +519,8 @@ async function main(): Promise<void> {
     for (const platform of platforms) {
       if (onlyPlatforms && !onlyPlatforms.includes(platform)) continue;
       for (const layout of layouts) {
+        // macOS and Windows have no phone idiom.
+        if (desktops.includes(platform) && layout.idiom === 'phone') continue;
         for (const accent of accents) {
           if (
             only &&
@@ -500,6 +553,14 @@ async function main(): Promise<void> {
           await popups(page, prefix, layout);
           if (layout.name === 'desktop-1280' && accent === 'indigo') {
             await liveAccent(page, prefix, 'teal');
+          }
+          if (desktops.includes(platform) && accent === 'indigo') {
+            fs.writeFileSync(
+              path.join(out, `${prefix}-control-heights.txt`),
+              (await controlHeights(page)).join('\n'),
+            );
+            if (platform === 'macos' && layout.name === 'desktop-1280')
+              await sidebarToggle(page, prefix);
           }
           if (layout.touch && accent === 'indigo') {
             const heights = await targets(page);

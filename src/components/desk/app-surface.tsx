@@ -16,7 +16,7 @@ import {
 } from '../../../sdk-internal/app/src/native-surface';
 import { useSurfaceTheme } from '~/ui/theme';
 import { nativeAppsAvailable } from '~components/desktop-host/native-apps';
-import { appSurfaceSource } from './app-surface-source';
+import { appSurfaceFrameSource } from './app-surface-source';
 import { NativeAppSurface } from './native-app-surface';
 import { attachPlatformShortcuts } from './platform-shortcuts';
 import classes from './app-surface.module.css';
@@ -156,7 +156,7 @@ function FrameAppSurface({
   const router = useRouter({ warn: false });
   const [loading, setLoading] = useState(true);
   const [generation, setGeneration] = useState(0);
-  const src = appSurfaceSource(app.slug);
+  const src = appSurfaceFrameSource(app.slug);
 
   // The load handler and the App's own navigation events outlive the render
   // that subscribed them; these always see the newest props.

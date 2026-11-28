@@ -2,7 +2,7 @@ import { Text, View } from 'nsh';
 import type { JSX } from 'nsh';
 import { Menu as BaseMenu, MenuItem, MenuSeparator } from 'nsh/base';
 import { Each } from '../core/control';
-import { byLook, look, touch } from '../core/env';
+import { byLook, look, mobileLook, touch } from '../core/env';
 import {
   BACKDROP,
   FOCUS_RING,
@@ -44,7 +44,8 @@ export type MenuProps = {
 };
 
 /** The triggers on each look: iOS's plain accent icon and gray button,
- * Android's 48-point circle and outlined pill. */
+ * Android's 48-point circle and outlined pill, the desktops' pull-down
+ * buttons (28 points on macOS, 32 on Windows). */
 const TRIGGER = byLook({
   web: {
     icon: `size-9 items-center justify-center rounded-(--radius-md) hover:bg-surface-hover aria-expanded:bg-surface-pressed pointer-coarse:size-11 ${FOCUS_RING}`,
@@ -64,6 +65,20 @@ const TRIGGER = byLook({
     icon: `size-12 items-center justify-center rounded-full active:bg-surface-pressed aria-expanded:bg-surface-pressed ${FOCUS_RING}`,
     button: `h-10 flex-row items-center gap-2 rounded-full border border-control-border px-4 active:bg-surface-pressed ${FOCUS_RING}`,
     label: 'text-m3-label-lg font-medium text-foreground',
+    glyph: 'foreground' as GlyphColor,
+    buttonGlyph: 'foreground' as GlyphColor,
+  },
+  macos: {
+    icon: `size-7 items-center justify-center rounded-(--radius-xs) hover:bg-surface-hover aria-expanded:bg-surface-pressed ${FOCUS_RING}`,
+    button: `h-7 flex-row items-center gap-1.5 rounded-(--radius-xs) border border-hairline bg-card px-3 shadow-card hover:bg-surface-hover aria-expanded:bg-surface-pressed ${FOCUS_RING}`,
+    label: 'text-mac-body font-semibold text-foreground',
+    glyph: 'foreground' as GlyphColor,
+    buttonGlyph: 'foreground' as GlyphColor,
+  },
+  windows: {
+    icon: `size-8 items-center justify-center rounded-(--radius-xs) hover:bg-surface-hover aria-expanded:bg-surface-pressed ${FOCUS_RING}`,
+    button: `h-8 flex-row items-center gap-2 rounded-(--radius-xs) border border-hairline border-b-control-border bg-card px-3 hover:bg-muted aria-expanded:bg-surface-pressed ${FOCUS_RING}`,
+    label: 'text-win-label font-semibold text-foreground',
     glyph: 'foreground' as GlyphColor,
     buttonGlyph: 'foreground' as GlyphColor,
   },
@@ -103,7 +118,7 @@ export function Menu(props: MenuProps): JSX.Element {
           >
             <Glyph
               icon={props.icon ?? IconDots}
-              size={look === 'web' ? 'md' : '2xl'}
+              size={mobileLook ? '2xl' : 'md'}
               color={TRIGGER.glyph}
             />
           </View>

@@ -79,7 +79,6 @@ const finalize = (packageDir: string, tooling = TOOLING) =>
     deploymentId: 'dep-1',
     commit: COMMIT,
     tooling: async () => tooling,
-    trustBytecode: true,
   });
 
 describe('accepting a build package', () => {
@@ -92,7 +91,6 @@ describe('accepting a build package', () => {
       deploymentId: 'dep-1',
       commit: COMMIT,
       tooling: async () => TOOLING,
-      trustBytecode: true,
     });
     expect(result.normalized.backend).toMatchObject({
       entry: 'backend/main.bundle.js',
@@ -185,7 +183,6 @@ describe('accepting a build package', () => {
         commit: COMMIT,
         tooling: async () => TOOLING,
         committedManifest: async () => parseSourceManifest(committed),
-        trustBytecode: true,
       });
     // A builder that grants itself more than the commit declares.
     await expect(

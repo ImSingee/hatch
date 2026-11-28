@@ -2,7 +2,7 @@ import { Text, View } from 'nsh';
 import type { JSX } from 'nsh';
 import { Button as BaseButton } from 'nsh/base';
 import { Each, If } from '../core/control';
-import { byLook, look } from '../core/env';
+import { byLook, look, mobileLook } from '../core/env';
 import { SurfaceContext } from '../core/surface';
 import { FOCUS_RING_INSET } from '../core/styles';
 import type { Action, IconData } from '../core/types';
@@ -33,7 +33,8 @@ export type ListProps<T> = {
 /**
  * The list's frame on each look: the Desk's sheet with hairlines, iOS's
  * inset grouped list (no edge, separators inset to the text), Material's
- * flat list on the page's ground.
+ * flat list on the page's ground; on the desktops the Desk's sheet with the
+ * platform's corner.
  */
 const FRAME = byLook({
   web: {
@@ -56,6 +57,20 @@ const FRAME = byLook({
     sheet: 'self-stretch',
     rows: '',
     empty: 'text-center text-m3-body-lg font-regular text-muted-foreground',
+  },
+  macos: {
+    title: 'px-1 text-mac-body font-semibold text-muted-foreground',
+    sheet:
+      'self-stretch overflow-hidden rounded-(--radius-md) border border-hairline bg-card',
+    rows: '',
+    empty: 'text-center text-mac-body font-regular text-muted-foreground',
+  },
+  windows: {
+    title: 'px-1 text-win-body font-semibold text-foreground',
+    sheet:
+      'self-stretch overflow-hidden rounded-(--radius-sm) border border-hairline bg-card',
+    rows: '',
+    empty: 'text-center text-win-body font-regular text-muted-foreground',
   },
 });
 
@@ -146,37 +161,43 @@ export type ListItemProps = {
 
 /** One row of a `List` (DESIGN.md "List row"). */
 export function ListItem(props: ListItemProps): JSX.Element {
-  if (look !== 'web') return <PlatformListItem {...props} />;
+  if (mobileLook) return <PlatformListItem {...props} />;
+  const style = DESK_ROW;
+  // The selected row is tinted with the accent, or on Windows marked by
+  // the accent line at its start on a neutral fill.
+  const tinted = () => props.selected === true && style.selectedTint;
   const body = (
     <>
       {props.icon ? (
         <View
-          class={`size-8.5 items-center justify-center rounded-(--radius-md) ${props.selected ? 'bg-card' : 'bg-muted'}`}
+          class={`${style.tile} ${props.selected ? 'bg-card' : 'bg-muted'}`}
         >
           <Glyph
             icon={props.icon}
             size="lg"
-            color={props.selected ? 'primary-tint-foreground' : 'foreground'}
+            color={tinted() ? 'primary-tint-foreground' : 'foreground'}
           />
         </View>
       ) : null}
       {props.avatar ? (
         <Avatar name={props.avatar.name} src={props.avatar.src} size="md" />
       ) : null}
-      <View class="flex-1 gap-0.5 py-2">
+      <View class={style.text}>
         <Text
-          class={`text-body font-label truncate ${props.selected ? 'text-primary-tint-foreground' : 'text-foreground'}`}
+          class={`${style.title} truncate ${tinted() ? 'text-primary-tint-foreground' : 'text-foreground'}`}
         >
           {props.title}
         </Text>
         {props.description ? (
-          <Text class="text-caption text-muted-foreground truncate">
+          <Text class={`${style.description} text-muted-foreground truncate`}>
             {props.description}
           </Text>
         ) : null}
       </View>
       {props.value ? (
-        <Text class="text-body text-muted-foreground">{props.value}</Text>
+        <Text class={`${style.value} text-muted-foreground`}>
+          {props.value}
+        </Text>
       ) : null}
       {props.badge ? <Badge {...props.badge} /> : null}
       {props.onPress ? (
@@ -184,13 +205,20 @@ export function ListItem(props: ListItemProps): JSX.Element {
       ) : null}
     </>
   );
-  const rowClass = () =>
-    `min-h-11.5 flex-1 flex-row items-center gap-3 px-4 pointer-coarse:min-h-13 ${props.selected ? 'bg-primary-tint' : ''}`;
+  const rowClass = () => `${style.row} ${props.selected ? style.selected : ''}`;
   return (
     <View
       class="group flex-row items-center border-t border-hairline first:border-t-0 focus-within:bg-surface-hover"
       classList={{ 'opacity-50': props.disabled === true }}
     >
+      {props.selected && !style.selectedTint ? (
+        <View
+          class="pointer-events-none absolute inset-y-0 left-0 justify-center"
+          importantForAccessibility="no-hide-descendants"
+        >
+          <View class="h-4 w-0.75 rounded-full bg-primary" />
+        </View>
+      ) : null}
       {props.onPress ? (
         <BaseButton
           onPress={props.onPress}
@@ -201,7 +229,7 @@ export function ListItem(props: ListItemProps): JSX.Element {
               ? `${props.title}, ${props.description}`
               : props.title
           }
-          class={`${rowClass()} ${props.selected ? '' : 'hover:bg-surface-hover active:bg-surface-pressed'} ${FOCUS_RING_INSET}`}
+          class={`${rowClass()} ${props.selected ? '' : style.press} ${FOCUS_RING_INSET}`}
         >
           {body}
         </BaseButton>
@@ -229,6 +257,61 @@ export function ListItem(props: ListItemProps): JSX.Element {
     </View>
   );
 }
+
+type DeskRow = {
+  tile: string;
+  text: string;
+  title: string;
+  description: string;
+  value: string;
+  row: string;
+  press: string;
+  selected: string;
+  /** The selection tints the row with the accent. */
+  selectedTint: boolean;
+};
+
+/** A row's classes on the web and the desktops: the Desk's 46-point row;
+ * macOS's 40-point row, which a pointer does not highlight; Fluent's list
+ * item, whose selection is a neutral fill with the accent line. */
+const DESK_ROW = byLook<DeskRow | null>({
+  web: {
+    tile: 'size-8.5 items-center justify-center rounded-(--radius-md)',
+    text: 'flex-1 gap-0.5 py-2',
+    title: 'text-body font-label',
+    description: 'text-caption',
+    value: 'text-body',
+    row: 'min-h-11.5 flex-1 flex-row items-center gap-3 px-4 pointer-coarse:min-h-13',
+    press: 'hover:bg-surface-hover active:bg-surface-pressed',
+    selected: 'bg-primary-tint',
+    selectedTint: true,
+  },
+  ios: null,
+  android: null,
+  macos: {
+    tile: 'size-7 items-center justify-center rounded-(--radius-xs)',
+    text: 'flex-1 gap-0.5 py-1.5',
+    title: 'text-mac-body font-medium',
+    description: 'text-mac-callout font-regular',
+    value: 'text-mac-body font-regular',
+    row: 'min-h-10 flex-1 flex-row items-center gap-2.5 px-3',
+    press: 'active:bg-surface-pressed',
+    selected: 'bg-primary-tint',
+    selectedTint: true,
+  },
+  windows: {
+    tile: 'size-8 items-center justify-center rounded-(--radius-xs)',
+    text: 'flex-1 gap-0.5 py-2',
+    title: 'text-win-body font-regular',
+    description: 'text-win-caption font-regular',
+    value: 'text-win-body font-regular',
+    row: 'min-h-10 flex-1 flex-row items-center gap-3 px-4',
+    press: 'hover:bg-surface-hover active:bg-surface-pressed',
+    selected: 'bg-surface-hover',
+    selectedTint: false,
+  },
+  // iOS and Android draw `PlatformListItem` instead.
+}) as DeskRow;
 
 /** A row's classes on iOS and Android. */
 const ROW = byLook({
@@ -258,6 +341,8 @@ const ROW = byLook({
     value: 'text-m3-body-md font-regular text-muted-foreground',
     chevron: false,
   },
+  macos: null,
+  windows: null,
 });
 
 /** `ListItem` on iOS and Android. */

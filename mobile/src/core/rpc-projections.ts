@@ -40,9 +40,22 @@ export function appProjection(app: Resource): AppSummary {
     updatedAt: app.updatedAt,
     iconPath: app.iconPath ?? null,
     live: hasLiveVersion(app),
+    runtime: frontendRuntime(app),
   };
 }
 /** The view names the live deployment's version as `currentVersion`. */
+/** How the live deployment's frontend runs, from the App's view. */
+function frontendRuntime(app: Resource): 'native' | 'web' | null {
+  const view = app.view ? toJson(ValueSchema, app.view) : null;
+  if (!view || typeof view !== 'object' || Array.isArray(view)) return null;
+  const frontend = view.frontend;
+  if (!frontend || typeof frontend !== 'object' || Array.isArray(frontend))
+    return null;
+  return frontend.runtime === 'native' || frontend.runtime === 'web'
+    ? frontend.runtime
+    : null;
+}
+
 function hasLiveVersion(app: Resource) {
   const view = app.view ? toJson(ValueSchema, app.view) : null;
   if (!view || typeof view !== 'object' || Array.isArray(view)) return false;

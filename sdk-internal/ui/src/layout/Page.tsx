@@ -1,7 +1,7 @@
 import { Scroll, Text, View, effect } from 'nsh';
 import type { JSX } from 'nsh';
 import { Button as BaseButton } from 'nsh/base';
-import { look } from '../core/env';
+import { byLook, look, mobileLook } from '../core/env';
 import { BarActionsContext } from '../core/overlay';
 import { SurfaceContext } from '../core/surface';
 import { ShellScopeContext, claimTitle } from '../core/shell';
@@ -9,9 +9,17 @@ import { FOCUS_RING, GAP } from '../core/styles';
 import { HeadingText } from '../display/Text';
 import type { Space } from '../core/types';
 import { Glyph } from '../icons/Icon';
-import { IconArrowLeft, IconChevronLeft } from '../icons/icons.gen';
+import {
+  IconArrowLeft,
+  IconChevronLeft,
+  IconLayoutSidebar,
+} from '../icons/icons.gen';
 import { IconButton } from '../input/Button';
-import { BottomChromeContext, PageNavContext } from '../navigation/nav-context';
+import {
+  BottomChromeContext,
+  PageNavContext,
+  SidebarToggleContext,
+} from '../navigation/nav-context';
 import type { PageNav } from '../navigation/nav-context';
 
 export type PageWidth = 'narrow' | 'default' | 'wide' | 'full';
@@ -41,6 +49,59 @@ const WIDTH: Record<PageWidth, string> = {
   full: 'max-w-none',
 };
 
+/** The page on the web and the desktops: the Desk's title row; macOS's
+ * 22-point title and Fluent's 28-point page title, with Fluent's back
+ * arrow. iOS and Android draw their own bars. */
+const DESK_PAGE = byLook({
+  web: {
+    frame: 'w-full self-center px-4 py-5 sm:px-6 sm:py-6 lg:px-8',
+    title: 'text-section sm:text-title text-foreground text-balance',
+    description: 'text-body text-muted-foreground text-pretty',
+    backInset: '-ml-2 pointer-coarse:-ml-3',
+    back: IconChevronLeft,
+  },
+  ios: null,
+  android: null,
+  macos: {
+    frame: 'w-full self-center px-5 py-4 sm:px-6 sm:py-5',
+    title:
+      'text-mac-title-1 font-bold tracking-normal text-foreground text-balance',
+    description: 'text-mac-body font-regular text-muted-foreground text-pretty',
+    backInset: '-ml-1',
+    back: IconChevronLeft,
+  },
+  windows: {
+    frame: 'w-full self-center px-5 py-5 sm:px-8 sm:py-6',
+    title:
+      'text-win-title font-semibold tracking-normal text-foreground text-balance',
+    description: 'text-win-body font-regular text-muted-foreground text-pretty',
+    backInset: '-ml-1',
+    back: IconArrowLeft,
+  },
+});
+
+/**
+ * The button that hides and shows an `AppShell`'s sidebar on macOS, at the
+ * start of a title row; nothing elsewhere. Internal: `Page` and
+ * `ListDetailPage` draw it.
+ */
+export function SidebarToggleButton(): JSX.Element {
+  const sidebar = SidebarToggleContext();
+  return (
+    <>
+      {sidebar?.available() ? (
+        <View class="-ml-1">
+          <IconButton
+            icon={IconLayoutSidebar}
+            label={sidebar.shown() ? 'Hide sidebar' : 'Show sidebar'}
+            onPress={sidebar.toggle}
+          />
+        </View>
+      ) : null}
+    </>
+  );
+}
+
 /**
  * One screen of the App: a scrolling body with the title row. In a
  * `NavStack` above its first page, the title row starts with a back button.
@@ -50,14 +111,15 @@ const WIDTH: Record<PageWidth, string> = {
  * On iOS the first page of a stack shows a large title that scrolls with
  * the content, and a page above it a navigation bar: back with the title of
  * the page it leads to, the title in the middle, the actions at the end. On
- * Android every page has a top app bar.
+ * Android every page has a top app bar. On macOS the title row starts with
+ * the button that hides the `AppShell`'s sidebar.
  */
 export function Page(props: PageProps): JSX.Element {
   const nav = PageNavContext();
   const scope = ShellScopeContext();
   const own = { ...scope, depth: scope.depth + 1 };
   claimTitle(own, () => props.title);
-  if (look !== 'web') {
+  if (mobileLook) {
     effect(() => nav?.nameTitle?.(() => props.title));
     return (
       <ShellScopeContext.Provider value={own}>
@@ -71,6 +133,8 @@ export function Page(props: PageProps): JSX.Element {
       </ShellScopeContext.Provider>
     );
   }
+  const style = DESK_PAGE as NonNullable<typeof DESK_PAGE>;
+  const sidebar = SidebarToggleContext();
   return (
     <ShellScopeContext.Provider value={own}>
       <Scroll
@@ -80,33 +144,35 @@ export function Page(props: PageProps): JSX.Element {
       >
         <View
           class={[
-            'w-full self-center px-4 py-5 sm:px-6 sm:py-6 lg:px-8',
+            style.frame,
             WIDTH[props.width ?? 'default'],
             GAP[props.gap ?? 'xl'],
           ].join(' ')}
         >
-          {props.hideTitle ? null : (
+          {props.hideTitle ? (
+            sidebar?.available() ? (
+              <View class="flex-row">
+                <SidebarToggleButton />
+              </View>
+            ) : null
+          ) : (
             <View class="flex-row flex-wrap items-start gap-3">
+              <SidebarToggleButton />
               {nav?.canGoBack() ? (
-                <View class="-ml-2 pointer-coarse:-ml-3">
+                <View class={style.backInset}>
                   <IconButton
-                    icon={IconChevronLeft}
+                    icon={style.back}
                     label="Back"
                     onPress={nav.back}
                   />
                 </View>
               ) : null}
               <View class="min-w-48 flex-1 gap-1">
-                <HeadingText
-                  level={1}
-                  class="text-section sm:text-title text-foreground text-balance"
-                >
+                <HeadingText level={1} class={style.title}>
                   {props.title}
                 </HeadingText>
                 {props.description ? (
-                  <Text class="text-body text-muted-foreground text-pretty">
-                    {props.description}
-                  </Text>
+                  <Text class={style.description}>{props.description}</Text>
                 ) : null}
               </View>
               {props.actions ? (

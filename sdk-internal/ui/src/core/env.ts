@@ -6,14 +6,14 @@
  * App renders into (the web player's container, the native view), so an App
  * in a narrow window or a split pane on a desktop lays out as a narrow App.
  * Density follows the input: touch idioms get 44-point targets. Habits
- * follow the platform (`look`): iOS and Android controls on those, the
- * Desk's own elsewhere.
+ * follow the platform (`look`): iOS, Android, macOS and Windows controls on
+ * those, the Desk's own elsewhere.
  */
 import { host, platform, windowSize } from 'nsh';
 import { lookOf, resolvePlatform } from './platform';
-import type { HostPlatform, Look } from './platform';
+import type { DesktopLook, HostPlatform, Look, MobileLook } from './platform';
 
-export type { HostPlatform, Look };
+export type { DesktopLook, HostPlatform, Look, MobileLook };
 
 /** The platform the App runs on: NSH's OS, or in the web player the one
  * its shell names (`host.params.platform`). Constant while it runs. */
@@ -24,6 +24,9 @@ export const hostPlatform: HostPlatform = resolvePlatform(
 
 /** The habits the components follow. */
 export const look: Look = lookOf(hostPlatform);
+
+/** iOS or Android: the touch looks, with their own page and list trees. */
+export const mobileLook: boolean = look === 'ios' || look === 'android';
 
 /** The value for the App's look. */
 export function byLook<T>(values: Record<Look, T>): T {

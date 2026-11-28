@@ -8,6 +8,7 @@ import { configPath, resolveCredential } from './config';
 import { credentialHeaders, platformClient, publicError } from './client';
 import { CliError, fetchFailure } from './error';
 import { readTextInput } from './input';
+import { RPC_METHOD_PATH_RE } from '../../hatch-manifest/src/identifiers.js';
 
 export class BackendInvocationError extends CliError {
   constructor(
@@ -66,10 +67,7 @@ export async function runBackendInvocation(
   const { values, positionals } = parsed;
   const [id, method] = positionals;
   // Protobuf identifiers only: no URLs, encoded separators or dot segments.
-  const match =
-    /^(?:[A-Za-z_][A-Za-z0-9_]*\.)*[A-Za-z_][A-Za-z0-9_]*\/[A-Za-z_][A-Za-z0-9_]*$/.exec(
-      method ?? '',
-    );
+  const match = RPC_METHOD_PATH_RE.exec(method ?? '');
   if (
     args[offset + 2] !== 'backend' ||
     positionals.length !== 2 ||

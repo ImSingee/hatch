@@ -25,6 +25,8 @@ export type TaskTrigger = 'manual' | 'cron' | 'webhook' | 'app';
 export type TaskRun = {
   runId: string;
   task: string;
+  /** The App that started the run through `appAccess`, if another App did. */
+  callerAppId?: string;
 };
 
 const SENTINEL = '[[hatch]]';
@@ -34,7 +36,9 @@ let nextSeq = 0;
 export function currentTaskRun(): TaskRun | null {
   const runId = runtimeEnv('HATCH_RUN_ID');
   const task = runtimeEnv('HATCH_TASK');
-  return runId && task ? { runId, task } : null;
+  const callerAppId = runtimeEnv('HATCH_CALLER_APP');
+  if (!runId || !task) return null;
+  return callerAppId ? { runId, task, callerAppId } : { runId, task };
 }
 
 /** Whether this backend instance was started to serve one task run. */

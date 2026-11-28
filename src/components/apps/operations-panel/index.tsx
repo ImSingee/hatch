@@ -24,6 +24,7 @@ import {
   deleteAppDatabaseFn,
   type AppOps,
 } from '~server/apps';
+import { AppAccessSection } from './app-access-section';
 import { CronSection } from './cron-section';
 import { DataTableSection } from './data-table-section';
 import { DatabaseSection } from './database-section';
@@ -224,6 +225,8 @@ export function OperationsPanel({
   if (!ops) return null;
 
   const databaseVisible = ops.database.enabled || Boolean(ops.database.dbName);
+  const hasAppAccess =
+    ops.appAccess.outgoing.length > 0 || ops.appAccess.incoming.length > 0;
   const dataTableVisible =
     ops.dataTable.enabled || Boolean(ops.dataTable.dbName);
   const hasOperations =
@@ -236,7 +239,8 @@ export function OperationsPanel({
     dataTableVisible ||
     Boolean(notifications) ||
     hasAi ||
-    Boolean(tasks);
+    Boolean(tasks) ||
+    hasAppAccess;
 
   return (
     <Section id="operations" title={t('ops.title')}>
@@ -319,6 +323,11 @@ export function OperationsPanel({
           {hasAi ? (
             <GroupCard padded id="ai">
               <AiSection appId={appId} />
+            </GroupCard>
+          ) : null}
+          {hasAppAccess ? (
+            <GroupCard padded id="app-access">
+              <AppAccessSection access={ops.appAccess} />
             </GroupCard>
           ) : null}
         </Stack>

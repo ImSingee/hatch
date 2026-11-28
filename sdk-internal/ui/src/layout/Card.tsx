@@ -56,11 +56,16 @@ const PADDING: Record<NonNullable<CardProps['padding']>, string> = {
   lg: 'p-6',
 };
 
-/** On iOS and Android a card sits on the page's ground without an edge. */
+/** On iOS and Android a card sits on the page's ground without an edge;
+ * on Windows it takes Fluent's smaller card corner. */
 const SURFACE = byLook({
   web: 'self-stretch rounded-(--radius-lg) border border-hairline bg-card overflow-hidden',
   ios: 'self-stretch rounded-(--radius-lg) bg-card overflow-hidden',
   android: 'self-stretch rounded-(--radius-lg) bg-card overflow-hidden',
+  macos:
+    'self-stretch rounded-(--radius-lg) border border-hairline bg-card overflow-hidden',
+  windows:
+    'self-stretch rounded-(--radius-sm) border border-hairline bg-card overflow-hidden',
 });
 
 /** How a pressable card answers a press. */
@@ -68,6 +73,8 @@ const PRESS = byLook({
   web: 'transition hover:shadow-dock hover:-translate-y-px active:translate-y-0',
   ios: 'transition-opacity active:opacity-60',
   android: 'transition-colors active:bg-muted',
+  macos: 'transition-colors active:bg-muted',
+  windows: 'transition-colors hover:bg-muted active:bg-surface-hover',
 });
 
 /**

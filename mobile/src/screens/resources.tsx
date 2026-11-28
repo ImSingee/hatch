@@ -3,10 +3,12 @@ import { router, useIsFocused } from 'expo-router';
 import { useState } from 'react';
 import { RefreshControl, View } from 'react-native';
 import type { AppSummary } from '../core';
+import { useBesideApp } from '../state/beside';
 import { useNavigationPreferences } from '../state/navigation';
 import { openSection } from '../state/open-section';
 import { useSession } from '../state/session';
 import { usePullToRefresh } from '../state/use-pull-to-refresh';
+import { useBesideRoom } from '../ui/beside-layout';
 import { IconButton } from '../ui/button';
 import { TileGrid } from '../ui/columns';
 import { NativeField } from '../ui/native-field';
@@ -33,6 +35,8 @@ export function ResourcesScreen({ nested = false }: { nested?: boolean }) {
   const { preferences } = useNavigationPreferences();
   const [order, setOrder] = useState<Order>('name');
   const [search, setSearch] = useState('');
+  const besideRoom = useBesideRoom();
+  const [, setBeside] = useBesideApp();
   const apps = useQuery({
     queryKey: [origin, 'apps'],
     queryFn: ({ signal }) => api!.apps(signal),
@@ -148,6 +152,23 @@ export function ResourcesScreen({ nested = false }: { nested?: boolean }) {
                         glyph: 'info',
                         onPress: () => details(item),
                       },
+                      // Where the window has room for two (web Desk: "Open
+                      // beside").
+                      ...(besideRoom && item.live
+                        ? [
+                            {
+                              label: 'Open beside',
+                              glyph: 'open' as const,
+                              onPress: () =>
+                                setBeside({
+                                  id: item.id,
+                                  slug: item.slug,
+                                  name: item.name,
+                                  runtime: item.runtime,
+                                }),
+                            },
+                          ]
+                        : []),
                     ]}
                   >
                     {(onLongPress) => (

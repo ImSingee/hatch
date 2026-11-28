@@ -39,6 +39,10 @@
       "types": "./dist/ai.d.ts",
       "default": "./dist/ai.js"
     },
+    "./apps": {
+      "types": "./dist/apps.d.ts",
+      "default": "./dist/apps.js"
+    },
     "./native": {
       "types": "./dist/native.d.ts",
       "default": "./dist/native.js"

@@ -1,0 +1,11 @@
+{
+  "version": "0.7.0",
+  "ios": {
+    "url": "https://github.com/longbridge/nsh/releases/download/v0.7.0/nsh-embed-ios.zip",
+    "sha256": "71a952b23b8ac0d0a8a40176acd76149bd1a6e3007eca8bc8c4c66ca7f26124a"
+  },
+  "android": {
+    "url": "https://github.com/longbridge/nsh/releases/download/v0.7.0/nsh-embed-android.zip",
+    "sha256": "89d0c979d1a457b57118b32b5f8312e45c856377501816b37069ad9d36c77033"
+  }
+}

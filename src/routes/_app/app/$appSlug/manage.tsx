@@ -25,6 +25,7 @@ import {
   IconArchiveOff,
   IconBook,
   IconBell,
+  IconPlugConnected,
   IconCheck,
   IconClock,
   IconDatabase,
@@ -418,7 +419,9 @@ function AppDetailPage() {
                 runtimeSupported={runtimeSupported}
               />
 
-              {capabilities?.backend ? <ApiPanel appId={app.id} /> : null}
+              {capabilities?.backend ? (
+                <ApiPanel appId={app.id} slug={app.slug} />
+              ) : null}
 
               {/* An archived App publishes no docs, matching the CLI. */}
               {isArchived ? null : <DocsPanel appId={app.id} slug={app.slug} />}
@@ -520,6 +523,14 @@ function useManageSections(
       label: t('appManage.section.ai'),
       icon: icon(IconSparkles),
       color: 'grape',
+    },
+    Boolean(
+      ops?.appAccess.outgoing.length || ops?.appAccess.incoming.length,
+    ) && {
+      key: 'app-access',
+      label: t('appManage.section.appAccess'),
+      icon: icon(IconPlugConnected),
+      color: 'lime',
     },
     hasApi && {
       key: 'api',

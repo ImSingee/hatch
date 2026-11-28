@@ -452,11 +452,12 @@ function storedAccent(): string | null {
 
 /**
  * The platforms a shell may name in the page's `platform` query parameter.
- * The Mobile app's WebView opens `/app/<slug>/embed/?platform=ios`, so the
- * App's components take that platform's look (`@hatch/ui`); a browser
- * names none and keeps the web's.
+ * The Mobile app's WebView opens `/app/<slug>/embed/?platform=ios`, and the
+ * macOS app's surfaces `?platform=macos`, so the App's components take that
+ * platform's look (`@hatch/ui`); a browser names none and keeps the web's.
+ * `windows` is for a Windows shell that hosts the player.
  */
-const SHELL_PLATFORMS = ['ios', 'android'];
+const SHELL_PLATFORMS = ['ios', 'android', 'macos', 'windows'];
 
 /** What the App reads as `host.params` when it starts. */
 export function launchParams(

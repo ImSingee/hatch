@@ -33,7 +33,8 @@ type TextSize = NonNullable<TextProps['size']>;
 type TextWeight = NonNullable<TextProps['weight']>;
 
 /** Body text on each look: the Desk's 12/14/16, iOS's footnote, body and
- * title 3, Material's body medium, body large and title large. */
+ * title 3, Material's body medium, body large and title large, macOS's
+ * 12/13/15 and Fluent's caption, body and body large. */
 const SIZE = byLook<Record<TextSize, string>>({
   web: { sm: 'text-caption', md: 'text-body', lg: 'text-body-lg' },
   ios: { sm: 'text-ios-footnote', md: 'text-ios-body', lg: 'text-ios-title-3' },
@@ -41,6 +42,16 @@ const SIZE = byLook<Record<TextSize, string>>({
     sm: 'text-m3-body-md',
     md: 'text-m3-body-lg',
     lg: 'text-m3-title-lg',
+  },
+  macos: {
+    sm: 'text-mac-callout',
+    md: 'text-mac-body',
+    lg: 'text-mac-title-3',
+  },
+  windows: {
+    sm: 'text-win-caption',
+    md: 'text-win-body',
+    lg: 'text-win-body-lg',
   },
 });
 
@@ -50,6 +61,16 @@ const WEIGHT = byLook<Record<TextWeight, string>>({
   android: {
     regular: 'font-regular',
     strong: 'font-medium',
+    bold: 'font-bold',
+  },
+  macos: {
+    regular: 'font-regular',
+    strong: 'font-semibold',
+    bold: 'font-bold',
+  },
+  windows: {
+    regular: 'font-regular',
+    strong: 'font-semibold',
     bold: 'font-bold',
   },
 });
@@ -111,7 +132,9 @@ export type HeadingProps = {
 type Level = NonNullable<HeadingProps['level']>;
 
 /** Headings on each look: iOS's large title, title 1, title 2 and headline;
- * Material's headlines and title medium. */
+ * Material's headlines and title medium; macOS's large title, title 1,
+ * title 2 and title 3; Fluent's title large, title, subtitle and body
+ * large. */
 const LEVEL = byLook<Record<Level, string>>({
   web: {
     1: 'text-display',
@@ -130,6 +153,18 @@ const LEVEL = byLook<Record<Level, string>>({
     2: 'text-m3-headline-md font-regular tracking-normal',
     3: 'text-m3-headline-sm font-regular tracking-normal',
     4: 'text-m3-title-md font-medium tracking-normal',
+  },
+  macos: {
+    1: 'text-mac-large-title font-bold tracking-normal',
+    2: 'text-mac-title-1 font-bold tracking-normal',
+    3: 'text-mac-title-2 font-bold tracking-normal',
+    4: 'text-mac-title-3 font-semibold tracking-normal',
+  },
+  windows: {
+    1: 'text-win-title-lg font-semibold tracking-normal',
+    2: 'text-win-title font-semibold tracking-normal',
+    3: 'text-win-subtitle font-semibold tracking-normal',
+    4: 'text-win-body-lg font-semibold tracking-normal',
   },
 });
 
@@ -153,6 +188,16 @@ export const TITLE = byLook({
     modal: 'text-m3-headline-sm font-regular tracking-normal',
     section: 'text-m3-title-lg font-regular tracking-normal',
   },
+  macos: {
+    card: 'text-mac-title-3 font-bold tracking-normal',
+    modal: 'text-mac-title-2 font-bold tracking-normal',
+    section: 'text-mac-title-2 font-bold tracking-normal',
+  },
+  windows: {
+    card: 'text-win-body font-semibold tracking-normal',
+    modal: 'text-win-subtitle font-semibold tracking-normal',
+    section: 'text-win-subtitle font-semibold tracking-normal',
+  },
 });
 
 /** Body and secondary text components draw around content. Internal. */
@@ -165,6 +210,14 @@ export const BODY = byLook({
   android: {
     body: 'text-m3-body-lg font-regular',
     caption: 'text-m3-body-md font-regular',
+  },
+  macos: {
+    body: 'text-mac-body font-regular',
+    caption: 'text-mac-callout font-regular',
+  },
+  windows: {
+    body: 'text-win-body font-regular',
+    caption: 'text-win-caption font-regular',
   },
 });
 

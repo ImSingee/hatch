@@ -124,7 +124,9 @@ export function Panels(props: {
 /**
  * The segmented control on each look: the Desk's; iOS's, a white segment
  * sliding on a gray track; Material's segmented buttons, an outlined pill
- * with the selected segment tinted.
+ * with the selected segment tinted; macOS's segmented control, a raised
+ * segment on a sunken track; Fluent's selector bar, text whose selected
+ * item an accent line underlines.
  */
 const SEGMENTED = byLook({
   web: {
@@ -147,6 +149,20 @@ const SEGMENTED = byLook({
     tab: 'group h-10 flex-row items-center justify-center gap-2 border-l border-control-border px-4 first:border-l-0 active:bg-surface-pressed disabled:opacity-40',
     text: 'text-m3-label-lg font-medium text-foreground group-selected:text-primary-tint-foreground',
     selectedGlyph: 'primary-tint-foreground' as GlyphColor,
+  },
+  macos: {
+    list: 'flex-row gap-0.5 rounded-(--radius-xs) bg-surface-sunken p-0.5',
+    indicator: 'inset-y-0.5 rounded-(--radius-xs) bg-card shadow-card',
+    tab: 'group h-6 flex-row items-center justify-center gap-1.5 rounded-(--radius-xs) px-2.5 disabled:opacity-50',
+    text: 'text-mac-body font-medium text-foreground',
+    selectedGlyph: 'foreground' as GlyphColor,
+  },
+  windows: {
+    list: 'flex-row gap-1',
+    indicator: 'bottom-0 h-0.75 rounded-full bg-primary',
+    tab: 'group h-9 flex-row items-center justify-center gap-2 rounded-(--radius-xs) px-3 hover:bg-surface-hover disabled:opacity-50',
+    text: 'text-win-body font-regular text-muted-foreground group-selected:font-semibold group-selected:text-foreground',
+    selectedGlyph: 'foreground' as GlyphColor,
   },
 });
 

@@ -1,0 +1,12 @@
+{
+  "name": "Grant probe",
+  "id": "dev.hatch.test.grant-probe",
+  "version": "1.0.0",
+  "build": 1,
+  "capabilities": {
+    "network": { "hosts": ["*"] },
+    "clipboard": true,
+    "openUrl": true,
+    "host": true
+  }
+}

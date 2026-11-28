@@ -43,6 +43,12 @@ export type AppSummary = Omit<Plain<Resource>, 'description' | 'iconPath'> & {
    * still building or failed has none, whatever its status says.
    */
   live: boolean;
+  /**
+   * How the live deployment's frontend runs: `native` Apps run on the phone's
+   * NSH runtime (mobile/native), `web` ones in a WebView. Null without a live
+   * frontend, or where the instance did not say (a list).
+   */
+  runtime: 'native' | 'web' | null;
 };
 export type AppDetail = AppSummary;
 export type Model = Plain<AgentModel>;

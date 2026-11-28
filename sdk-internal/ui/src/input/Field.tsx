@@ -51,12 +51,10 @@ export function Field(
       {props.labelHidden ? null : (
         <View class="gap-0.5">
           <View class="flex-row gap-1">
-            <Text class="text-body font-label text-field-label">
-              {props.label}
-            </Text>
+            <Text class={`${LABEL.label} text-field-label`}>{props.label}</Text>
             {props.required ? (
               <Text
-                class="text-body font-label text-danger-strong"
+                class={`${LABEL.label} text-danger-strong`}
                 importantForAccessibility="no"
               >
                 *
@@ -64,7 +62,9 @@ export function Field(
             ) : null}
           </View>
           {props.description ? (
-            <Text class="text-caption text-muted-foreground text-pretty">
+            <Text
+              class={`${LABEL.description} text-muted-foreground text-pretty`}
+            >
               {props.description}
             </Text>
           ) : null}
@@ -75,6 +75,22 @@ export function Field(
     </View>
   );
 }
+
+/** The label above a field on the web and the desktops, and the line
+ * under it. (iOS and Android draw their own frames.) */
+const LABEL = byLook({
+  web: { label: 'text-body font-label', description: 'text-caption' },
+  ios: { label: 'text-body font-label', description: 'text-caption' },
+  android: { label: 'text-body font-label', description: 'text-caption' },
+  macos: {
+    label: 'text-mac-body font-medium',
+    description: 'text-mac-callout font-regular',
+  },
+  windows: {
+    label: 'text-win-body font-regular',
+    description: 'text-win-caption font-regular',
+  },
+});
 
 type FieldFrameProps = Omit<FieldProps, 'name' | 'disabled'> & {
   children?: JSX.Element;
@@ -224,28 +240,38 @@ const ERROR_TEXT = byLook({
   web: 'text-caption font-strong text-danger-strong',
   ios: 'text-ios-footnote font-regular text-danger-strong',
   android: 'text-m3-body-sm font-regular text-danger-strong',
+  macos: 'text-mac-callout font-medium text-danger-strong',
+  windows: 'text-win-caption font-regular text-danger-strong',
 });
 
 /**
  * The well a text-like control sits in (DESIGN.md "Field"). On iOS the
  * field's row is the well, so the control has none of its own; on Android
  * it is Material's outlined field, its border 2 points of the accent while
- * it has the focus.
+ * it has the focus. macOS rings a focused field in the accent; Windows
+ * (Fluent) draws a darker bottom edge that turns into a 2-point accent line
+ * with the focus.
  */
 export const WELL = byLook({
   web: 'flex-row items-center gap-2 self-stretch rounded-(--radius-md) border bg-card px-3 transition-colors focus-within:border-ring focus-within:outline-2 focus-within:outline-offset-2 focus-within:outline-ring',
   ios: 'flex-row items-center gap-2 self-stretch',
   android:
     'flex-row items-center gap-3 self-stretch rounded-(--radius-xs) border px-4 transition-colors focus-within:outline-2 focus-within:-outline-offset-2 focus-within:outline-primary',
+  macos:
+    'flex-row items-center gap-1.5 self-stretch rounded-(--radius-xs) border bg-card px-2 transition-colors focus-within:outline-3 focus-within:outline-offset-0 focus-within:outline-primary',
+  windows:
+    'flex-row items-center gap-2 self-stretch rounded-(--radius-xs) border bg-card px-2.5 transition-colors focus-within:border-b-2 focus-within:border-b-primary',
 });
 
 /** 36 points; on touch 46, so the input inside its 1-point border keeps a
  * 44-point target. iOS: the 44-point line under the label; Android: 56
- * points. */
+ * points; macOS 28, Windows 32. */
 export const WELL_HEIGHT = byLook({
   web: 'h-9 pointer-coarse:h-11.5',
   ios: 'h-11',
   android: 'h-14',
+  macos: 'h-7',
+  windows: 'h-8',
 });
 
 export function wellState(invalid: boolean, disabled: boolean): string {
@@ -257,6 +283,9 @@ export function wellState(invalid: boolean, disabled: boolean): string {
       : 'border-control-border';
   }
   if (disabled) return 'border-input bg-muted';
+  if (look === 'windows') {
+    return invalid ? 'border-danger' : 'border-input border-b-control-border';
+  }
   return invalid ? 'border-danger' : 'border-input';
 }
 
@@ -266,6 +295,10 @@ export const WELL_TEXT = byLook({
   ios: 'text-ios-body font-regular text-foreground placeholder:text-muted-foreground disabled:text-muted-foreground',
   android:
     'text-m3-body-lg font-regular text-foreground placeholder:text-muted-foreground disabled:text-muted-foreground',
+  macos:
+    'text-mac-body font-regular text-foreground placeholder:text-muted-foreground disabled:text-muted-foreground',
+  windows:
+    'text-win-body font-regular text-foreground placeholder:text-muted-foreground disabled:text-muted-foreground',
 });
 
 /** How a well that opens a popup (a select, a date) answers the pointer
@@ -274,6 +307,8 @@ export const TRIGGER_STATE = byLook({
   web: 'enabled:hover:bg-muted',
   ios: 'active:opacity-60',
   android: 'active:bg-surface-pressed',
+  macos: 'active:bg-surface-pressed',
+  windows: 'enabled:hover:bg-muted active:bg-surface-pressed',
 });
 
 /** A search field at the top of a list or a popup, without a label: a
@@ -282,4 +317,6 @@ export const SEARCH_WELL = byLook({
   web: '',
   ios: 'flex-row items-center gap-1.5 self-stretch h-9 rounded-(--radius-sm) bg-surface-hover px-2',
   android: '',
+  macos: '',
+  windows: '',
 });

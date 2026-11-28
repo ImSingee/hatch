@@ -32,7 +32,21 @@
     "m3-body-sm": [12, 1.3333],
     "m3-label-lg": [14, 1.4286],
     "m3-label-md": [12, 1.3333],
-    "m3-label-sm": [11, 1.4545]
+    "m3-label-sm": [11, 1.4545],
+    "mac-large-title": [26, 1.2308],
+    "mac-title-1": [22, 1.1818],
+    "mac-title-2": [17, 1.2941],
+    "mac-title-3": [15, 1.3333],
+    "mac-body": [13, 1.3846],
+    "mac-callout": [12, 1.3333],
+    "mac-subhead": [11, 1.2727],
+    "win-title-lg": [40, 1.3],
+    "win-title": [28, 1.2857],
+    "win-subtitle": [20, 1.4],
+    "win-body-lg": [18, 1.3333],
+    "win-body": [14, 1.4286],
+    "win-label": [13, 1.3846],
+    "win-caption": [12, 1.3333]
   },
   "fontWeight": {
     "body": 500,

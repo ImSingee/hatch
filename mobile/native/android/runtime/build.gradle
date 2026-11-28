@@ -1,0 +1,35 @@
+// The runtime on Android: one NSH engine per App, owned here (not by a
+// view), verified packages, the fixed grant and the host bridge. Depends on
+// Android and NSH only (no React Native, no Expo).
+plugins {
+    id 'com.android.library'
+    id 'org.jetbrains.kotlin.android'
+}
+
+android {
+    namespace 'dev.hatch.app.runtime'
+    compileSdk 37
+    defaultConfig {
+        minSdk 26
+        testInstrumentationRunner 'androidx.test.runner.AndroidJUnitRunner'
+    }
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_17
+        targetCompatibility JavaVersion.VERSION_17
+    }
+}
+
+kotlin {
+    compilerOptions {
+        jvmTarget = org.jetbrains.kotlin.gradle.dsl.JvmTarget.JVM_17
+    }
+}
+
+dependencies {
+    api project(':hatch-app-core')
+    api 'com.longbridge.nsh:nsh:0.7.0'
+    androidTestImplementation 'androidx.test:runner:1.6.2'
+    androidTestImplementation 'androidx.test:core:1.6.1'
+    androidTestImplementation 'androidx.test.ext:junit:1.2.1'
+    androidTestImplementation 'org.jetbrains.kotlin:kotlin-test-junit'
+}

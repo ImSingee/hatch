@@ -11,6 +11,12 @@ cat request.json | hatch app invoke backend <id-or-slug> app.v1.TodoService/Crea
 hatch --profile staging app invoke backend <id-or-slug> app.v1.TodoService/ListTodos --json
 ```
 
+To learn an App's methods, read the reference generated from its proto:
+`hatch app docs rpc <id-or-slug>` prints each method's comment, request and
+response fields, `deprecated` and whether it is safe to retry
+(`idempotency_level`), with ready-to-run examples; `--json` prints the same
+data structured. See the App docs section of the CLI README.
+
 To run a method as a recorded task (its own instance, input validation,
 steps and run history) when the App declares it under `tasks`, use
 `hatch app task run <id-or-slug> <task>` instead.
