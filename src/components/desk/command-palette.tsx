@@ -16,10 +16,12 @@ import {
   IconSettings,
   IconSparkles,
 } from '@tabler/icons-react';
-import { useMemo, type ReactNode } from 'react';
+import { useWindowEvent } from '@mantine/hooks';
+import { useMemo, useState, type ReactNode } from 'react';
 import { AppGlyph } from '~components/apps/app-glyph';
 import { type PlainTranslationKey, useI18n } from '~i18n';
 import { appsQueryOptions } from '~queries/apps';
+import { isCompositionKey } from './composition';
 import { DESK_HOME } from './paths';
 import {
   platformShortcutKeys,
@@ -156,9 +158,25 @@ export function SearchPalette() {
     [apps.data, navigate, t],
   );
 
+  // Escape closes the palette, except the Escape that cancels an input
+  // method's composition: Mantine's own handling checks only `isComposing`,
+  // which WebKit leaves false on that key.
+  const [opened, setOpened] = useState(false);
+  useWindowEvent(
+    'keydown',
+    (event) => {
+      if (!opened || event.key !== 'Escape' || isCompositionKey(event)) return;
+      spotlight.close();
+    },
+    { capture: true },
+  );
+
   return (
     <Spotlight
       actions={actions}
+      closeOnEscape={false}
+      onSpotlightOpen={() => setOpened(true)}
+      onSpotlightClose={() => setOpened(false)}
       // The key is a platform shortcut (see platform-shortcuts.ts) so it also
       // works while focus is inside an App, from fields included.
       shortcut={null}

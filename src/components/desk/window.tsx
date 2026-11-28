@@ -17,6 +17,7 @@ import {
   useRef,
 } from 'react';
 import { useI18n } from '~i18n';
+import { isCompositionKey } from './composition';
 import { useWindowFrame, useWindowMaximize } from './desk-context';
 import { DESK_HOME } from './paths';
 import classes from './window.module.css';
@@ -173,7 +174,7 @@ export function DeskWindow({
     };
     const onEscape = (event: KeyboardEvent) => {
       if (event.key !== 'Escape' || event.defaultPrevented) return;
-      if (event.isComposing || event.repeat) return;
+      if (isCompositionKey(event) || event.repeat) return;
       if (event.metaKey || event.ctrlKey || event.altKey || event.shiftKey)
         return;
       if (layerWasOpen || isEditing(event.target)) return;
