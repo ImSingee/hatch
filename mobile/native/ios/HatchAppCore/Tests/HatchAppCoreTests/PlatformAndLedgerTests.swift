@@ -54,6 +54,12 @@ final class PlatformClientTests: XCTestCase {
         var unfinished = stream(bytes)
         unfinished.removeLast(PlatformClient.envelope(Data("{}".utf8)).count)
         XCTAssertThrowsError(try PlatformClient.readPackage(unfinished, hasher: SumHasher()))
+        // An end frame that is not a JSON object did not finish it either.
+        var malformed = unfinished
+        var end = PlatformClient.envelope(Data("{".utf8))
+        end[0] = 0x02
+        malformed.append(end)
+        XCTAssertThrowsError(try PlatformClient.readPackage(malformed, hasher: SumHasher()))
     }
 
     func testAnErrorInTheEndFrameCarriesItsCodes() {
@@ -110,18 +116,18 @@ final class PlatformClientTests: XCTestCase {
 }
 
 final class RunLedgerTests: XCTestCase {
-    let start = Date(timeIntervalSince1970: 1_000_000)
+    let start = ContinuousClock.now
 
     func testTheLeastRecentlyShownAppStopsAtTheLimit() {
         let ledger = RunLedger(limit: 3)
         for (index, app) in ["a", "b", "c"].enumerated() {
-            ledger.setVisible([app], now: start + Double(index))
-            ledger.start(app, route: "r-\(app)", now: start + Double(index))
+            ledger.setVisible([app], now: start + .seconds(index))
+            ledger.start(app, route: "r-\(app)", now: start + .seconds(index))
         }
-        ledger.setVisible(["c"], now: start + 3)
+        ledger.setVisible(["c"], now: start + .seconds(3))
         ledger.setRoute("a-later", of: "a")
         // "a" was shown first and is off screen: it makes room for "d".
-        let victims = ledger.start("d", route: "", now: start + 4)
+        let victims = ledger.start("d", route: "", now: start + .seconds(4))
         XCTAssertEqual(victims, ["a"])
         XCTAssertEqual(ledger.running, ["b", "c", "d"])
         XCTAssertEqual(ledger.route(of: "a"), "a-later")
@@ -133,9 +139,9 @@ final class RunLedgerTests: XCTestCase {
         let ledger = RunLedger(limit: 2)
         ledger.setVisible(["a"], now: start)
         ledger.start("a", route: "", now: start)
-        ledger.start("b", route: "", now: start + 1)
-        ledger.setVisible(["a"], now: start + 2)
-        XCTAssertEqual(ledger.start("c", route: "", now: start + 3), ["b"])
+        ledger.start("b", route: "", now: start + .seconds(1))
+        ledger.setVisible(["a"], now: start + .seconds(2))
+        XCTAssertEqual(ledger.start("c", route: "", now: start + .seconds(3)), ["b"])
     }
 
     func testHiddenAppsStopAfterTheBackgroundTime() {
@@ -143,39 +149,54 @@ final class RunLedgerTests: XCTestCase {
         ledger.setVisible(["a"], now: start)
         ledger.start("a", route: "orders/7", now: start)
         ledger.start("b", route: "", now: start)
-        ledger.setVisible(["b"], now: start + 60)
-        var result = ledger.stopWaiting(now: start + 299)
+        ledger.setVisible(["b"], now: start + .seconds(60))
+        var result = ledger.stopWaiting(now: start + .seconds(299))
         XCTAssertEqual(result.stopped, [])
-        XCTAssertEqual(result.nextDue, start + 360)
-        result = ledger.stopWaiting(now: start + 360)
+        XCTAssertEqual(result.nextDue, start + .seconds(360))
+        result = ledger.stopWaiting(now: start + .seconds(360))
         XCTAssertEqual(result.stopped, ["a"])
         XCTAssertEqual(ledger.route(of: "a"), "orders/7")
         XCTAssertNil(result.nextDue)
         // The whole app in the background: every App starts waiting.
-        ledger.setVisible([], now: start + 400)
-        XCTAssertEqual(ledger.stopWaiting(now: start + 699).stopped, [])
-        XCTAssertEqual(ledger.stopWaiting(now: start + 700).stopped, ["b"])
+        ledger.setVisible([], now: start + .seconds(400))
+        XCTAssertEqual(ledger.stopWaiting(now: start + .seconds(699)).stopped, [])
+        XCTAssertEqual(ledger.stopWaiting(now: start + .seconds(700)).stopped, ["b"])
     }
 
     func testShowingAnAppAgainResetsItsWait() {
         let ledger = RunLedger(limit: 3, backgroundMinutes: 1)
         ledger.start("a", route: "", now: start)
         ledger.setVisible([], now: start)
-        ledger.setVisible(["a"], now: start + 50)
-        ledger.setVisible([], now: start + 55)
-        XCTAssertEqual(ledger.stopWaiting(now: start + 100).stopped, [])
-        XCTAssertEqual(ledger.stopWaiting(now: start + 115).stopped, ["a"])
+        ledger.setVisible(["a"], now: start + .seconds(50))
+        ledger.setVisible([], now: start + .seconds(55))
+        XCTAssertEqual(ledger.stopWaiting(now: start + .seconds(100)).stopped, [])
+        XCTAssertEqual(ledger.stopWaiting(now: start + .seconds(115)).stopped, ["a"])
     }
 }
 
 
-/// Takes only a newer, validly signed list, as NSH does.
+/// Takes only a newer, validly signed list, as NSH does: in memory first,
+/// then saved to `state` (unless `failSave`).
 final class FakeTrustStore: TrustStore {
     struct Refused: Error {}
     var sequence: Int
     var roots: [String] = []
+    let state: URL?
+    var failSave: Bool
 
-    init(sequence: Int = 0) { self.sequence = sequence }
+    init(sequence: Int = 0, state: URL? = nil, failSave: Bool = false) {
+        self.sequence = sequence
+        self.state = state
+        self.failSave = failSave
+    }
+
+    /// A store opened from what `state` holds.
+    static func opened(_ state: URL, failSave: Bool = false) -> FakeTrustStore {
+        let saved = (try? Data(contentsOf: state))
+            .flatMap { try? JSONSerialization.jsonObject(with: $0) as? [String: String] }?["revocations"]
+        let sequence = saved.flatMap { Int($0.split(separator: ":")[1]) } ?? 0
+        return FakeTrustStore(sequence: sequence, state: state, failSave: failSave)
+    }
 
     func addRoot(_ publicKey: String) throws { roots.append(publicKey) }
 
@@ -183,6 +204,9 @@ final class FakeTrustStore: TrustStore {
         let parts = json.split(separator: ":")
         guard parts[0] == "signed", let number = Int(parts[1]), number > sequence else { throw Refused() }
         sequence = number
+        guard let state else { return }
+        if failSave { throw Refused() }
+        try JSONSerialization.data(withJSONObject: ["revocations": json]).write(to: state)
     }
 }
 
@@ -192,39 +216,70 @@ final class TrustRefreshTests: XCTestCase {
             initialized: true, roots: ["root"], revocations: list ?? "signed:\(sequence)", revocationSequence: sequence)
     }
 
-    private func marker() -> URL {
-        FileManager.default.temporaryDirectory.appendingPathComponent("trust-\(UUID().uuidString)/sequence")
+    private struct Dir {
+        let marker: URL
+        let state: URL
+        init() throws {
+            let dir = FileManager.default.temporaryDirectory.appendingPathComponent("trust-\(UUID().uuidString)")
+            try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+            marker = dir.appendingPathComponent("sequence")
+            state = dir.appendingPathComponent("nsh-trust.json")
+        }
+        func refresh() -> TrustRefresh { TrustRefresh(marker: marker, state: state) }
+        func recorded() -> String? { try? String(contentsOf: marker, encoding: .utf8) }
     }
 
-    func testAListTheStoreAlreadyHasIsNotAFailure() throws {
-        let marker = marker()
-        try FileManager.default.createDirectory(at: marker.deletingLastPathComponent(), withIntermediateDirectories: true)
-        // The store took list 8 but the marker still says 7 (its write failed).
-        try "7".write(to: marker, atomically: true, encoding: .utf8)
-        let store = FakeTrustStore(sequence: 8)
-        try TrustRefresh(marker: marker).refresh(store, material: material(8)) { FakeTrustStore() }
-        XCTAssertEqual(try String(contentsOf: marker, encoding: .utf8), "8")
+    private struct NotNeeded: Error {}
+
+    func testAListTheStoreAlreadySavedIsNotAFailure() throws {
+        let d = try Dir()
+        let store = FakeTrustStore(state: d.state)
+        try d.refresh().refresh(store, material: material(8), reopen: { FakeTrustStore.opened(d.state) }) {
+            FakeTrustStore()
+        }
+        // The store saved list 8 but the marker still says 7 (its write was lost).
+        try "7".write(to: d.marker, atomically: true, encoding: .utf8)
+        try d.refresh().refresh(store, material: material(8), reopen: { throw NotNeeded() }) { throw NotNeeded() }
+        XCTAssertEqual(d.recorded(), "8")
         // Newer lists still apply.
-        try TrustRefresh(marker: marker).refresh(store, material: material(9)) { FakeTrustStore() }
+        try d.refresh().refresh(store, material: material(9), reopen: { FakeTrustStore.opened(d.state) }) {
+            FakeTrustStore()
+        }
         XCTAssertEqual(store.sequence, 9)
     }
 
-    func testAnInvalidNewerListStopsEverything() throws {
-        let marker = marker()
-        try FileManager.default.createDirectory(at: marker.deletingLastPathComponent(), withIntermediateDirectories: true)
-        try "7".write(to: marker, atomically: true, encoding: .utf8)
+    func testAListTakenButNotSavedIsSavedBeforeTheMarkerMoves() throws {
+        let d = try Dir()
+        let store = FakeTrustStore(state: d.state, failSave: true)
+        // NSH kept list 8 in memory but could not save it: nothing is recorded.
         XCTAssertThrowsError(
-            try TrustRefresh(marker: marker).refresh(FakeTrustStore(sequence: 7), material: material(8, "forged:8")) {
-                FakeTrustStore()
-            })
-        XCTAssertEqual(try String(contentsOf: marker, encoding: .utf8), "7")
+            try d.refresh().refresh(
+                store, material: material(8), reopen: { FakeTrustStore.opened(d.state, failSave: true) }
+            ) { FakeTrustStore() })
+        XCTAssertNil(d.recorded())
+        // The next open saves it through a store opened from disk, then records it.
+        try d.refresh().refresh(store, material: material(8), reopen: { FakeTrustStore.opened(d.state) }) {
+            FakeTrustStore()
+        }
+        XCTAssertEqual(d.recorded(), "8")
+        XCTAssertEqual(FakeTrustStore.opened(d.state).sequence, 8)
+    }
+
+    func testAnInvalidNewerListStopsEverything() throws {
+        let d = try Dir()
+        try "7".write(to: d.marker, atomically: true, encoding: .utf8)
+        XCTAssertThrowsError(
+            try d.refresh().refresh(
+                FakeTrustStore(sequence: 7), material: material(8, "forged:8"), reopen: { FakeTrustStore(sequence: 7) }
+            ) { FakeTrustStore() })
+        XCTAssertEqual(d.recorded(), "7")
     }
 
     func testRootsAreAddedOncePerStore() throws {
-        let refresh = TrustRefresh(marker: marker())
+        let refresh = try Dir().refresh()
         let store = FakeTrustStore()
-        try refresh.refresh(store, material: material(1)) { FakeTrustStore() }
-        try refresh.refresh(store, material: material(1)) { FakeTrustStore() }
+        try refresh.refresh(store, material: material(1), reopen: { FakeTrustStore() }) { FakeTrustStore() }
+        try refresh.refresh(store, material: material(1), reopen: { FakeTrustStore() }) { FakeTrustStore() }
         XCTAssertEqual(store.roots, ["root"])
     }
 }

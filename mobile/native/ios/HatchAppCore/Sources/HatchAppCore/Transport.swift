@@ -56,17 +56,20 @@ public enum TransportError: Error, Equatable {
 public final class URLSessionTransport: NSObject, HTTPTransport, URLSessionTaskDelegate, @unchecked Sendable {
     /// The longest line a streamed body may send (64 KiB).
     public static let maxLine = 64 * 1024
-    private lazy var session: URLSession = {
+    /// Made once, before the transport is handed out, so concurrent first
+    /// calls never race to create it.
+    private var session: URLSession!
+
+    public override init() {
+        super.init()
         let configuration = URLSessionConfiguration.ephemeral
         configuration.urlCache = nil
         configuration.requestCachePolicy = .reloadIgnoringLocalCacheData
         configuration.httpCookieStorage = nil
         configuration.httpShouldSetCookies = false
         configuration.urlCredentialStorage = nil
-        return URLSession(configuration: configuration, delegate: self, delegateQueue: nil)
-    }()
-
-    public override init() {}
+        session = URLSession(configuration: configuration, delegate: self, delegateQueue: nil)
+    }
 
     private func urlRequest(_ request: HTTPRequest) -> URLRequest {
         var out = URLRequest(url: request.url, timeoutInterval: request.timeout)
