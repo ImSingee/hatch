@@ -787,8 +787,11 @@ rename after its size and SHA-256 match what the platform announced. It
 prints `{ appId, deploymentId, version, build, nshAppId, nshVersion, sha256,
 size, keyId, bytecode, path }`. `build` grows with every deploy and rollback
 of the App, so a rolled-back version is a newer build of the older code;
-`bytecode` is false for packages of a `--local` build, which keep their
-source only. `--out -` writes the bytes to stdout instead. The platform signs
+`bytecode` says whether the package carries the build's bytecode. Every
+deployment carries it except a `--local` one built while the platform still
+dropped the bytecode of `--local` builds, which stays source only, also when
+the App is rolled back to it.
+`--out -` writes the bytes to stdout instead. The platform signs
 the package the first time it is asked if it has not yet, so the command
 needs no other step. `hatch app get` shows `frontend.runtime`,
 `frontend.nshVersion` and `frontend.packageBuild`.

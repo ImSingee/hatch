@@ -1117,7 +1117,9 @@ message AppPackage {
   uint32 size = 8;
   // The release key that signed it.
   string key_id = 9;
-  // Whether it carries bytecode (only packages of a Builder's build do).
+  // Whether it carries the build's bytecode, which shells load as trusted
+  // input. False only for a `--local` deployment built while the platform
+  // still dropped the bytecode of `--local` builds, also after a rollback.
   bool bytecode = 10;
 }
 

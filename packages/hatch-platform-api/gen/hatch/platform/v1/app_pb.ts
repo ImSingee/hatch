@@ -3611,7 +3611,9 @@ export type AppPackage = Message<'hatch.platform.v1.AppPackage'> & {
   keyId: string;
 
   /**
-   * Whether it carries bytecode (only packages of a Builder's build do).
+   * Whether it carries the build's bytecode, which shells load as trusted
+   * input. False only for a `--local` deployment built while the platform
+   * still dropped the bytecode of `--local` builds, also after a rollback.
    *
    * @generated from field: bool bytecode = 10;
    */

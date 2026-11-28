@@ -89,8 +89,6 @@ export async function buildApp(
       deploymentId,
       commit: null,
       tooling: host.tooling,
-      // The platform built it itself.
-      trustBytecode: true,
     });
     // Deploy builds use a fresh path, while direct callers do not lose a
     // prior output when a check or a later step fails.
