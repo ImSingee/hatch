@@ -444,7 +444,11 @@ class TrustRefreshTest {
         val roots = mutableListOf<String>()
         var closed = false
 
-        override fun addRoot(publicKey: String) = roots.add(publicKey)
+        // Like NSH, a root it already trusts is not added twice.
+        override fun addRoot(publicKey: String): Boolean {
+            if (publicKey !in roots) roots.add(publicKey)
+            return true
+        }
 
         override fun updateRevocations(json: String): Boolean {
             val (signed, number) = json.split(":")
@@ -510,7 +514,9 @@ class TrustRefreshTest {
         d.refresh().refresh(store, material(8), { FakeStore.opened(d.state).also { reopened += it } }) { FakeStore() }
         assertEquals("8", d.marker.readText())
         assertEquals(8, FakeStore.opened(d.state).sequence)
-        assertEquals(true, reopened.single().closed)
+        // The reopened store replaces the old one: it stays open, trusting the roots.
+        assertEquals(false, reopened.single().closed)
+        assertEquals(listOf("root"), reopened.single().roots)
     }
 
     @Test
@@ -524,11 +530,17 @@ class TrustRefreshTest {
     }
 
     @Test
-    fun rootsAreAddedOncePerStore() {
-        val refresh = Dir().refresh()
-        val store = FakeStore()
-        refresh.refresh(store, material(1), { FakeStore() }) { FakeStore() }
-        refresh.refresh(store, material(1), { FakeStore() }) { FakeStore() }
+    fun everyStoreItChecksWithTrustsTheRoots() {
+        val d = Dir()
+        val probes = mutableListOf<FakeStore>()
+        val store = FakeStore(state = d.state, failSave = true)
+        assertFailsWith<IllegalStateException> {
+            d.refresh().refresh(store, material(3), { FakeStore.opened(d.state).also { it.failSave = true } }) {
+                FakeStore().also { probes += it }
+            }
+        }
         assertEquals(listOf("root"), store.roots)
+        assertEquals(listOf("root"), probes.single().roots)
+        assertEquals(true, probes.single().closed)
     }
 }

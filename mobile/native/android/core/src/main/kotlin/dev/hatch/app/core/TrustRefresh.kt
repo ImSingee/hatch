@@ -4,6 +4,7 @@ import java.io.File
 
 /** What the runtime needs of NSH's trust store (`NshTrust`). */
 interface TrustStore {
+    /** Trusts a root key; a store that already trusts it answers true too. */
     fun addRoot(publicKey: String): Boolean
 
     /** Applies a signed revocation list; false when the store refuses it. */
@@ -23,14 +24,13 @@ interface TrustStore {
  * - `state` already holds this list: the marker's own write was lost.
  * - Otherwise a store with nothing applied (`fresh`) checks the list. If it
  *   refuses, the list is not valid and nothing opens. If it takes it, the
- *   store took the list but did not save it: a store opened again from what
- *   is saved (`reopen`) takes it and saves it, or the open fails and the next
- *   one tries again.
+ *   store took the list but did not save it: the store is opened again from
+ *   what is saved (`reopen`, which replaces it) and takes the list, saving
+ *   it, or the open fails and the next one tries again.
+ *
+ * Every store gets the roots: NSH opens a store trusting none.
  */
 class TrustRefresh(private val marker: File, private val state: File) {
-    private val roots = mutableSetOf<String>()
-
-    @Synchronized
     fun refresh(
         store: TrustStore,
         material: RuntimeTrust,
@@ -40,17 +40,21 @@ class TrustRefresh(private val marker: File, private val state: File) {
         if (!material.initialized) {
             throw PlatformException("failed_precondition", message = "This instance has no native App keys yet.")
         }
-        for (root in material.roots) {
-            if (root in roots) continue
-            check(store.addRoot(root)) { "The instance's root key is not valid." }
-            roots.add(root)
-        }
+        trustRoots(store, material.roots)
         val list = material.revocations ?: return
         val applied = runCatching { marker.readText().trim().toInt() }.getOrDefault(0)
         if (material.revocationSequence <= applied) return
         if (!store.updateRevocations(list) && !saves(list)) {
-            check(applies(fresh(), list)) { "The instance's revocation list is not valid." }
-            check(applies(reopen(), list)) { "Could not save the instance's revocation list." }
+            val probe = fresh()
+            try {
+                trustRoots(probe, material.roots)
+                check(probe.updateRevocations(list)) { "The instance's revocation list is not valid." }
+            } finally {
+                probe.close()
+            }
+            val reopened = reopen()
+            trustRoots(reopened, material.roots)
+            check(reopened.updateRevocations(list)) { "Could not save the instance's revocation list." }
         }
         marker.parentFile?.mkdirs()
         val partial = File(marker.parentFile, "${marker.name}.partial")
@@ -58,13 +62,9 @@ class TrustRefresh(private val marker: File, private val state: File) {
         check(partial.renameTo(marker)) { "Could not record the revocation list." }
     }
 
-    private fun applies(store: TrustStore, list: String): Boolean =
-        try {
-            for (root in roots) store.addRoot(root)
-            store.updateRevocations(list)
-        } finally {
-            store.close()
-        }
+    private fun trustRoots(store: TrustStore, roots: List<String>) {
+        for (root in roots) check(store.addRoot(root)) { "The instance's root key is not valid." }
+    }
 
     /** Whether the saved state holds `list` itself. */
     private fun saves(list: String): Boolean {
@@ -72,5 +72,39 @@ class TrustRefresh(private val marker: File, private val state: File) {
         // Lists are JSON objects; anything else is compared as it is written.
         val wanted = runCatching { Json.parse(list) }.getOrNull()?.takeIf { it is Map<*, *> } ?: list
         return saved != null && saved == wanted
+    }
+}
+
+/**
+ * The one trust store of an instance's trust directory, shared by every
+ * session for that instance. NSH saves a store's whole state at once, so a
+ * second store on the same directory could write back what it read before
+ * the first saved (a revocation list, an accepted build). One store, and one
+ * caller at a time: refreshing it, replacing it, and whatever `use` runs with
+ * it (opening and accepting a package) never overlap, and a session that
+ * ended (`active` false) neither refreshes nor uses it.
+ */
+class TrustDirectory<S : TrustStore>(
+    private val refresh: TrustRefresh,
+    private val open: () -> S,
+    private val fresh: () -> TrustStore,
+) {
+    private var store: S? = null
+
+    @Synchronized
+    fun <T> use(material: RuntimeTrust, active: () -> Boolean, block: (S) -> T): T {
+        if (!active()) throw PlatformException("unauthenticated", message = "Sign in to this instance again.")
+        refresh.refresh(
+            store ?: open().also { store = it },
+            material,
+            reopen = {
+                store?.close()
+                open().also { store = it }
+            },
+            fresh,
+        )
+        val current = store!!
+        if (!active()) throw PlatformException("unauthenticated", message = "Sign in to this instance again.")
+        return block(current)
     }
 }

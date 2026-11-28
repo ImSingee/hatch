@@ -49,8 +49,8 @@ final class EngineSession {
     let origin: URL
     let directory: URL
     private let tokenBox: TokenBox
-    private var store: NshTrust?
-    private let trustRefresh: TrustRefresh
+    /// Shared with every session for the same instance: they use the same trust directory.
+    private let trustDirectory: TrustDirectory<StoreOf>
     private(set) var active = true
 
     /// The credential, readable off the main actor by the bridge.
@@ -68,9 +68,7 @@ final class EngineSession {
         self.origin = origin
         self.directory = directory
         tokenBox = TokenBox(token)
-        trustRefresh = TrustRefresh(
-            marker: directory.appendingPathComponent("trust/revocations-sequence"),
-            state: directory.appendingPathComponent("trust/nsh-trust.json"))
+        trustDirectory = TrustDirectories.of(directory)
     }
 
     var token: String? {
@@ -87,41 +85,58 @@ final class EngineSession {
         PlatformClient(origin: origin, credential: credential, transport: transport)
     }
 
-    /// This session's trust store, first brought up to the instance's
-    /// material (a newer revocation list applies before any package opens).
-    func trust(_ client: PlatformClient) async throws -> NshTrust {
+    /// Runs `body` with the instance's trust store, first brought up to the
+    /// instance's material (a newer revocation list applies before any package
+    /// opens). Not for a session that ended, and never at the same time as
+    /// another session's work on the same store.
+    func withTrust<T>(_ client: PlatformClient, _ body: (NshTrust) async throws -> T) async throws -> T {
         guard active else { throw PlatformError(code: "unauthenticated", message: "Sign in to this instance again.") }
-        let store = try self.store ?? NshTrust(stateDirectory: directory.appendingPathComponent("trust"))
-        self.store = store
         let material = try await client.runtimeTrust()
-        guard active else { throw PlatformError(code: "unauthenticated", message: "Sign in to this instance again.") }
-        let probes = directory
-        try trustRefresh.refresh(
-            StoreOf(store), material: material,
-            reopen: { StoreOf(try NshTrust(stateDirectory: probes.appendingPathComponent("trust"))) },
-            fresh: {
-                let dir = probes.appendingPathComponent("trust-probe-\(UUID().uuidString)", isDirectory: true)
-                return StoreOf(try NshTrust(stateDirectory: dir), removing: dir)
-            })
-        return store
+        return try await trustDirectory.use(material: material, active: { active }) { try await body($0.trust) }
     }
 
     func retire() {
         active = false
         tokenBox.value = nil
-        store = nil
     }
 }
 
+/// The one trust store per instance directory, for the life of the process.
+@MainActor
+private enum TrustDirectories {
+    static var all: [String: TrustDirectory<StoreOf>] = [:]
+
+    static func of(_ directory: URL) -> TrustDirectory<StoreOf> {
+        if let existing = all[directory.path] { return existing }
+        let created = TrustDirectory<StoreOf>(
+            refresh: TrustRefresh(
+                marker: directory.appendingPathComponent("trust/revocations-sequence"),
+                state: directory.appendingPathComponent("trust/nsh-trust.json")),
+            open: { StoreOf(try NshTrust(stateDirectory: directory.appendingPathComponent("trust"))) },
+            fresh: {
+                let dir = directory.appendingPathComponent("trust-probe-\(UUID().uuidString)", isDirectory: true)
+                return StoreOf(try NshTrust(stateDirectory: dir), removing: dir)
+            })
+        all[directory.path] = created
+        return created
+    }
+}
+
+/// An `NshTrust` as `TrustRefresh` sees it; a probe's directory goes with it.
 private final class StoreOf: TrustStore {
     let trust: NshTrust
     let directory: URL?
+    private var roots: Set<String> = []
     init(_ trust: NshTrust, removing directory: URL? = nil) {
         self.trust = trust
         self.directory = directory
     }
     deinit { if let directory { try? FileManager.default.removeItem(at: directory) } }
-    func addRoot(_ publicKey: String) throws { try trust.addRoot(publicKey) }
+    func addRoot(_ publicKey: String) throws {
+        guard !roots.contains(publicKey) else { return }
+        try trust.addRoot(publicKey)
+        roots.insert(publicKey)
+    }
     func updateRevocations(_ json: String) throws { try trust.updateRevocations(json) }
 }
 
@@ -219,7 +234,8 @@ public final class AppEngineManager {
         ledger.reset()
         session?.retire()
         session = nil
-        if let origin, let token {
+        // Storage a sign-out could not delete yet is never handed to the next session.
+        if let origin, let token, AppStorage.ready(Self.directory(of: origin)) {
             session = EngineSession(origin: origin, token: token, directory: Self.directory(of: origin))
         }
     }
@@ -232,9 +248,11 @@ public final class AppEngineManager {
     /// Deletes what Apps saved on this phone for `origin` (their storage),
     /// when its account signs out: the next account must not find it. The
     /// instance's engines stop first (`configure`).
-    public func forgetStorage(origin: URL) {
+    public func forgetStorage(origin: URL) throws {
         guard session?.origin != origin else { return }
-        try? FileManager.default.removeItem(at: Self.directory(of: origin).appendingPathComponent("storage"))
+        guard AppStorage.forget(Self.directory(of: origin)) else {
+            throw PlatformError(code: "internal", message: "Could not delete the Apps' data on this device.")
+        }
     }
 
     /// The user's background minutes (`GetDeskPreferences`).
@@ -360,15 +378,15 @@ public final class AppEngineManager {
                 }
             }
             guard engines[engine.appId] === engine, let file else { return }
-            let trust = try await engine.session.trust(client)
-            let package: NshPackage
-            do {
-                package = try await trust.openPackage(at: file)
-            } catch {
-                // A cached package the store refuses (revoked, or older than
-                // one it accepted) is fetched again when the App next opens.
-                try? FileManager.default.removeItem(at: file)
-                throw PlatformError(code: "failed_precondition", message: "\(error)")
+            let package: NshPackage = try await engine.session.withTrust(client) { trust in
+                do {
+                    return try await trust.openPackage(at: file)
+                } catch {
+                    // A cached package the store refuses (revoked, or older than
+                    // one it accepted) is fetched again when the App next opens.
+                    try? FileManager.default.removeItem(at: file)
+                    throw PlatformError(code: "failed_precondition", message: "\(error)")
+                }
             }
             guard engines[engine.appId] === engine else { return }
             let build = Int(package.info.build)

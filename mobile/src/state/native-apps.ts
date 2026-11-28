@@ -34,8 +34,12 @@ export function useNativeAppRuntime() {
   useEffect(subscribe, []);
   const configured = useQuery({
     queryKey: [origin, 'native-app-runtime', epoch],
-    queryFn: async () => {
-      await appRuntime.configure(origin, await vault.get(origin!));
+    queryFn: async ({ signal }) => {
+      const token = await vault.get(origin!);
+      // Signing out or switching instances cancels this query: a credential
+      // read for the session that ended configures nothing.
+      if (signal.aborted) throw new Error('The session changed.');
+      await appRuntime.configure(origin, token);
       return true;
     },
     enabled: Boolean(origin && appRuntime.available),
