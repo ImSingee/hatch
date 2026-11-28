@@ -62,7 +62,7 @@ export default function AppScreen() {
   const native =
     appRuntime.available && app.data?.runtime === 'native' ? app.data : null;
   const [nativeTitle, setNativeTitle] = useState<string | null>(null);
-  useNativeAppRuntime();
+  const runtimeReady = useNativeAppRuntime();
   // Android's back gesture goes back in the App first, then leaves the screen.
   useFocusEffect(
     useCallback(() => {
@@ -162,6 +162,8 @@ export default function AppScreen() {
             action={{ label: 'Try again', onPress: retry }}
           />
         </View>
+      ) : native && !runtimeReady ? (
+        <Busy label={`Opening ${name}`} />
       ) : native ? (
         <NativeAppSurface
           appId={native.id}

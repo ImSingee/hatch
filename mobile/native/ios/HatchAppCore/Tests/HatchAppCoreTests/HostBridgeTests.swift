@@ -47,6 +47,18 @@ final class RecordingShell: BridgeShell, @unchecked Sendable {
     func deploymentStale() async { staleCount += 1 }
 }
 
+/// A shell that only the bridge holds, passing its calls on.
+final class ForwardingShell: BridgeShell, @unchecked Sendable {
+    let target: RecordingShell
+    init(to target: RecordingShell) { self.target = target }
+    func themeJSON() async -> String? { await target.themeJSON() }
+    func setTitle(_ title: String?) async { await target.setTitle(title) }
+    func setRoute(_ route: String) async { await target.setRoute(route) }
+    func openApp(slug: String, route: String) async -> Bool { await target.openApp(slug: slug, route: route) }
+    func unauthorized() async { await target.unauthorized() }
+    func deploymentStale() async { await target.deploymentStale() }
+}
+
 final class HostBridgeTests: XCTestCase {
     let origin = URL(string: "https://hatch.example.test")!
     var transport: FakeTransport!
@@ -61,6 +73,18 @@ final class HostBridgeTests: XCTestCase {
         bridge = HostBridge(
             origin: origin, scope: scope, credential: { "session-token" }, transport: transport, shell: shell,
             eventsWait: 0.5)
+    }
+
+    func testTheBridgeKeepsTheShellItWasGiven() async {
+        // The engine manager hands the bridge a shell no one else holds.
+        let routes = RecordingShell()
+        let bridge = HostBridge(
+            origin: origin, scope: bridge.scope, credential: { nil }, transport: transport,
+            shell: ForwardingShell(to: routes))
+        _ = await bridge.call("hatch.nav.setRoute", ["route": "orders/7"])
+        _ = await bridge.call("hatch.nav.setTitle", ["title": "Orders"])
+        XCTAssertEqual(routes.routes, ["orders/7"])
+        XCTAssertEqual(routes.titles, ["Orders"])
     }
 
     private func refused(_ answer: [String: Any], _ code: String, file: StaticString = #filePath, line: UInt = #line) {

@@ -56,7 +56,9 @@ public final class HostBridge: @unchecked Sendable {
     public let origin: URL
     private let credential: @Sendable () -> String?
     private let transport: HTTPTransport
-    private weak var shell: BridgeShell?
+    /// Held strongly: the shell is the engine's only link to its host, and
+    /// nothing else needs to keep it.
+    private let shell: BridgeShell?
     private let lock = NSLock()
     private var _scope: AppScope
     private let eventsWait: TimeInterval

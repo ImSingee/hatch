@@ -1,5 +1,5 @@
 import { useQuery } from '@tanstack/react-query';
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { appRuntime } from '../native/app-runtime';
 import { openSurfaceLink } from './deep-links';
 import { useSession, vault } from './session';
@@ -23,15 +23,22 @@ function subscribe() {
  * and its credential, the user's background minutes and the theme Apps
  * follow. Used by the App screen; signing out or switching instances stops
  * every App (`SessionProvider`).
+ *
+ * Returns whether the runtime has this session's credential yet: a view
+ * mounted before that would find no session and fail.
  */
-export function useNativeAppRuntime(): void {
+export function useNativeAppRuntime(): boolean {
   const { api, origin, epoch } = useSession();
+  const session = origin ? `${epoch}:${origin}` : null;
+  const [configured, setConfigured] = useState<string | null>(null);
   useEffect(() => {
     subscribe();
     if (!origin) return;
     let alive = true;
     void vault.get(origin).then((token) => {
-      if (alive) appRuntime.configure(origin, token);
+      if (!alive) return;
+      appRuntime.configure(origin, token);
+      setConfigured(`${epoch}:${origin}`);
     });
     return () => {
       alive = false;
@@ -55,4 +62,5 @@ export function useNativeAppRuntime(): void {
   useEffect(() => {
     if (theme.data) appRuntime.setTheme(theme.data);
   }, [theme.data]);
+  return session !== null && configured === session;
 }
