@@ -79,6 +79,8 @@ export type WindowPlacement = 'front' | 'beside' | 'hidden';
  */
 const LAYERS = [
   '.mantine-Modal-content',
+  // The search palette: a modal under Spotlight's own class names.
+  '.mantine-Spotlight-content',
   '.mantine-Drawer-content',
   '.mantine-Popover-dropdown',
   '.mantine-Menu-dropdown',
