@@ -2,6 +2,7 @@ import { useQuery } from '@tanstack/react-query';
 import { useEffect } from 'react';
 import { appRuntime } from '../native/app-runtime';
 import { openSurfaceLink } from './deep-links';
+import { readRuntimeSession } from './runtime-session';
 import { useSession, vault } from './session';
 
 let subscribed = false;
@@ -35,14 +36,13 @@ export function useNativeAppRuntime() {
   const configured = useQuery({
     queryKey: [origin, 'native-app-runtime', epoch],
     queryFn: async ({ signal }) => {
-      const token = await vault.get(origin!);
       // Apps keep their storage per account: another account on this
       // instance never opens what this one saved.
-      const account = await api!.accountId(signal);
-      // Signing out or switching instances cancels this query: a credential
-      // read for the session that ended configures nothing.
-      if (signal.aborted) throw new Error('The session changed.');
-      if (!account) throw new Error('This sign-in has no account.');
+      const { token, account } = await readRuntimeSession({
+        readToken: () => vault.get(origin!),
+        accountId: (signal) => api!.accountId(signal),
+        signal,
+      });
       await appRuntime.configure(origin, token, account);
       return true;
     },

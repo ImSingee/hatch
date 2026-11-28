@@ -25,12 +25,16 @@ object AppStorage {
     /** Deletes what Apps saved for the instance; false when some of it is still there. */
     @Synchronized
     fun forget(instanceDirectory: File): Boolean {
+        if (!instanceDirectory.exists()) return true
         val accounts = File(instanceDirectory, ACCOUNTS)
         // Out of the way first, in one step, then deleted.
         if (accounts.exists() && !accounts.renameTo(File(instanceDirectory, "$FORGOTTEN${UUID.randomUUID()}"))) {
             accounts.deleteRecursively()
         }
-        instanceDirectory.listFiles { file -> file.name.startsWith(FORGOTTEN) }?.forEach { it.deleteRecursively() }
-        return !accounts.exists() && instanceDirectory.listFiles { file -> file.name.startsWith(FORGOTTEN) }.isNullOrEmpty()
+        // A directory it cannot list may still hold what it moved away.
+        val forgotten = instanceDirectory.listFiles { file -> file.name.startsWith(FORGOTTEN) } ?: return false
+        forgotten.forEach { it.deleteRecursively() }
+        val left = instanceDirectory.listFiles { file -> file.name.startsWith(FORGOTTEN) } ?: return false
+        return !accounts.exists() && left.isEmpty()
     }
 }
