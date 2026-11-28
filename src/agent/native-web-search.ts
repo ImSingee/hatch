@@ -359,6 +359,10 @@ export function createNativeWebSearchCollector(
         pending,
       };
     },
+    hasPending: () =>
+      [...inherited.values(), ...entries.values()].some(
+        (entry) => !entry.ended,
+      ),
     replay: () => anthropic?.content(),
   };
 }
@@ -369,12 +373,12 @@ export type AssistantWithNativeWebSearch = AssistantMessage & {
 
 function prepareAnthropicReplay(
   messages: Message[],
-  paused: WeakMap<AssistantMessage, RecordValue[]>,
+  replies: WeakMap<AssistantMessage, RecordValue[]>,
 ) {
   const replacements = new Map<string, RecordValue[]>();
   const prepared = messages.map((message) => {
     if (message.role !== 'assistant') return message;
-    const content = paused.get(message);
+    const content = replies.get(message);
     if (!content) return message;
     // A reply made entirely of provider-side blocks has no content in pi.
     // Give pi a placeholder to locate that exact reply after serialization.
@@ -423,22 +427,22 @@ export function withNativeWebSearch(
   api: SearchApi,
   callbacks: SearchCallbacks,
 ): Models {
-  const paused = new WeakMap<AssistantMessage, RecordValue[]>();
+  const replies = new WeakMap<AssistantMessage, RecordValue[]>();
   let pending = new Map<string, SearchEntry>();
   let continuations = 0;
   const streamSimple: Models['streamSimple'] = (model, context, options) => {
     const collector = createNativeWebSearchCollector(api, callbacks, pending);
     const replay =
       api === 'anthropic-messages'
-        ? prepareAnthropicReplay(context.messages, paused)
+        ? prepareAnthropicReplay(context.messages, replies)
         : undefined;
     const source = models.streamSimple(
       model,
       replay ? { ...context, messages: replay.messages } : context,
       {
         ...options,
-        // A thread can already contain the paused reply, especially when
-        // it had no pi-visible blocks and pi hashes it as an empty prefix.
+        // A thread can already contain the reply we need to replay, even
+        // when pi hashed it without the hosted tool blocks.
         ...(replay?.needed ? { disableContinuation: true } : {}),
         async onPayload(payload, model) {
           const withReplay = replay ? replay.apply(payload) : payload;
@@ -454,21 +458,27 @@ export function withNativeWebSearch(
     const output = createAssistantMessageEventStream();
     const finish = (message: AssistantWithNativeWebSearch) => {
       let willContinue = false;
-      if (
+      const paused =
         message.rawStopReason === 'pause_turn' &&
         message.stopReason !== 'error' &&
         message.stopReason !== 'aborted' &&
-        continuations < MAX_NATIVE_SEARCH_CONTINUATIONS
-      ) {
+        continuations < MAX_NATIVE_SEARCH_CONTINUATIONS;
+      const pendingClientTool =
+        api === 'anthropic-messages' &&
+        message.stopReason === 'toolUse' &&
+        message.content.some((block) => block.type === 'toolCall') &&
+        collector.hasPending();
+      if (paused || pendingClientTool) {
         const content = collector.replay();
         if (content) {
-          paused.set(message, content);
-          continuations++;
+          replies.set(message, content);
+          if (paused) continuations++;
           willContinue = true;
         } else {
           message.stopReason = 'error';
-          message.errorMessage =
-            'The provider paused web search without a replayable reply.';
+          message.errorMessage = paused
+            ? 'The provider paused web search without a replayable reply.'
+            : 'The provider left web search pending without a replayable reply.';
         }
       }
       const finished = collector.finish(willContinue);
