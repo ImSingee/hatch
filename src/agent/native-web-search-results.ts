@@ -2,7 +2,7 @@ export type NativeWebSearch = {
   id: string;
   contentIndex: number;
   name: 'web_search' | 'web_fetch';
-  args: { query?: string; url?: string };
+  args: { query?: string; queries?: string[]; url?: string };
   sources: { url: string; title?: string }[];
   error?: string;
   openAI?: { item: Record<string, unknown>; previousItemId?: string };

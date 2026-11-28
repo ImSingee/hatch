@@ -1,5 +1,8 @@
 import { describe, expect, it, vi } from 'vitest';
-import type { NativeWebSearch } from './native-web-search-results';
+import {
+  nativeWebSearchOutput,
+  type NativeWebSearch,
+} from './native-web-search-results';
 import {
   createNativeWebSearchCollector,
   injectNativeWebSearch,
@@ -208,6 +211,38 @@ describe('provider-native web search', () => {
       },
     ]);
     expect(searches[1]?.args).not.toHaveProperty('url');
+  });
+
+  it('keeps a bounded list of OpenAI search queries in the live callback and saved result', () => {
+    const onSearchStart = vi.fn<(search: NativeWebSearch) => void>();
+    const onSearchEnd = vi.fn<(search: NativeWebSearch) => void>();
+    const collector = createNativeWebSearchCollector('openai-responses', {
+      onSearchStart,
+      onSearchEnd,
+    });
+    const otherQueries = Array.from(
+      { length: 9 },
+      (_, index) => `Query ${index}`,
+    );
+    const queries = ['Hatch setup', 'Hatch pricing', ...otherQueries];
+    collector.observe({
+      type: 'response.output_item.done',
+      output_index: 0,
+      item: {
+        id: 'ws_multi',
+        type: 'web_search_call',
+        status: 'completed',
+        action: { type: 'search', query: 'Legacy query', queries },
+      },
+    });
+    const args = { queries: queries.slice(0, 10) };
+    expect(onSearchStart).toHaveBeenCalledWith(
+      expect.objectContaining({ args }),
+    );
+    expect(onSearchEnd).toHaveBeenCalledWith(expect.objectContaining({ args }));
+    const [search] = collector.finish().searches;
+    expect(search?.args).toEqual(args);
+    expect(JSON.parse(nativeWebSearchOutput(search))).toMatchObject(args);
   });
 
   it('collects OpenAI searches and page opens, including the neighboring replay id', () => {

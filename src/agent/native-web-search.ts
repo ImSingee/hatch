@@ -20,6 +20,7 @@ type SearchEntry = {
 };
 
 const MAX_SEARCHES = 16;
+const MAX_QUERIES = 10;
 const MAX_INPUT_JSON = 16_384;
 const MAX_RAW_ITEM = 32_768;
 const MAX_REPLAY_SIZE = 2 * 1024 * 1024;
@@ -320,14 +321,20 @@ export function createNativeWebSearchCollector(
     const { search } = entry;
     search.contentIndex = contentIndex;
     const action = record(item.action);
-    const query = boundedText(
-      action?.query ?? list(action?.queries)[0] ?? action?.pattern,
-      2000,
-    );
+    const queries = list(action?.queries)
+      .slice(0, MAX_QUERIES)
+      .flatMap((value) => {
+        const query = boundedText(value, 2000);
+        return query ? [query] : [];
+      });
+    const query = boundedText(action?.query ?? action?.pattern, 2000);
     const url = boundedUrl(action?.url);
     if (action?.type === 'open_page') search.name = 'web_fetch';
-    if (query || url) {
-      search.args = { ...(query ? { query } : {}), ...(url ? { url } : {}) };
+    if (queries.length || query || url) {
+      search.args = {
+        ...(queries.length ? { queries } : query ? { query } : {}),
+        ...(url ? { url } : {}),
+      };
       start(entry);
     }
     if (event.type !== 'response.output_item.done') return;

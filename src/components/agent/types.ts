@@ -297,7 +297,10 @@ export function toolDetail(
     name === 'run_command'
       ? pick('command')
       : name === 'web_search'
-        ? pick('query')
+        ? (pick('query') ??
+          (Array.isArray(args.queries) && typeof args.queries[0] === 'string'
+            ? { value: args.queries[0], ellipsis: 'end' as const }
+            : undefined))
         : name === 'web_fetch'
           ? pick('url')
           : (pick('id') ?? pick('path', 'start') ?? pick('name'));
