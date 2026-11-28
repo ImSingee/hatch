@@ -14,6 +14,7 @@ import com.longbridge.nsh.NshPackage
 import com.longbridge.nsh.NshTrust
 import com.longbridge.nsh.NshView
 import dev.hatch.app.core.AppScope
+import dev.hatch.app.core.AppStorage
 import dev.hatch.app.core.BridgeShell
 import dev.hatch.app.core.EngineSetup
 import dev.hatch.app.core.HostBridge
@@ -25,6 +26,7 @@ import dev.hatch.app.core.PackageHasher
 import dev.hatch.app.core.PlatformClient
 import dev.hatch.app.core.PlatformException
 import dev.hatch.app.core.RunLedger
+import dev.hatch.app.core.TrustDirectory
 import dev.hatch.app.core.TrustRefresh
 import dev.hatch.app.core.TrustStore
 import dev.hatch.app.core.UrlConnectionTransport
@@ -35,6 +37,7 @@ import java.security.MessageDigest
 import java.util.UUID
 import java.util.concurrent.ArrayBlockingQueue
 import java.util.concurrent.Executors
+import java.util.concurrent.FutureTask
 import java.util.concurrent.RejectedExecutionException
 import java.util.concurrent.ThreadPoolExecutor
 import java.util.concurrent.TimeUnit
@@ -137,64 +140,34 @@ object AppEngineManager {
         @Volatile var active = true
             private set
 
-        private var store: NshTrust? = null
-        private var users = 0
         /** Shared with every session for the same instance: they use the same trust directory. */
-        private val trustRefresh = trustRefreshOf(directory)
+        private val trust = trustDirectoryOf(directory)
 
         fun credential(): String? = if (active) token else null
 
         fun client(): PlatformClient = PlatformClient(origin, ::credential, transport)
 
-        /** Runs `block` with this session's trust store, first brought up to the instance's material. */
+        /**
+         * Runs `block` with the instance's trust store, first brought up to the
+         * instance's material. Not for a session that ended, and never at the
+         * same time as another session's work on the same store.
+         */
         fun <T> withTrust(client: PlatformClient, block: (NshTrust) -> T): T {
-            val store =
-                synchronized(this) {
-                    if (!active) throw PlatformException("unauthenticated", message = "Sign in to this instance again.")
-                    users += 1
-                    store ?: NshTrust(File(directory, "trust")).also { store = it }
-                }
-            try {
-                val material = client.runtimeTrust()
-                // One refresh at a time per trust directory, and none for a session
-                // that ended while the material was on its way.
-                synchronized(trustRefresh) {
-                    if (!active) throw PlatformException("unauthenticated", message = "Sign in to this instance again.")
-                    trustRefresh.refresh(
-                        StoreOf(store),
-                        material,
-                        reopen = { StoreOf(NshTrust(File(directory, "trust"))) },
-                        fresh = {
-                            val dir = File(directory, "trust-probe-${UUID.randomUUID()}")
-                            StoreOf(NshTrust(dir), dir)
-                        },
-                    )
-                }
-                if (!active) throw PlatformException("unauthenticated", message = "Sign in to this instance again.")
-                return block(store)
-            } finally {
-                synchronized(this) {
-                    users -= 1
-                    if (!active && users == 0) closeStore()
-                }
-            }
+            val material = client.runtimeTrust()
+            return trust.use(material, { active }) { block(it.trust) }
         }
 
         fun retire() {
-            synchronized(this) {
-                active = false
-                if (users == 0) closeStore()
-            }
-        }
-
-        private fun closeStore() {
-            store?.close()
-            store = null
+            active = false
         }
     }
 
+    /** An `NshTrust` as `TrustRefresh` sees it; a probe's directory goes with it. */
     private class StoreOf(val trust: NshTrust, val directory: File? = null) : TrustStore {
-        override fun addRoot(publicKey: String) = trust.addRoot(publicKey)
+        private val roots = mutableSetOf<String>()
+
+        override fun addRoot(publicKey: String): Boolean =
+            publicKey in roots || trust.addRoot(publicKey).also { if (it) roots.add(publicKey) }
 
         override fun updateRevocations(json: String) = trust.updateRevocations(json)
 
@@ -216,14 +189,25 @@ object AppEngineManager {
         }
     /** Polls waiting for a worker; more are refused (`resource_exhausted`), so none waits unseen. */
     private const val POLL_QUEUE = 8
-    private val trustRefreshes = mutableMapOf<String, TrustRefresh>()
+    /** How long `hatch.nav.open` waits for the main thread to hand the request on. */
+    private const val OPEN_APP_WAIT_SECONDS = 5L
+    private val trustDirectories = mutableMapOf<String, TrustDirectory<StoreOf>>()
 
-    private fun trustRefreshOf(directory: File): TrustRefresh =
-        synchronized(trustRefreshes) {
-            trustRefreshes.getOrPut(directory.path) {
-                TrustRefresh(File(directory, "trust/revocations-sequence"), File(directory, "trust/nsh-trust.json"))
+    /** The one trust store per instance directory, for the life of the process. */
+    private fun trustDirectoryOf(directory: File): TrustDirectory<StoreOf> =
+        synchronized(trustDirectories) {
+            trustDirectories.getOrPut(directory.path) {
+                TrustDirectory(
+                    TrustRefresh(File(directory, "trust/revocations-sequence"), File(directory, "trust/nsh-trust.json")),
+                    open = { StoreOf(NshTrust(File(directory, "trust"))) },
+                    fresh = {
+                        val dir = File(directory, "trust-probe-${UUID.randomUUID()}")
+                        StoreOf(NshTrust(dir), dir)
+                    },
+                )
             }
         }
+
     private val transport = UrlConnectionTransport()
     /** One package load per App at a time: they share its cache directory. */
     private val packageLocks = mutableMapOf<String, Any>()
@@ -322,7 +306,8 @@ object AppEngineManager {
         current?.retire()
         session =
             if (next != null && token != null) {
-                Session(next, token, File(context.applicationContext.filesDir, "hatch-apps/${InstanceKey.of(next)}"))
+                // Storage a sign-out could not delete yet is never handed to the next session.
+                instanceDirectory(context, next).takeIf { AppStorage.ready(it) }?.let { Session(next, token, it) }
             } else {
                 null
             }
@@ -336,8 +321,11 @@ object AppEngineManager {
     fun forgetStorage(context: Context, origin: String) {
         val key = origin.trimEnd('/')
         if (session?.origin == key) return
-        File(context.applicationContext.filesDir, "hatch-apps/${InstanceKey.of(key)}/storage").deleteRecursively()
+        check(AppStorage.forget(instanceDirectory(context, key))) { "Could not delete the Apps' data on this device." }
     }
+
+    private fun instanceDirectory(context: Context, origin: String) =
+        File(context.applicationContext.filesDir, "hatch-apps/${InstanceKey.of(origin)}")
 
     /** The user's background minutes (`GetDeskPreferences`). */
     fun setBackgroundMinutes(minutes: Int) {
@@ -366,9 +354,13 @@ object AppEngineManager {
     fun open(context: Context, appId: String, route: String?, listener: AppEngineListener?): AppEngineState {
         listeners[appId] = java.lang.ref.WeakReference(listener)
         engines[appId]?.let { engine ->
-            engine.listener = listener
-            if (route != null) navigate(appId, route)
-            return engine.state
+            if (engine.activity === activityOf(context)) {
+                engine.listener = listener
+                if (route != null) navigate(appId, route)
+                return engine.state
+            }
+            // Its views belong to another activity: it starts again here, where it was.
+            stop(appId)
         }
         val session = session
         val scope = AppScope.of(appId, "", emptyMap(), false)
@@ -653,10 +645,13 @@ object AppEngineManager {
 
         override fun openApp(slug: String, route: String): Boolean {
             val engine = engine ?: return false
-            if (delegate == null) return false
-            // Only a request from the engine still running reaches the host app.
-            main.post { if (current() === engine) delegate?.openApp(slug, route, engine.session.origin) }
-            return true
+            // Only a request from the engine still running reaches the host app,
+            // and the App hears whether it did.
+            val dispatch = FutureTask {
+                current() === engine && delegate?.openApp(slug, route, engine.session.origin) == true
+            }
+            if (Looper.myLooper() == Looper.getMainLooper()) dispatch.run() else main.post(dispatch)
+            return runCatching { dispatch.get(OPEN_APP_WAIT_SECONDS, TimeUnit.SECONDS) }.getOrDefault(false)
         }
 
         override fun unauthorized() {

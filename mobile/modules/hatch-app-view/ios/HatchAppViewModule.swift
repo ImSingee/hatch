@@ -95,8 +95,8 @@ public final class HatchAppViewModule: Module {
             MainActor.assumeIsolated { AppEngineManager.shared.configure(origin: origin.flatMap(URL.init(string:)), token: token) }
         }.runOnQueue(.main)
         AsyncFunction("forgetStorage") { (origin: String) in
-            MainActor.assumeIsolated {
-                if let url = URL(string: origin) { AppEngineManager.shared.forgetStorage(origin: url) }
+            try MainActor.assumeIsolated {
+                if let url = URL(string: origin) { try AppEngineManager.shared.forgetStorage(origin: url) }
             }
         }.runOnQueue(.main)
         AsyncFunction("setBackgroundMinutes") { (minutes: Int) in
