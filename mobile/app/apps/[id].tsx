@@ -30,8 +30,9 @@ export default function AppScreen() {
   const shown = useLinkedId(params.id, params.slug).id ?? undefined;
   // While this screen shows it, the App is not shown beside as well.
   useShowsApp(shown);
-  // Covered by another screen, it hands its App's one view to the column
-  // beside, if that shows the same App; with focus back, it takes it again.
+  // Covered by another screen, it hands its native App's one view to the
+  // column beside, if that shows the same App; with focus back, it takes it
+  // again. A web App keeps its page here: the column beside has its own.
   const [beside] = useBesideApp();
   const focused = useIsFocused();
   const room = useBesideRoom();
@@ -41,6 +42,7 @@ export default function AppScreen() {
     Boolean(shown) &&
     beside !== null &&
     beside.id === shown &&
+    beside.runtime === 'native' &&
     !beside.hidden;
   const show = (app: AppSummary) =>
     router.setParams({
