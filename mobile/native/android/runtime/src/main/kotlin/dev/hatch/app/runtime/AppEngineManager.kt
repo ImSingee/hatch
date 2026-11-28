@@ -17,6 +17,7 @@ import dev.hatch.app.core.AppScope
 import dev.hatch.app.core.AppStorage
 import dev.hatch.app.core.BridgeShell
 import dev.hatch.app.core.EngineSetup
+import dev.hatch.app.core.HandOff
 import dev.hatch.app.core.HostBridge
 import dev.hatch.app.core.HostCalls
 import dev.hatch.app.core.HostEvents
@@ -37,7 +38,6 @@ import java.security.MessageDigest
 import java.util.UUID
 import java.util.concurrent.ArrayBlockingQueue
 import java.util.concurrent.Executors
-import java.util.concurrent.FutureTask
 import java.util.concurrent.RejectedExecutionException
 import java.util.concurrent.ThreadPoolExecutor
 import java.util.concurrent.TimeUnit
@@ -190,7 +190,7 @@ object AppEngineManager {
     /** Polls waiting for a worker; more are refused (`resource_exhausted`), so none waits unseen. */
     private const val POLL_QUEUE = 8
     /** How long `hatch.nav.open` waits for the main thread to hand the request on. */
-    private const val OPEN_APP_WAIT_SECONDS = 5L
+    private const val OPEN_APP_WAIT_MILLIS = 5_000L
     private val trustDirectories = mutableMapOf<String, TrustDirectory<StoreOf>>()
 
     /** The one trust store per instance directory, for the life of the process. */
@@ -494,6 +494,8 @@ object AppEngineManager {
     /** Shows `appId`'s engine in `container`; the engine keeps its last size until the container has one. */
     fun attach(appId: String, container: ViewGroup) {
         val engine = engines[appId] ?: return
+        // An engine's view stays in its own activity's containers.
+        if (activityOf(container.context) !== engine.activity) return
         containers[appId] = container
         val view = engine.view
         if (view.parent !== container) {
@@ -646,12 +648,11 @@ object AppEngineManager {
         override fun openApp(slug: String, route: String): Boolean {
             val engine = engine ?: return false
             // Only a request from the engine still running reaches the host app,
-            // and the App hears whether it did.
-            val dispatch = FutureTask {
-                current() === engine && delegate?.openApp(slug, route, engine.session.origin) == true
-            }
-            if (Looper.myLooper() == Looper.getMainLooper()) dispatch.run() else main.post(dispatch)
-            return runCatching { dispatch.get(OPEN_APP_WAIT_SECONDS, TimeUnit.SECONDS) }.getOrDefault(false)
+            // and the App hears whether it did: a request given up on never
+            // reaches it later.
+            val ask = { current() === engine && delegate?.openApp(slug, route, engine.session.origin) == true }
+            if (Looper.myLooper() == Looper.getMainLooper()) return ask()
+            return HandOff.ask(main::post, OPEN_APP_WAIT_MILLIS, ask)
         }
 
         override fun unauthorized() {

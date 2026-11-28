@@ -57,10 +57,11 @@ export const appRuntime = {
   },
   /**
    * Deletes what Apps saved on this phone for `origin` once its account has
-   * signed out, so the next account there finds none of it.
+   * signed out, so the next account there finds none of it. Rejects when some
+   * of it is still there: the runtime then keeps it from use until it is gone.
    */
   async forgetStorage(origin: string) {
-    await runtime?.forgetStorage(origin).catch(ignore);
+    await runtime?.forgetStorage(origin);
   },
   setBackgroundMinutes(minutes: number) {
     void runtime?.setBackgroundMinutes(minutes).catch(ignore);

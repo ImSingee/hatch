@@ -88,4 +88,34 @@ class TrustDirectoryTest {
         assertEquals(listOf("first done", "second"), order.toList())
         assertEquals(2, FakeStore.opened(state).sequence)
     }
+
+    @Test
+    fun aSessionRetiredWhileVerifyingFinishesBeforeTheNextOneStarts() {
+        val trust = directory()
+        var oldActive = true
+        val verifying = CountDownLatch(1)
+        val release = CountDownLatch(1)
+        val order = java.util.Collections.synchronizedList(mutableListOf<String>())
+        val old = thread {
+            trust.use(material(1), { oldActive }) {
+                verifying.countDown()
+                release.await(5, TimeUnit.SECONDS)
+                order += "old verified"
+            }
+        }
+        assertTrue(verifying.await(5, TimeUnit.SECONDS))
+        // Signed out and in again while the old session was verifying.
+        oldActive = false
+        val next = thread { trust.use(material(2), { true }) { order += "next" } }
+        Thread.sleep(200)
+        assertEquals(emptyList<String>(), order.toList())
+        release.countDown()
+        old.join(5_000)
+        next.join(5_000)
+        assertEquals(listOf("old verified", "next"), order.toList())
+        // The retired session can no longer start any trust work.
+        assertFailsWith<PlatformException> { trust.use(material(2), { oldActive }) { order += "old again" } }
+        assertEquals(1, opened.size)
+        assertEquals(2, FakeStore.opened(state).sequence)
+    }
 }
