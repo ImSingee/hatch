@@ -17,7 +17,16 @@ object HandOff {
      * answer. One it gave up on never runs afterwards, so "no" is final; one
      * that already started is waited for, so "yes" is never lost.
      */
-    fun ask(post: (Runnable) -> Unit, timeoutMillis: Long, block: () -> Boolean): Boolean {
+    fun ask(post: (Runnable) -> Unit, timeoutMillis: Long, block: () -> Boolean): Boolean =
+        ask(post, timeoutMillis, {}, block)
+
+    /** `ask`, telling `waitedOut` when the timed wait ended without an answer (for tests). */
+    internal fun ask(
+        post: (Runnable) -> Unit,
+        timeoutMillis: Long,
+        waitedOut: () -> Unit,
+        block: () -> Boolean,
+    ): Boolean {
         // Waiting, then either started or given up on: never both.
         val state = AtomicInteger(WAITING)
         val task = FutureTask { state.compareAndSet(WAITING, STARTED) && block() }
@@ -34,7 +43,9 @@ object HandOff {
                 Thread.currentThread().interrupt()
                 null
             }
-        return answer ?: if (state.compareAndSet(WAITING, GIVEN_UP)) false else finish(task)
+        if (answer != null) return answer
+        waitedOut()
+        return if (state.compareAndSet(WAITING, GIVEN_UP)) false else finish(task)
     }
 
     /** The answer of a task that already started, however long it takes. */

@@ -29,24 +29,20 @@ class HandOffTest {
     @Test
     fun aQuestionAlreadyBeingAnsweredIsWaitedFor() {
         val started = CountDownLatch(1)
-        val release = CountDownLatch(1)
-        val answer = AtomicReference<Boolean>()
-        val asking = thread {
-            answer.set(
-                HandOff.ask({ thread { it.run() } }, 50) {
-                    started.countDown()
-                    release.await(5, TimeUnit.SECONDS)
-                }
-            )
+        val waitedOut = CountDownLatch(1)
+        // The answer has begun before the caller waits, and ends only once
+        // the caller's timed wait is over.
+        val post = { task: Runnable ->
+            thread { task.run() }
+            assertTrue(started.await(5, TimeUnit.SECONDS))
         }
-        assertTrue(started.await(5, TimeUnit.SECONDS))
-        // Well past its timeout, the caller is still waiting for the answer
-        // that started in time, not answering "no".
-        asking.join(500)
-        assertTrue(asking.isAlive)
-        release.countDown()
-        asking.join(5_000)
-        assertEquals(true, answer.get())
+        val answer =
+            HandOff.ask(post, 50, { waitedOut.countDown() }) {
+                started.countDown()
+                waitedOut.await(5, TimeUnit.SECONDS)
+            }
+        assertEquals(0, waitedOut.count)
+        assertEquals(true, answer)
     }
 
     @Test

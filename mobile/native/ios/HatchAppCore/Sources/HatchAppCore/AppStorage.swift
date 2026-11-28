@@ -20,15 +20,17 @@ public enum AppStorage {
         lock.lock()
         defer { lock.unlock() }
         let files = FileManager.default
+        guard files.fileExists(atPath: instanceDirectory.path) else { return true }
         let all = instanceDirectory.appendingPathComponent(accounts)
         if files.fileExists(atPath: all.path) {
             // Out of the way first, in one step, then deleted.
             let forgotten = instanceDirectory.appendingPathComponent("\(forgottenPrefix)\(UUID().uuidString)")
             if (try? files.moveItem(at: all, to: forgotten)) == nil { try? files.removeItem(at: all) }
         }
+        // A directory it cannot list may still hold what it moved away.
+        guard let names = try? files.contentsOfDirectory(atPath: instanceDirectory.path) else { return false }
         var left = files.fileExists(atPath: all.path)
-        for name in (try? files.contentsOfDirectory(atPath: instanceDirectory.path)) ?? []
-        where name.hasPrefix(forgottenPrefix) {
+        for name in names where name.hasPrefix(forgottenPrefix) {
             if (try? files.removeItem(at: instanceDirectory.appendingPathComponent(name))) == nil { left = true }
         }
         return !left

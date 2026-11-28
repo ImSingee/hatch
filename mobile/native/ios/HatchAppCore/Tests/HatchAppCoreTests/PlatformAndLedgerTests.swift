@@ -373,23 +373,25 @@ final class TrustDirectoryTests: XCTestCase {
     func testWorkOnTheStoreNeverOverlaps() async throws {
         let trust = directory()
         var order: [String] = []
-        var release: CheckedContinuation<Void, Never>?
+        let gate = Gate()
+        // However the test ends, nothing stays parked.
+        defer { gate.open() }
         var firstFailed: Error?
         // A retired session still verifying a package…
         let first = Task {
             do {
                 try await trust.use(material: material(1), active: { true }) { _ in
-                    await withCheckedContinuation { release = $0 }
+                    await gate.wait()
                     order.append("first done")
                 }
             } catch { firstFailed = error }
         }
-        try await checkpoint("the first caller verifies", { firstFailed }) { release != nil }
+        try await checkpoint("the first caller verifies", { firstFailed }) { gate.waiting }
         // …and the new session for the same instance, with a newer list.
         let second = Task { try await trust.use(material: material(2), active: { true }) { _ in order.append("second") } }
         try await checkpoint("the second caller waits", { firstFailed }) { trust.waitingCount == 1 }
         XCTAssertEqual(order, [])
-        release?.resume()
+        gate.open()
         await first.value
         try await second.value
         XCTAssertNil(firstFailed)
@@ -401,23 +403,25 @@ final class TrustDirectoryTests: XCTestCase {
         let trust = directory()
         var oldActive = true
         var order: [String] = []
-        var release: CheckedContinuation<Void, Never>?
+        let gate = Gate()
+        // However the test ends, nothing stays parked.
+        defer { gate.open() }
         var oldFailed: Error?
         let old = Task {
             do {
                 try await trust.use(material: material(1), active: { oldActive }) { _ in
-                    await withCheckedContinuation { release = $0 }
+                    await gate.wait()
                     order.append("old verified")
                 }
             } catch { oldFailed = error }
         }
-        try await checkpoint("the old session verifies", { oldFailed }) { release != nil }
+        try await checkpoint("the old session verifies", { oldFailed }) { gate.waiting }
         // Signed out and in again while the old session was verifying.
         oldActive = false
         let next = Task { try await trust.use(material: material(2), active: { true }) { _ in order.append("next") } }
         try await checkpoint("the next session waits", { oldFailed }) { trust.waitingCount == 1 }
         XCTAssertEqual(order, [])
-        release?.resume()
+        gate.open()
         await old.value
         try await next.value
         XCTAssertNil(oldFailed)
@@ -432,6 +436,25 @@ final class TrustDirectoryTests: XCTestCase {
     }
 
     private struct Missed: Error, CustomStringConvertible { let description: String }
+
+    /// Parks a task until opened; opening twice, or before it waits, is fine.
+    @MainActor
+    private final class Gate {
+        private var continuation: CheckedContinuation<Void, Never>?
+        private var opened = false
+        var waiting: Bool { continuation != nil }
+
+        func wait() async {
+            guard !opened else { return }
+            await withCheckedContinuation { continuation = $0 }
+        }
+
+        func open() {
+            opened = true
+            continuation?.resume()
+            continuation = nil
+        }
+    }
 
     /// Waits (bounded) until `condition` holds, and fails at once if the
     /// parked task already failed (it threw before reaching its checkpoint).
