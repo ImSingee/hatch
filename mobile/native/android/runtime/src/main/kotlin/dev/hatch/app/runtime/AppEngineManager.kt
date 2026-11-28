@@ -538,7 +538,11 @@ object AppEngineManager {
 
     /** Asks the App to show `route` (`hatch.nav`). */
     fun navigate(appId: String, route: String) {
-        engines[appId]?.view?.send(HostEvents.NAV, mapOf("route" to route))
+        val engine = engines[appId] ?: return
+        // Remembered now: the App does not report a route the shell gave it,
+        // and a reload or restart must come back to this page.
+        ledger().setRoute(route, appId)
+        engine.view.send(HostEvents.NAV, mapOf("route" to route))
     }
 
     /** The system back gesture: true when the App went back itself. */
