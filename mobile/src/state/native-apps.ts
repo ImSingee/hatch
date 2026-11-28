@@ -40,7 +40,7 @@ export function useNativeAppRuntime() {
       // instance never opens what this one saved.
       const { token, account } = await readRuntimeSession({
         readToken: () => vault.get(origin!),
-        accountId: (signal) => api!.accountId(signal),
+        accountId: (credential, signal) => api!.accountId(credential, signal),
         signal,
       });
       await appRuntime.configure(origin, token, account);

@@ -148,26 +148,7 @@ export class HatchApiClient {
     this.vault = options.vault;
     this.fetcher = options.fetch;
     this.onUnauthorized = options.onUnauthorized;
-    const transport = createConnectTransport({
-      baseUrl: `${this.origin}/api/rpc`,
-      useBinaryFormat: false,
-      // Use the same credential snapshot, redirect, cookie and cache boundary as
-      // native auth and Agent transport. Connect owns message encoding/decoding.
-      fetch: (input, init) => {
-        if (
-          typeof input !== 'string' ||
-          !input.startsWith(`${this.origin}/api/rpc/`) ||
-          init?.method !== 'POST'
-        )
-          throw new MobileError('invalid_path', 'Invalid RPC destination.');
-        return this.fetchResponse(input.slice(this.origin.length), {
-          method: 'POST',
-          headers: init.headers,
-          body: init.body ?? undefined,
-          signal: init.signal ?? undefined,
-        });
-      },
-    });
+    const transport = this.rpcTransport();
     this.appRpc = createClient(AppService, transport);
     this.agentRpc = createClient(AgentService, transport);
     this.authRpc = createClient(AuthService, transport);
@@ -176,6 +157,36 @@ export class HatchApiClient {
     this.preferenceRpc = createClient(PreferenceService, transport);
     this.pinRpc = createClient(PinService, transport);
     this.themeRpc = createClient(ThemeService, transport);
+  }
+
+  /**
+   * Connect over the same credential snapshot, redirect, cookie and cache
+   * boundary as native auth and Agent transport; `credential` pins the one
+   * it sends instead of reading the vault. Connect owns message coding.
+   */
+  private rpcTransport(credential?: string) {
+    return createConnectTransport({
+      baseUrl: `${this.origin}/api/rpc`,
+      useBinaryFormat: false,
+      fetch: (input, init) => {
+        if (
+          typeof input !== 'string' ||
+          !input.startsWith(`${this.origin}/api/rpc/`) ||
+          init?.method !== 'POST'
+        )
+          throw new MobileError('invalid_path', 'Invalid RPC destination.');
+        return this.fetchResponse(
+          input.slice(this.origin.length),
+          {
+            method: 'POST',
+            headers: init.headers,
+            body: init.body ?? undefined,
+            signal: init.signal ?? undefined,
+          },
+          credential,
+        );
+      },
+    });
   }
 
   private async fetchResponse(
@@ -920,10 +931,17 @@ export class HatchApiClient {
     ).attachment;
   }
   /** Sign a fresh WebView in with this session. It names no App or Dashboard. */
-  /** The signed-in account's id; null for a credential that is not a user's session. */
-  async accountId(signal?: AbortSignal): Promise<string | null> {
+  /**
+   * The id of the account `credential` belongs to (sent as it is, never read
+   * again from the vault); null for a credential that is not a user's session.
+   */
+  async accountId(
+    credential: string,
+    signal?: AbortSignal,
+  ): Promise<string | null> {
+    const auth = createClient(AuthService, this.rpcTransport(credential));
     const status = await this.rpcRequest(
-      (signal) => this.authRpc.getStatus({}, { signal }),
+      (signal) => auth.getStatus({}, { signal }),
       signal,
     );
     return status.credential.case === 'session'
