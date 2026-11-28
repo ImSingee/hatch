@@ -14,15 +14,23 @@ describe('readRuntimeSession', () => {
     ).resolves.toEqual({ token: 'token-a', account: 'user-a' });
   });
 
-  it('starts over when the sign-in changes during the account lookup', async () => {
-    const tokens = ['token-a', 'token-b'];
-    await expect(
-      readRuntimeSession({
-        readToken: async () => tokens.shift() ?? null,
-        accountId: async () => 'user-b',
-        signal: signal(),
-      }),
-    ).rejects.toThrow('The sign-in changed.');
+  it('looks up the account of the very credential it read', async () => {
+    // The vault changes during the lookup (another sign-in, then back):
+    // the account still belongs to the credential that is configured.
+    const vault = ['token-a', 'token-b', 'token-a'];
+    const accounts: Record<string, string> = {
+      'token-a': 'user-a',
+      'token-b': 'user-b',
+    };
+    const session = await readRuntimeSession({
+      readToken: async () => vault.shift() ?? null,
+      accountId: async (credential) => {
+        vault.shift();
+        return accounts[credential] ?? null;
+      },
+      signal: signal(),
+    });
+    expect(session).toEqual({ token: 'token-a', account: 'user-a' });
   });
 
   it('refuses a session without a credential before asking for the account', async () => {
