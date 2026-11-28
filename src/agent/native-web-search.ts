@@ -49,9 +49,10 @@ function list(value: unknown): unknown[] {
 }
 
 function boundedText(value: unknown, max: number): string | undefined {
-  return typeof value === 'string' && value.length
-    ? value.slice(0, max)
-    : undefined;
+  if (typeof value !== 'string' || !value.length) return undefined;
+  const text = value.slice(0, max);
+  const last = text.charCodeAt(text.length - 1);
+  return last >= 0xd800 && last <= 0xdbff ? text.slice(0, -1) : text;
 }
 
 function parseInput(value: string): RecordValue | undefined {

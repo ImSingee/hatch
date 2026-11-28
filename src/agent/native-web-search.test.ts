@@ -135,6 +135,40 @@ describe('provider-native web search', () => {
     ]);
   });
 
+  it('does not split a search source title surrogate pair at the storage limit', () => {
+    const collector = createNativeWebSearchCollector('anthropic-messages', {
+      onSearchStart: vi.fn<(search: NativeWebSearch) => void>(),
+      onSearchEnd: vi.fn<(search: NativeWebSearch) => void>(),
+    });
+    const prefix = 'a'.repeat(239);
+    collector.observe({
+      type: 'content_block_start',
+      index: 0,
+      content_block: {
+        type: 'server_tool_use',
+        name: 'web_search',
+        id: 'search',
+        input: { query: 'Hatch' },
+      },
+    });
+    collector.observe({
+      type: 'content_block_start',
+      index: 1,
+      content_block: {
+        type: 'web_search_tool_result',
+        tool_use_id: 'search',
+        content: [
+          { url: 'https://example.test/cut', title: `${prefix}🌍` },
+          { url: 'https://example.test/fits', title: `${prefix.slice(1)}🌍` },
+        ],
+      },
+    });
+    expect(collector.finish().searches[0]?.sources).toEqual([
+      { url: 'https://example.test/cut', title: prefix },
+      { url: 'https://example.test/fits', title: `${prefix.slice(1)}🌍` },
+    ]);
+  });
+
   it('collects OpenAI searches and page opens, including the neighboring replay id', () => {
     const onSearchStart = vi.fn<(search: NativeWebSearch) => void>();
     const onSearchEnd = vi.fn<(search: NativeWebSearch) => void>();
