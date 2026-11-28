@@ -188,7 +188,8 @@ export function webPageUrl(
   const url = new URL(target.path, origin);
   if (url.origin !== origin || url.pathname !== target.path) return null;
   if (target.search) url.search = target.search;
-  if (target.hash) url.hash = target.hash;
+  // The setter drops one leading `#`, which a fragment may itself start with.
+  if (target.hash) url.hash = `#${target.hash}`;
   return url.href;
 }
 
