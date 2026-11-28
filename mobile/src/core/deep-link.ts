@@ -161,7 +161,7 @@ export function instanceLink(value: string, origin: string): DeepLink | null {
   }
   if (url.origin !== origin || url.username || url.password) return null;
   const segments = linkPathSegments(url.pathname);
-  const hash = linkFragment(url.hash);
+  const hash = linkFragment(url.hash.slice(1));
   if (!segments || hash === null) return null;
   const target = platformTarget(segments, hash, url.search || undefined);
   return target ? { instance: origin, target } : null;
@@ -188,7 +188,8 @@ export function webPageUrl(
   const url = new URL(target.path, origin);
   if (url.origin !== origin || url.pathname !== target.path) return null;
   if (target.search) url.search = target.search;
-  if (target.hash) url.hash = target.hash;
+  // The setter drops one leading `#`, which a fragment may itself start with.
+  if (target.hash) url.hash = `#${target.hash}`;
   return url.href;
 }
 

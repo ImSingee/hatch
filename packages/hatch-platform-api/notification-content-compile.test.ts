@@ -6,11 +6,38 @@ import {
   ContentError,
   compileCardJsonWith,
   compileCardMarkupWith,
+  compileMarkdownWith,
+  type JsonNode,
 } from './notification-content-compile';
 import { CARD_EXAMPLES } from './notification-content-examples';
-import { compileCardMarkup } from './notification-content-schema';
+import { compileCard, compileCardMarkup } from './notification-content-schema';
+import { contentToMarkup } from './notification-content-text';
 
 const NO_MARKDOWN = { markdownToBlocks: (): ContentNode[] => [] };
+
+/** The issues compiling reports, or a failure if it compiles. */
+function issuesOf(compile: () => unknown) {
+  try {
+    compile();
+  } catch (error) {
+    if (error instanceof ContentError) return error.issues;
+    throw error;
+  }
+  throw new Error('expected the content to be rejected');
+}
+
+/** `levels` Columns nested inside a Card, the innermost holding text. */
+function nestedCard(levels: number): JsonNode {
+  let node: JsonNode = { type: 'Text', children: ['x'] };
+  for (let level = 0; level < levels; level++) {
+    node = { type: 'Column', children: [node] };
+  }
+  return { type: 'Card', children: [node] };
+}
+
+/** The JSON path of the node nested `levels` deep along first children. */
+const pathAt = (levels: number) =>
+  Array.from({ length: levels }, () => 'children.0').join('.');
 
 /** A one-component card with `props`, compiled from a JSON tree. */
 function compileProp(type: string, props: Record<string, unknown>) {
@@ -270,5 +297,134 @@ describe('the dependency-free card compiler', () => {
         `<Card>${Array.from({ length: 11 }, (_, index) => `<Input id="f${index}" label="L" />`).join('')}</Card>`,
       ),
     ).toBe('1:1: <Card> a reply form has at most 10 fields');
+  });
+
+  it('takes only <Card> as the root of a card', () => {
+    const document = { type: 'Document', children: [{ type: 'Divider' }] };
+    expect(issuesOf(() => compileCardJsonWith(document, NO_MARKDOWN))).toEqual([
+      { message: 'a card starts with <Card>, not <Document>', path: 'card' },
+    ]);
+    expect(
+      issuesOf(() =>
+        compileCardMarkupWith('<Document><Divider /></Document>', NO_MARKDOWN),
+      ),
+    ).toEqual([
+      {
+        message: 'a card starts with <Card>, not <Document>',
+        line: 1,
+        column: 1,
+      },
+    ]);
+  });
+
+  // Text split into several pieces (by CDATA in markup, or as adjacent
+  // strings in a tree) reads as the same text written in one piece, so the
+  // canonical markup of a card compiles back to the same card.
+  it.each([
+    ['markup with CDATA', '<Card><Text>A <![CDATA[ ]]> B</Text></Card>'],
+    ['markup of CDATA spaces', '<Card><Text>A<![CDATA[  ]]>B</Text></Card>'],
+    [
+      'a tree of strings',
+      { type: 'Card', children: [{ type: 'Text', children: ['A ', ' B'] }] },
+    ],
+  ] as const)('collapses whitespace across pieces of text in %s', (_, card) => {
+    const { content } = compileCard(card);
+    expect(content.children).toEqual([{ type: 'Text', children: ['A B'] }]);
+    expect(compileCard(contentToMarkup(content)).content).toEqual(content);
+  });
+
+  it('stores a checked copy of Trend values given as a list', () => {
+    const values = [1, 2];
+    const { content } = compileCardJsonWith(
+      { type: 'Card', children: [{ type: 'Trend', props: { values } }] },
+      NO_MARKDOWN,
+    );
+    values.push(3);
+    expect(content.children).toEqual([
+      { type: 'Trend', props: { values: [1, 2] } },
+    ]);
+    // oxlint-disable-next-line no-sparse-arrays
+    const sparse = [1, , 3];
+    expect(compileProp('Trend', { values: sparse })).toEqual({
+      error: '<Trend> values Invalid input',
+    });
+  });
+
+  it('counts the Document root of Markdown against the element limit', () => {
+    const blocks = (count: number) => ({
+      markdownToBlocks: () =>
+        Array.from({ length: count }, () => ({ type: 'Divider' })),
+    });
+    expect(compileMarkdownWith('x', blocks(199)).children).toHaveLength(199);
+    expect(issuesOf(() => compileMarkdownWith('x', blocks(200)))).toEqual([
+      {
+        message: 'content has more than 200 elements',
+        path: 'markdown block 200',
+      },
+    ]);
+  });
+
+  it('reports a required text attribute left blank as missing', () => {
+    expect(
+      issuesOf(() =>
+        compileCardMarkupWith(
+          '<Card><Collapse summary=" \n "><Text>x</Text></Collapse></Card>',
+          NO_MARKDOWN,
+        ),
+      ),
+    ).toEqual([{ message: '<Collapse> needs summary', line: 1, column: 7 }]);
+    expect(compileProp('Collapse', { summary: '\t' })).toEqual({
+      error: '<Collapse> needs summary',
+    });
+  });
+
+  it('reports at most 20 issues for inline inputs', () => {
+    const choices = Array.from(
+      { length: 25 },
+      (_, index) =>
+        `<Choice id="c${index}" label="L" min="1"><Option id="a">A</Option></Choice>`,
+    ).join('');
+    const issues = issuesOf(() =>
+      compileCardMarkupWith(`<Card>${choices}</Card>`, NO_MARKDOWN),
+    );
+    expect(issues).toHaveLength(20);
+    expect(issues[0]!.message).toBe('<Choice> min and max need multiple');
+  });
+
+  it('rejects a tree nested past the limit without exhausting the stack', () => {
+    const tooDeep = {
+      message: 'content is nested more than 8 levels deep',
+      path: pathAt(9),
+    };
+    expect(
+      issuesOf(() => compileCardJsonWith(nestedCard(20_000), NO_MARKDOWN)),
+    ).toEqual([tooDeep]);
+    // Under the source size limit, through the shape checks.
+    expect(issuesOf(() => compileCard(nestedCard(2_000)))).toEqual([tooDeep]);
+    // A little too deep: the other problems are reported too.
+    const card = nestedCard(9);
+    card.props = { tone: 'loud' };
+    expect(issuesOf(() => compileCard(card))).toEqual([
+      {
+        message:
+          '<Card> tone must be one of neutral, info, success, warning, danger, working',
+        path: 'props.tone',
+      },
+      tooDeep,
+    ]);
+    let quote: ContentNode = { type: 'Text', children: ['x'] };
+    for (let level = 0; level < 5_000; level++) {
+      quote = { type: 'Quote', children: [quote] };
+    }
+    expect(
+      issuesOf(() =>
+        compileMarkdownWith('x', { markdownToBlocks: () => [quote] }),
+      ),
+    ).toEqual([
+      {
+        message: 'content is nested more than 8 levels deep',
+        path: 'markdown block 1',
+      },
+    ]);
   });
 });

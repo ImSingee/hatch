@@ -77,7 +77,11 @@ export const appRuntime = {
   setTheme(theme: ResolvedTheme | null) {
     void runtime?.setTheme(theme ? nativeAppTheme(theme) : null).catch(ignore);
   },
-  /** Asks a running App to show `route` (its own fragment, without `#`). */
+  /**
+   * Asks a running App to show `route`: its own fragment without the `#`
+   * that starts it, as a web App reads `location.hash.slice(1)`. The route
+   * may itself start with `#` (`hatch://app/x##notes` gives `#notes`).
+   */
   navigate(appId: string, route: string) {
     void runtime?.navigate(appId, route).catch(ignore);
   },

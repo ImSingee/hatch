@@ -10,13 +10,15 @@ card against it.
   allowed. Names are case-sensitive: components are capitalized (`Title`),
   inline marks lowercase (`b`, `a`).
 - Quote every attribute value (`tone="danger"`). A flag may be bare
-  (`mono`) or `"true"` / `"false"`. An empty value counts as left out. An
+  (`mono`) or `"true"` / `"false"`. An empty value, or text that is only
+  whitespace, counts as left out (so a required one is missing). An
   attribute a component does not have is an error.
 - Write `&amp;` for `&`, `&lt;` for `<`, `&quot;` for `"` inside a
   `"`-quoted value. Only `&amp; &lt; &gt; &quot; &apos;` and numeric
   references (`&#169;`) exist. No DOCTYPE, entity definitions or `<?xml?>`.
-- `<![CDATA[ … ]]>` saves escaping; whitespace rules still apply to it,
-  except inside `<Code>` and `<Markdown>`, where CDATA text is kept exactly.
+- `<![CDATA[ … ]]>` saves escaping; whitespace rules still apply to it and
+  the text around it as one piece (`A <![CDATA[ ]]> B` reads `A B`), except
+  inside `<Code>` and `<Markdown>`, where CDATA text is kept exactly.
 - Number lists are comma-separated (`values="210,180,260"`). Times are
   ISO-8601 (`2026-11-25T02:14:00Z`) and show in the reader's time zone.
 

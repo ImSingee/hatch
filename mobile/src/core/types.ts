@@ -324,7 +324,10 @@ export type AppPin = {
   appId: string;
   appSlug: string;
   label: string;
-  /** The App's own route without `#`; empty opens the App root. */
+  /**
+   * The App's own route without the `#` that starts it (the route may itself
+   * start with `#`); empty opens the App root.
+   */
   entryHash: string;
   appStatus: string;
 };

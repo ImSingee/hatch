@@ -27,6 +27,7 @@ import type {
 } from './content/catalog.gen';
 import {
   ContentError,
+  cardTreeTooDeep,
   compileCardJsonWith,
   compileCardMarkupWith,
   compileMarkdownWith,
@@ -548,6 +549,10 @@ export function compileCard(
 ):
   | { ok: true; content: ContentNode; reply: CompiledCard['reply'] }
   | { ok: false; issues: ContentIssue[] } {
+  // Before `jsonTree` reads the tree recursively, as the platform checks it
+  // before its shape checks.
+  const tooDeep = typeof source === 'string' ? null : cardTreeTooDeep(source);
+  if (tooDeep) return { ok: false, issues: [tooDeep] };
   try {
     const card =
       typeof source === 'string'

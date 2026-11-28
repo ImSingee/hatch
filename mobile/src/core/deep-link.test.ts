@@ -240,6 +240,14 @@ describe('deep links', () => {
     );
   });
 
+  it('keeps a fragment that starts with "#" in the full address', () => {
+    const page = parseDeepLink('hatch://settings/providers##keys');
+    if (page?.target.kind !== 'web') throw new Error('expected a web page');
+    expect(webPageUrl(page.target, origin)).toBe(
+      `${origin}/settings/providers##keys`,
+    );
+  });
+
   it('writes links that read back as the same page', () => {
     const pages: LinkTarget[] = [
       { kind: 'start' },

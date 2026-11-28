@@ -45,6 +45,22 @@ describe('Hatch deep links', () => {
       });
   });
 
+  it('keep a fragment that starts with "#"', () => {
+    expect(parseHatchLink('hatch://app/demo##section')).toEqual({
+      instance: null,
+      segments: ['app', 'demo'],
+      hash: '#section',
+    });
+    expect(hatchLinkWebUrl('hatch://app/demo##section', origin)).toBe(
+      `${origin}/app/demo##section`,
+    );
+    const page = { segments: ['app', 'demo'], hash: '#section' };
+    expect(parseHatchLink(formatHatchLink(page))).toEqual({
+      instance: null,
+      ...page,
+    });
+  });
+
   it('write links that read back as the same page', () => {
     const page = {
       segments: ['settings', 'users'],

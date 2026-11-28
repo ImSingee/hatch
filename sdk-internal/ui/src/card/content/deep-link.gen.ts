@@ -159,9 +159,13 @@ export function linkPathSegments(path: string): string[] | null {
   return segments;
 }
 
-/** A fragment without `#`; undefined when empty, null when too long. */
-export function linkFragment(value: string | undefined) {
-  const hash = value?.replace(/^#/, '') ?? '';
+/**
+ * A link's fragment, given and returned without the `#` that starts it (a
+ * URL's `hash` minus its first character); it may itself start with `#`.
+ * Undefined when empty, null when too long.
+ */
+export function linkFragment(fragment: string | undefined) {
+  const hash = fragment ?? '';
   if (hash.length > MAX_DEEP_LINK_FRAGMENT) return null;
   return hash || undefined;
 }

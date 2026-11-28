@@ -254,3 +254,20 @@ test('reads Markdown as the platform does', () => {
     ]).toEqual([entry.source, entry.blocks]);
   }
 });
+
+test('reports a tree nested too deeply as the platform does', () => {
+  type Tree = { type: string; children?: (Tree | string)[] };
+  let node: Tree = { type: 'Text', children: ['x'] };
+  for (let level = 0; level < 20_000; level++) {
+    node = { type: 'Column', children: [node] };
+  }
+  expect(compileCard({ type: 'Card', children: [node] })).toEqual({
+    ok: false,
+    issues: [
+      {
+        message: 'content is nested more than 8 levels deep',
+        path: Array.from({ length: 9 }, () => 'children.0').join('.'),
+      },
+    ],
+  });
+});
