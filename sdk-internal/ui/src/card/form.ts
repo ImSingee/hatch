@@ -196,9 +196,14 @@ export function createCardScope(
 
   const send = (answers: ReplyAnswers) => {
     if (pending() || props.busy || !props.onSubmit) return;
+    // The form that took these answers: a submit that settles after the
+    // card's questions changed answers nothing on the new ones.
+    const asked = form();
     let result: void | Promise<void>;
     try {
-      result = props.onSubmit(answers);
+      // The App gets its own copy: what it does with it never changes the
+      // answer the card shows.
+      result = props.onSubmit(copyAnswers(answers));
     } catch (caught) {
       error.set({ field: null, text: messageOf(caught) });
       return;
@@ -207,7 +212,7 @@ export function createCardScope(
       if (props.repeatable) {
         draft.set({});
         touched.set(new Set());
-      } else {
+      } else if (form() === asked) {
         submitted.set(answers);
       }
     };
@@ -284,7 +289,9 @@ export function createCardScope(
       const reply = form();
       return Boolean(reply && submits() === 0 && !submitsWithButtons(reply));
     },
-    submitLabel: () => form()?.submitLabel ?? props.submitLabel ?? 'Submit',
+    // The button the card adds: the App's label first. A card's own
+    // `Submit` names itself.
+    submitLabel: () => props.submitLabel ?? form()?.submitLabel ?? 'Submit',
     transition: () => {
       const shown = answered();
       if (!shown) return null;
@@ -299,9 +306,18 @@ export function createCardScope(
     },
     register: (field) => {
       registered.set([...registered(), field]);
-      cleanup(() =>
-        registered.set(registered().filter((entry) => entry !== field)),
-      );
+      cleanup(() => {
+        registered.set(registered().filter((entry) => entry !== field));
+        // A question taken away takes its draft with it: one that comes
+        // back starts again.
+        const id = field().field.id;
+        if (touched().has(id)) {
+          const next = { ...draft() };
+          delete next[id];
+          draft.set(next);
+          touched.set(new Set([...touched()].filter((entry) => entry !== id)));
+        }
+      });
     },
     registerSubmit: () => {
       submits.set(submits() + 1);
@@ -309,6 +325,15 @@ export function createCardScope(
     },
     linkAction: (href) => linkAction(href, props.onLinkPress),
   };
+}
+
+function copyAnswers(answers: ReplyAnswers): ReplyAnswers {
+  return Object.fromEntries(
+    Object.entries(answers).map(([id, value]) => [
+      id,
+      Array.isArray(value) ? [...value] : value,
+    ]),
+  );
 }
 
 function messageOf(caught: unknown): string {

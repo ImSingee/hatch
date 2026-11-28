@@ -207,6 +207,32 @@ test('keeps each line of code on one line', async () => {
   expect(long.height).toBe(short.height);
 });
 
+test('answers nothing on questions that replaced the submitted ones', async () => {
+  const app = await openCard('web', { example: 'swap' });
+  await app.type('label:First question', 'first answer');
+  await app.press('label:Send');
+  await app.waitFor('label:Second question');
+  await app.wait(50);
+  expect(app.enabled('label:Send')).toBe(true);
+  expect(app.value('label:Second question')).toBe('');
+});
+
+test('starts a question that comes back without its old draft', async () => {
+  const app = await openCard('web', { example: 'comeback' });
+  await app.type('label:Note', 'old draft');
+  await app.press('label:Toggle the note');
+  await app.press('label:Toggle the note');
+  await app.waitFor('label:Note');
+  expect(app.value('label:Note')).toBe('');
+  await app.press('label:Send');
+  await app.waitFor('text:submitted: {}');
+});
+
+test('names the submit button a markup card adds with the App label', async () => {
+  const app = await openCard('web', { example: 'markup-label' });
+  await app.waitFor('label:Save');
+});
+
 test('shows an answer given elsewhere read-only, with its status', async () => {
   const app = await openCard('web', {
     example: 'perm',

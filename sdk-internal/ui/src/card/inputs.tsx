@@ -465,15 +465,19 @@ export function Button(props: ButtonProps): JSX.Element {
           ? card.linkAction(props.href)
           : linkAction(props.href, undefined)
         : null;
-    return (
+    // A link the card cannot open shows as its text, as inline links do.
+    return open() ? (
       <UiButton
         label={props.children ?? props.href}
         kind="default"
         iconEnd={IconArrowUpRight}
         fullWidth={stacked()}
-        disabled={!open()}
         onPress={() => open()?.()}
       />
+    ) : (
+      <NshText class={`${TYPE.data} text-foreground`}>
+        {props.children ?? props.href}
+      </NshText>
     );
   }
   if (!answer()) {
@@ -586,9 +590,11 @@ export type SubmitProps = {
 export function Submit(props: SubmitProps): JSX.Element {
   const card = useCard();
   card?.registerSubmit();
-  return card && card.mode() === 'live' ? (
-    <SubmitButton card={card} label={props.children} />
-  ) : null;
+  // Followed as the card's questions come and go: they may mount after it.
+  return () =>
+    card && card.mode() === 'live' ? (
+      <SubmitButton card={card} label={props.children} />
+    ) : null;
 }
 
 /** The submit button itself. Internal: the card draws one when needed. */

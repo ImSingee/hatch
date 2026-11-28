@@ -120,6 +120,44 @@ function RowsCard() {
   );
 }
 
+/** The App swaps the questions while a submit is pending. */
+function SwapCard() {
+  const second = signal(false);
+  return (
+    <Card.Card
+      onSubmit={() => {
+        second.set(true);
+        return Promise.resolve();
+      }}
+    >
+      {second() ? (
+        <Card.Input id="second" label="Second question" />
+      ) : (
+        <Card.Input id="first" label="First question" />
+      )}
+      <Card.Submit>Send</Card.Submit>
+    </Card.Card>
+  );
+}
+
+/** A note taken away and brought back. */
+function ComebackCard() {
+  const shown = signal(true);
+  return (
+    <Card.Card
+      onSubmit={(answers: ReplyAnswers) =>
+        submitted.set(JSON.stringify(answers))
+      }
+    >
+      {shown() ? <Card.Input id="note" label="Note" /> : null}
+      <Card.Button onPress={() => shown.set(!shown())}>
+        Toggle the note
+      </Card.Button>
+      <Card.Submit>Send</Card.Submit>
+    </Card.Card>
+  );
+}
+
 function App() {
   const params = host.available() ? host.params : {};
   const id = typeof params.example === 'string' ? params.example : '';
@@ -138,6 +176,15 @@ function App() {
           {id === 'form-pending' ? <PendingCard /> : null}
           {id === 'layout' ? <LayoutCard /> : null}
           {id === 'rows' ? <RowsCard /> : null}
+          {id === 'swap' ? <SwapCard /> : null}
+          {id === 'comeback' ? <ComebackCard /> : null}
+          {id === 'markup-label' ? (
+            <Card.CardMarkup
+              source='<Card><Input id="name" label="Name" /></Card>'
+              submitLabel="Save"
+              onSubmit={() => {}}
+            />
+          ) : null}
           {example ? (
             <Card.CardMarkup
               source={example.markup}
