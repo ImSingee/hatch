@@ -16,6 +16,7 @@ import { OptionRow } from './ask-card';
 import { Button } from './button';
 import type { GlyphName } from './glyph.types';
 import { NativeField, type NativeFieldRef } from './native-field';
+import { shownAnswers } from './notification-content-model';
 import { notificationTime } from './notification-status';
 import { Card, Tag } from './primitives';
 import { Text, useType } from './text';
@@ -313,7 +314,7 @@ export function ReplyFieldInput({
   const c = usePalette();
   const type = useType();
   const { radii } = useTheme();
-  const answers = form?.answers ?? chosen ?? {};
+  const answers = form?.answers ?? shownAnswers(field, chosen);
   const current = answerOf(answers, field.id);
   const unavailable = !form || form.busy;
   const sends = form?.sends(field) ?? false;
@@ -358,7 +359,12 @@ export function ReplyFieldInput({
                 typeof current === 'string' ? null : { color: c.inkSoft },
               ]}
             >
-              {typeof current === 'string' ? current : 'No answer'}
+              {typeof current === 'string'
+                ? current
+                : // Answered, but left blank; a preview stays empty.
+                  chosen
+                  ? 'No answer'
+                  : ''}
             </Text>
           </View>
         )

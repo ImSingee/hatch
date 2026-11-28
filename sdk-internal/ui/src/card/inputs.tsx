@@ -21,6 +21,7 @@ import { CHOICE_STYLE } from '../input/Choice';
 import { FieldErrorLine } from '../input/Field';
 import { TextArea, TextField } from '../input/TextField';
 import type { ContentTone } from './content/catalog.gen';
+import { optionName } from './content/reply.gen';
 import type { ReplyOptionInput } from './content/reply-form.gen';
 import { CardContext, linkAction } from './form';
 import type { CardScope, CardTransition } from './form';
@@ -212,9 +213,9 @@ export type OptionProps = {
   children?: string;
   /** The answer's value. */
   id: string;
-  /** Shown beside it, such as "about 1 minute". */
+  /** Shown beside it, such as "about 1 minute"; read with the label. */
   note?: string;
-  /** A tag, such as "breaking". */
+  /** A tag, such as "breaking"; read with the label. */
   badge?: string;
   /** Chosen to begin with. */
   default?: boolean;
@@ -265,6 +266,13 @@ export function Option(props: OptionProps): JSX.Element {
         : [...list, props.id],
     );
   };
+  // The note and badge are part of what a screen reader announces.
+  const name = () =>
+    optionName({
+      label: props.children ?? '',
+      note: props.note,
+      badge: props.badge,
+    });
   const rowClass = () =>
     `${OPTION} ${chosen() ? OPTION_SELECTED : ''} ${dimmed() ? 'opacity-55' : ''} ${FOCUS_RING}`;
   const body = () => (
@@ -295,7 +303,7 @@ export function Option(props: OptionProps): JSX.Element {
       checked={chosen()}
       disabled={!live() || card?.busy()}
       onChange={toggle}
-      accessibilityLabel={props.children}
+      accessibilityLabel={name()}
       class={rowClass()}
       indicatorClass={CHECKBOX}
       indicator={
@@ -318,7 +326,7 @@ export function Option(props: OptionProps): JSX.Element {
       checked={chosen()}
       disabled={!live() || card?.busy()}
       onChange={toggle}
-      accessibilityLabel={props.children}
+      accessibilityLabel={name()}
       class={rowClass()}
     >
       <View class={CHOICE_STYLE.radio}>

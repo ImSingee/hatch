@@ -20,6 +20,7 @@ import {
   answerOf,
   defaultAnswers,
   describeAnswers,
+  optionName,
   submitsWithButtons,
   validateAnswers,
   type ReplyAnswers,
@@ -505,6 +506,7 @@ function FieldInput({
               key={option.id}
               value={option.id}
               label={<OptionLabel option={option} />}
+              aria-label={optionName(option)}
               disabled={disabled}
               styles={OPTION_STYLES}
             />
@@ -530,6 +532,7 @@ function FieldInput({
               key={option.id}
               value={option.id}
               label={<OptionLabel option={option} />}
+              aria-label={optionName(option)}
               disabled={disabled}
               styles={OPTION_STYLES}
             />
