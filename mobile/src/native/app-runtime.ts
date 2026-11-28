@@ -22,7 +22,11 @@ type Events = {
 type Subscription = { remove(): void };
 
 type RuntimeModule = {
-  configure(origin: string | null, token: string | null): Promise<void>;
+  configure(
+    origin: string | null,
+    token: string | null,
+    account: string | null,
+  ): Promise<void>;
   forgetStorage(origin: string): Promise<void>;
   setBackgroundMinutes(minutes: number): Promise<void>;
   setTheme(json: string | null): Promise<void>;
@@ -48,12 +52,16 @@ const ignore = () => undefined;
 export const appRuntime = {
   available: runtime !== null,
   /**
-   * The signed-in instance; another instance, or none, stops every App.
-   * Settles once the runtime has it: an App view mounted before then would
-   * find no session.
+   * The signed-in instance and account; another one, or none, stops every
+   * App. Settles once the runtime has it (an App view mounted before then
+   * would find no session) and rejects when the runtime could not take it.
    */
-  async configure(origin: string | null, token: string | null) {
-    await runtime?.configure(origin, token).catch(ignore);
+  async configure(
+    origin: string | null,
+    token: string | null,
+    account: string | null,
+  ) {
+    await runtime?.configure(origin, token, account);
   },
   /**
    * Deletes what Apps saved on this phone for `origin` once its account has

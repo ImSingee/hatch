@@ -98,7 +98,9 @@ class TrustDirectory<S : TrustStore>(
             store ?: open().also { store = it },
             material,
             reopen = {
-                store?.close()
+                // Forgotten before it closes, kept only once the new one opened:
+                // a closed store is never handed out.
+                store?.also { store = null }?.close()
                 open().also { store = it }
             },
             fresh,

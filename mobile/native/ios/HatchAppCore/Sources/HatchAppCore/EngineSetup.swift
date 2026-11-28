@@ -12,18 +12,19 @@ public struct EngineSetup: Equatable {
     /// `host.params`: the platform (`@hatch/ui` takes its look), the route
     /// the App opens at and the package's build number.
     public let params: [String: AnyHashable]
-    /// Where the App keeps `Storage` and NSH its caches: per instance and App.
+    /// Where the App keeps `Storage` (per instance, account and App) and NSH
+    /// its caches.
     public let storageDirectory: URL
     public let cacheDirectory: URL
 
     public init(
-        platform: String, route: String, packageBuild: Int, appId: String, instanceDirectory: URL,
+        platform: String, route: String, packageBuild: Int, appId: String, accountDirectory: URL,
         cacheRoot: URL
     ) {
         heapMegabytes = Self.heapMegabytes
         grant = HostCalls.grant
         params = ["platform": platform, "route": route, "packageBuild": packageBuild]
-        storageDirectory = instanceDirectory.appendingPathComponent("storage/\(appId)", isDirectory: true)
+        storageDirectory = accountDirectory.appendingPathComponent("storage/\(appId)", isDirectory: true)
         cacheDirectory = cacheRoot.appendingPathComponent("nsh", isDirectory: true)
     }
 }

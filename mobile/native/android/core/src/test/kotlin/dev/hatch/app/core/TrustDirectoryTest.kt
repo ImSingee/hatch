@@ -80,7 +80,7 @@ class TrustDirectoryTest {
         assertTrue(verifying.await(5, TimeUnit.SECONDS))
         // …and the new session for the same instance, with a newer list.
         val second = thread { trust.use(material(2), { true }) { order += "second" } }
-        Thread.sleep(200)
+        awaitBlocked(second)
         assertEquals(emptyList<String>(), order.toList())
         release.countDown()
         first.join(5_000)
@@ -107,7 +107,7 @@ class TrustDirectoryTest {
         // Signed out and in again while the old session was verifying.
         oldActive = false
         val next = thread { trust.use(material(2), { true }) { order += "next" } }
-        Thread.sleep(200)
+        awaitBlocked(next)
         assertEquals(emptyList<String>(), order.toList())
         release.countDown()
         old.join(5_000)
@@ -117,5 +117,38 @@ class TrustDirectoryTest {
         assertFailsWith<PlatformException> { trust.use(material(2), { oldActive }) { order += "old again" } }
         assertEquals(1, opened.size)
         assertEquals(2, FakeStore.opened(state).sequence)
+    }
+
+    @Test
+    fun aStoreThatFailedToOpenAgainIsNeverHandedOut() {
+        var failOpen = false
+        val trust =
+            TrustDirectory(
+                TrustRefresh(File(dir, "sequence"), state),
+                open = {
+                    check(!failOpen) { "could not open the store" }
+                    FakeStore.opened(state).also { it.failSave = failSave; opened += it }
+                },
+                fresh = { FakeStore() },
+            )
+        // A list kept only in memory needs the store opened again, and that fails once.
+        failSave = true
+        trust.use(material(0), { true }) { it }
+        failOpen = true
+        assertFailsWith<IllegalStateException> { trust.use(material(5), { true }) { it } }
+        failOpen = false
+        failSave = false
+        val used = trust.use(material(5), { true }) { it }
+        assertEquals(false, used.closed)
+        assertEquals(5, FakeStore.opened(state).sequence)
+    }
+
+    /** Waits (bounded) until `waiter` is parked on the directory's lock. */
+    private fun awaitBlocked(waiter: Thread) {
+        val deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(5)
+        while (waiter.state != Thread.State.BLOCKED) {
+            check(System.nanoTime() < deadline && waiter.isAlive) { "the second caller never reached the lock" }
+            Thread.sleep(5)
+        }
     }
 }
