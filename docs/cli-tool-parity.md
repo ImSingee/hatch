@@ -420,6 +420,19 @@ manifest and changes them by deploying. `hatch app get` shows the live
 deployment's chords under `manifest.keyboard.reserve`, which the Web UI reads
 from the same normalized manifest. There is no separate command or Agent Tool.
 
+## App-to-App access: manifest only
+
+An App grants its backend access to other Apps' RPC methods, Data Tables,
+tasks and webhook paths with `appAccess` in its source manifest, and changes
+the grants by deploying. `hatch app get <id-or-slug> --json` shows the live
+grants under `manifest.appAccess`, and `ops.appAccess` lists the Apps it
+reaches (`outgoing`) and the Apps that reach it (`incoming`), each item marked
+with whether the providing App's live deployment has it, the same overview the
+manage page shows. Calls go through `/api/app/<id>/access/...`, which only an
+App backend's signature opens; a user or Agent tests a target directly with
+`hatch app invoke backend`, `hatch app task run` and the Data commands. There
+is no separate command or Agent Tool.
+
 ## Device login approval: browser only
 
 The `/cli/authorize` page approves a CLI or mobile device login for the

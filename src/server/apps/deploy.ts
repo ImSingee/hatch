@@ -14,6 +14,7 @@ import {
 import { db, schema } from '~/db';
 import { AppError } from '~server/errors';
 import { manifestInvalid } from './manifest-validation';
+import { assertAppAccessTargets } from './app-access';
 import type { DeploymentBuildOrigin, JsonObject } from '~/db/schema';
 import { workspaceRelative } from '~server/deploy-lock';
 import { appDeployLock } from './deploy-lock';
@@ -678,6 +679,8 @@ async function releaseDeploymentInner(
           '(verified webhooks are forwarded to /__webhook)',
       );
     }
+
+    await assertAppAccessTargets(build.normalized.appAccess);
 
     // Source validation, schema evaluation, and every production bundle have
     // passed. Only now expose a persistent build marker: type/build failures

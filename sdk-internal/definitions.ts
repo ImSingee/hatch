@@ -80,6 +80,7 @@ export const APP_SDK: SdkDefinition = {
     './tasks': { source: 'tasks.ts', runtime: 'web' },
     // Backend-only: signed calls with HATCH_SIGNING_SECRET.
     './ai': { source: 'ai.ts', runtime: 'web' },
+    './apps': { source: 'apps.ts', runtime: 'web' },
     './native': { source: 'native.ts', runtime: 'native' },
     './native/rpc': { source: 'native-rpc.ts', runtime: 'native' },
     // Not for App source: the platform bundles it as the native web player.

@@ -10,10 +10,25 @@ import { extraPermissionsSchema } from './extra-permissions.js';
 import { isAppManagedPathSegment } from './app-managed-path.js';
 import {
   APP_NAME_MAX_LENGTH,
-  APP_SLUG_MAX_LENGTH,
   isAppNameWithinMaxLength,
 } from './app-identity.js';
 import { networkPolicySchema } from './network-policy.js';
+import {
+  APP_ID_RE,
+  APP_TASK_NAME_MAX_LENGTH,
+  APP_TASK_NAME_RE,
+} from './identifiers.js';
+import { appAccessSchema } from './app-access.js';
+
+export {
+  APP_ID_RE,
+  APP_SLUG_RE,
+  APP_TASK_NAME_MAX_LENGTH,
+  APP_TASK_NAME_RE,
+  isRpcMethodPath,
+  isValidAppId,
+  isValidAppSlug,
+} from './identifiers.js';
 import {
   formatKeyboardChord,
   parseKeyboardChord,
@@ -188,9 +203,6 @@ export const cronJobSchema = z
 
 export type CronJob = z.infer<typeof cronJobSchema>;
 
-/** Task names appear in URLs and CLI arguments. */
-export const APP_TASK_NAME_RE = /^[a-z0-9][a-z0-9-]*$/;
-export const APP_TASK_NAME_MAX_LENGTH = 64;
 /** Upper bound for `tasks.concurrency` and each task's own `concurrency`. */
 export const APP_TASK_MAX_CONCURRENCY = 32;
 export const APP_TASK_DEFAULT_CONCURRENCY = 4;
@@ -381,31 +393,6 @@ export const capabilitiesSchema = supportedCapabilitiesSchema
   })
   .strict()
   .transform((capabilities) => supportedCapabilitiesSchema.parse(capabilities));
-
-/**
- * Canonical app-id shape: lowercase alphanumerics and hyphens, safe as a path
- * segment. A leading digit is allowed so generated ULID ids (e.g.
- * `01jabc...`) pass alongside legacy kebab-case ids (`habit-tracker`). This is
- * an internal, immutable identifier — see `APP_SLUG_RE` for the human URL slug.
- */
-export const APP_ID_RE = /^[a-z0-9][a-z0-9-]*$/;
-
-/**
- * Canonical app-slug shape: lowercase letters, digits, and hyphens, starting
- * with a letter or digit. Used in the mutable, human-facing `/app/<slug>` URL.
- * Slugs and immutable ids occupy independent namespaces.
- */
-export const APP_SLUG_RE = /^[a-z0-9][a-z0-9-]*$/;
-
-/** True when `id` is a safe app-id path segment (ULID or legacy kebab). */
-export function isValidAppId(id: string): boolean {
-  return APP_ID_RE.test(id);
-}
-
-/** True when `slug` is a valid, human-facing app URL slug. */
-export function isValidAppSlug(slug: string): boolean {
-  return slug.length <= APP_SLUG_MAX_LENGTH && APP_SLUG_RE.test(slug);
-}
 
 /** Notification kind identifier, e.g. `order.shipped`. */
 export const NOTIFICATION_KIND_RE = /^[a-z0-9][a-z0-9._-]{0,63}$/;
@@ -682,9 +669,34 @@ export const sourceManifestSchema = z
      * Declare them only when the App is meant to be called by other services.
      */
     docs: appDocsSchema,
+    /**
+     * Other Apps' RPC methods, Data Tables, tasks and webhook paths this
+     * App's backend may reach through the platform relay.
+     */
+    appAccess: appAccessSchema.optional(),
   })
   .strict()
   .superRefine((manifest, ctx) => {
+    if (manifest.appAccess && manifest.appAccess.length > 0) {
+      if (!manifest.capabilities.backend || !manifest.backend) {
+        ctx.addIssue({
+          code: 'custom',
+          message:
+            'appAccess requires capabilities.backend and backend.entry: only the backend reaches other Apps',
+          path: ['appAccess'],
+        });
+      }
+      manifest.appAccess.forEach((grant, index) => {
+        if (grant.app === manifest.id) {
+          ctx.addIssue({
+            code: 'custom',
+            message:
+              "appAccess must name another App; call this App's own code directly",
+            path: ['appAccess', index, 'app'],
+          });
+        }
+      });
+    }
     if (manifest.app?.runtime === 'native' && manifest.app.html !== undefined) {
       ctx.addIssue({
         code: 'custom',
@@ -844,3 +856,9 @@ export type WebhookAuth = z.infer<typeof webhookConfigSchema>['auth'];
 export type NotificationsConfig = z.infer<typeof notificationsConfigSchema>;
 export type AiConfig = z.infer<typeof aiConfigSchema>;
 export type AiRole = z.infer<typeof aiRoleSchema>;
+export type { AppAccessGrant, AppAccessRequest } from './app-access.js';
+export {
+  appAccessAllows,
+  findAppAccessGrant,
+  isCanonicalWebhookPath,
+} from './app-access.js';

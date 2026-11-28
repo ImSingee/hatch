@@ -2,8 +2,9 @@
 import { createHash } from 'node:crypto';
 import { z } from 'zod';
 import type { JsonValue } from '~/db/schema';
+import { DATA_NAME_RE } from '../../../../packages/hatch-manifest/src/identifiers.js';
 
-export const DATA_NAME_RE = /^[a-z][a-zA-Z0-9_]*$/;
+export { DATA_NAME_RE };
 
 const nameSchema = z
   .string()

@@ -407,6 +407,11 @@ service name. A web App sets `"html": "app/index.html"` in place of
 uses `$param` syntax for dynamic paths (`/notes/$id`). Widget ids are stable URL and
 dashboard identifiers.
 
+To call another App's backend methods, Data Tables, tasks or webhook from this
+App's backend, list them under `appAccess` (see
+[Reaching other Apps](references/app-access.md)). Frontends never call other
+Apps directly.
+
 ### Backend network access
 
 Every authored backend must declare `backend.network`. New Apps start with an
@@ -725,6 +730,10 @@ Read only the reference relevant to the requested capability:
   new scheduled or triggered jobs.
 - [Data and storage](references/data-storage.md): Postgres, Storage, KV, runtime
   assets, and Data Table query/mutation details.
+- [Reaching other Apps](references/app-access.md): declare `appAccess` and
+  call another App's RPC methods, Data Tables, tasks or webhook from the
+  backend with `@hatch/app/apps`; identify relayed callers with `appCaller`
+  and `verifyPlatformRequest`.
 - [App icons](references/app-icon.md): design candidate icons with an image
   model and let the user choose, upload a user-supplied file, or remove the
   icon (`hatch app icon`). Read it whenever the user asks for an App icon or

@@ -44,6 +44,7 @@ vi.mock('./provision', () => ({
 }));
 
 const {
+  backendAppAccessEnv,
   backendArtifactEnv,
   backendPortEnv,
   backendStorageEnv,
@@ -643,6 +644,28 @@ describe('app backend runtime artifacts', () => {
 
     expect(args).toContain('--allow-net');
     expect(args.some((arg) => arg.startsWith('--allow-net='))).toBe(false);
+  });
+});
+
+describe('App access runtime', () => {
+  it('gives a backend the relay URL only when its artifact declares appAccess', () => {
+    const dir = runtimeDir();
+    writeBackendEntry(dir, 'backend/main.bundle.js');
+    writeManifest(dir, {
+      backend: { entry: 'backend/main.bundle.js', format: 'bundle-v1' },
+      appAccess: [{ app: 'other', rpc: ['*'] }],
+    });
+    const granted = resolveBackendArtifact(dir);
+    expect(backendAppAccessEnv('caller', granted)).toEqual({
+      HATCH_APP_ACCESS_URL: 'http://localhost:3700/api/app/caller/access',
+    });
+
+    writeManifest(dir, {
+      backend: { entry: 'backend/main.bundle.js', format: 'bundle-v1' },
+    });
+    expect(backendAppAccessEnv('caller', resolveBackendArtifact(dir))).toEqual(
+      {},
+    );
   });
 });
 
