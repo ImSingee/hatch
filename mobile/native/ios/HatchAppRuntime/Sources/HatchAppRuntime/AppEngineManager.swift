@@ -461,7 +461,11 @@ public final class AppEngineManager {
 
     /// Asks the App to show `route` (`hatch.nav`).
     public func navigate(_ appId: String, to route: String) {
-        engines[appId]?.view.send(HostEvents.nav, ["route": route])
+        guard let engine = engines[appId] else { return }
+        // Remembered now: the App does not report a route the shell gave it,
+        // and a reload or restart must come back to this page.
+        ledger.setRoute(route, of: appId)
+        engine.view.send(HostEvents.nav, ["route": route])
     }
 
     /// Stops and starts `appId` again at its current route.
