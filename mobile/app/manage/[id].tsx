@@ -31,10 +31,13 @@ export default function ManageAppScreen() {
   const { id, slug } = useLocalSearchParams<{ id: string; slug?: string }>();
   // Where the window has room, every App sits beside this page and a row
   // shows another App's page here, in place.
+  const shown = useLinkedId(id, slug).id ?? undefined;
   const show = (app: AppSummary) =>
     router.setParams({ id: app.id, slug: app.slug });
   return (
-    <ListDetail list={<AppSwitcher current={id} onSelect={show} undeployed />}>
+    <ListDetail
+      list={<AppSwitcher current={shown} onSelect={show} undeployed />}
+    >
       <ManageApp key={id} id={id} slug={slug} />
     </ListDetail>
   );

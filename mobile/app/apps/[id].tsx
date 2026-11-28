@@ -49,6 +49,8 @@ export default function AppScreen() {
   const c = usePalette();
   // Pins pass their own slug, label and hash; other entries resolve the slug.
   const params = useLocalSearchParams<AppParams>();
+  // A link names the App by its slug: the list marks it once resolved.
+  const shown = useLinkedId(params.id, params.slug).id ?? undefined;
   const show = (app: AppSummary) =>
     router.setParams({
       id: app.id,
@@ -61,7 +63,7 @@ export default function AppScreen() {
       style={{ flex: 1, backgroundColor: c.ground }}
       edges={['left', 'right']}
     >
-      <ListDetail list={<AppSwitcher current={params.id} onSelect={show} />}>
+      <ListDetail list={<AppSwitcher current={shown} onSelect={show} />}>
         {/* Another App starts over: its own title, attempts and history. */}
         <AppView key={params.id} {...params} />
       </ListDetail>
