@@ -35,7 +35,13 @@ export default function AppScreen() {
   const [beside] = useBesideApp();
   const focused = useIsFocused();
   const room = useBesideRoom();
-  const yielded = !focused && room && Boolean(shown) && beside?.id === shown;
+  const yielded =
+    !focused &&
+    room &&
+    Boolean(shown) &&
+    beside !== null &&
+    beside.id === shown &&
+    !beside.hidden;
   const show = (app: AppSummary) =>
     router.setParams({
       id: app.id,

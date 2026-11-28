@@ -10,6 +10,12 @@ export type BesideApp = {
   name: string;
   /** How its frontend runs (`AppSummary.runtime`). */
   runtime: 'native' | 'web' | null;
+  /**
+   * Hidden, still running: a web App's page stays loaded off-screen until it
+   * is closed or another App takes its place. (A hidden native App is simply
+   * no longer beside: its engine runs on without a view.)
+   */
+  hidden?: boolean;
 };
 
 const besideKey = (origin: string | null) => [origin, 'beside-app'];

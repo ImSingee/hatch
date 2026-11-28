@@ -35,10 +35,10 @@ export function BesideLayout({ children }: PropsWithChildren) {
   const front = useFrontApps();
   // An App has one view: while the front shows it, it is not beside too.
   const mounted = beside && !front.includes(beside.id) ? beside : null;
-  const shown = split ? mounted : null;
-  // While the window is too narrow, a native App's engine runs on without its
-  // view; a web App lives in its WebView, which stays mounted, hidden, so the
-  // App keeps its page and what was typed into it.
+  const shown = split && !mounted?.hidden ? mounted : null;
+  // Hidden, or while the window is too narrow, a native App's engine runs on
+  // without its view; a web App lives in its WebView, which stays mounted
+  // off-screen, so the App keeps its page and what was typed into it.
   const kept = !shown && mounted?.runtime !== 'native' ? mounted : null;
   const column = shown ?? kept;
   // The width the column beside had last, kept while it is off-screen.
@@ -102,7 +102,12 @@ export function BesideLayout({ children }: PropsWithChildren) {
                   slug={column.slug}
                   label={column.name}
                   beside={{
-                    onHide: () => setBeside(null),
+                    onHide: () =>
+                      setBeside(
+                        column.runtime === 'native'
+                          ? null
+                          : { ...column, hidden: true },
+                      ),
                     onClose: () => {
                       setBeside(null);
                       appRuntime.stop(column.id);
