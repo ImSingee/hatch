@@ -25,6 +25,7 @@ import {
   IconArchiveOff,
   IconBook,
   IconBell,
+  IconPlugConnected,
   IconCheck,
   IconClock,
   IconDatabase,
@@ -514,6 +515,14 @@ function useManageSections(
       label: t('appManage.section.notifications'),
       icon: icon(IconBell),
       color: 'pink',
+    },
+    Boolean(
+      ops?.appAccess.outgoing.length || ops?.appAccess.incoming.length,
+    ) && {
+      key: 'app-access',
+      label: t('appManage.section.appAccess'),
+      icon: icon(IconPlugConnected),
+      color: 'grape',
     },
     hasApi && {
       key: 'api',

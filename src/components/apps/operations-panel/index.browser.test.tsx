@@ -106,6 +106,7 @@ function appOps(
     storage: { enabled: storageEnabled },
     kv: { enabled: false },
     dataTable,
+    appAccess: { outgoing: [], incoming: [] },
   };
 }
 

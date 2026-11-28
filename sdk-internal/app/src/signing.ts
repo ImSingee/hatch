@@ -43,12 +43,26 @@ export async function hmacHeaders(
   };
 }
 
+/** `<timestamp>.` followed by the exact payload bytes. */
+function signedBytes(
+  timestamp: string,
+  body: string | Uint8Array,
+): Uint8Array<ArrayBuffer> {
+  const prefix = new TextEncoder().encode(`${timestamp}.`);
+  const payload =
+    typeof body === 'string' ? new TextEncoder().encode(body) : body;
+  const bytes = new Uint8Array(prefix.byteLength + payload.byteLength);
+  bytes.set(prefix);
+  bytes.set(payload, prefix.byteLength);
+  return bytes;
+}
+
 /** Constant-time check of a platform `x-hatch-signature` over raw bytes. */
 export async function verifyHmac(args: {
   secret: string;
   timestamp: string | null;
   signature: string | null;
-  body: string;
+  body: string | Uint8Array;
   maxSkewMs: number;
 }): Promise<boolean> {
   const { secret, timestamp, signature, body, maxSkewMs } = args;
@@ -66,6 +80,6 @@ export async function verifyHmac(args: {
     'HMAC',
     await hmacKey(secret, 'verify'),
     bytes,
-    new TextEncoder().encode(`${timestamp}.${body}`),
+    signedBytes(timestamp, body),
   );
 }

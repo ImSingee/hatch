@@ -59,8 +59,11 @@ import { readTextPrefix } from '../http-body';
 import { internalPlatformUrl } from '../internal-platform-url';
 import { subprocessSandboxEnv } from '../sandbox-env';
 import {
+  HATCH_CALLER_APP_HEADER,
+  HATCH_CALLER_SIGNATURE_HEADER,
   HATCH_SIGNATURE_HEADER,
   HATCH_TIMESTAMP_HEADER,
+  appAccessSignaturePayload,
   hatchSignature,
 } from '../secrets';
 import {
@@ -79,6 +82,7 @@ import {
   notificationsUrl,
   kvUrl,
   taskEnqueueUrl,
+  appAccessUrl,
 } from './manifest';
 import {
   type BackendRuntimeSnapshot,
@@ -100,6 +104,8 @@ export type BackendArtifact = {
   /** Absent when no policy was declared, which runs unrestricted. */
   network?: NetworkPolicy;
   extraPermissions?: string[];
+  /** The deployment may reach other Apps through the access relay. */
+  appAccess?: true;
 };
 
 const LEGACY_BACKEND_ENTRY = 'backend/main.ts';
@@ -197,6 +203,7 @@ function readBackendArtifactMetadata(buildDir: string): {
   format?: 'bundle-v1';
   network?: NetworkPolicy;
   extraPermissions?: string[];
+  appAccess?: true;
 } {
   const manifestPath = path.join(buildDir, NORMALIZED_MANIFEST);
   let manifestStat;
@@ -282,8 +289,11 @@ function readBackendArtifactMetadata(buildDir: string): {
     }
     extraPermissions = parsedPermissions.data;
   }
+  const appAccess =
+    Array.isArray(manifest.appAccess) && manifest.appAccess.length > 0;
   const base = {
     entry,
+    ...(appAccess ? { appAccess: true as const } : {}),
     ...(extraPermissions === undefined ? {} : { extraPermissions }),
     ...(runtime === undefined ? {} : { runtime }),
     ...(network === undefined ? {} : { network }),
@@ -327,13 +337,25 @@ export function resolveBackendArtifact(buildDir: string): BackendArtifact {
     metadata.network === undefined ? {} : { network: metadata.network };
   const runtime =
     metadata.runtime === undefined ? {} : { runtime: metadata.runtime };
-  const permissions =
-    metadata.extraPermissions === undefined
+  const permissions = {
+    ...(metadata.extraPermissions === undefined
       ? {}
-      : { extraPermissions: metadata.extraPermissions };
+      : { extraPermissions: metadata.extraPermissions }),
+    ...(metadata.appAccess ? { appAccess: true as const } : {}),
+  };
   return metadata.format === 'bundle-v1'
     ? { entryPath, format: 'bundle-v1', ...network, ...runtime, ...permissions }
     : { entryPath, ...network, ...runtime, ...permissions };
+}
+
+/** The access relay URL for a backend whose deployment declares appAccess. */
+export function backendAppAccessEnv(
+  id: string,
+  artifact: BackendArtifact,
+): Record<string, string> {
+  return artifact.appAccess
+    ? { HATCH_APP_ACCESS_URL: internalPlatformUrl(appAccessUrl(id)) }
+    : {};
 }
 
 /** Prefer immutable deployment bytes; fall back only for legacy artifacts. */
@@ -1183,8 +1205,14 @@ async function spawnBackendProcess(
   const tasksEnqueueUrl = appRow.capabilities?.tasks
     ? internalPlatformUrl(taskEnqueueUrl(id))
     : null;
+  const appAccessEnv = signingSecret
+    ? backendAppAccessEnv(id, backendArtifact)
+    : {};
   const automaticNetworkDestinations = [
     `127.0.0.1:${port}`,
+    ...(appAccessEnv.HATCH_APP_ACCESS_URL
+      ? [networkDestinationFromUrl(appAccessEnv.HATCH_APP_ACCESS_URL)]
+      : []),
     ...(databaseEnv.DATABASE_URL
       ? [networkDestinationFromUrl(databaseEnv.DATABASE_URL)]
       : []),
@@ -1242,6 +1270,7 @@ async function spawnBackendProcess(
         ? { HATCH_NOTIFICATIONS_URL: notificationsBaseUrl }
         : {}),
       ...(tasksEnqueueUrl ? { HATCH_TASKS_URL: tasksEnqueueUrl } : {}),
+      ...appAccessEnv,
       HATCH_DEPLOYMENT_ID: backendDeploymentId,
       ...extraEnv,
     }),
@@ -2095,16 +2124,24 @@ function forwardToAppBackend(
  * (including 206, 304, and 416) and the media/cache headers listed in
  * {@link PROXY_RESPONSE_HEADERS} are copied through unchanged.
  */
+export type ProxyAppRequestOptions = {
+  stripSecretParam?: boolean;
+  signWithSecret?: string;
+  expectedDeploymentId?: string;
+  /**
+   * Relay from another App (`appAccess`): stream the body unsigned and sign
+   * the calling App, method and forwarded path with the target's secret.
+   * Exclusive with `signWithSecret`.
+   */
+  caller?: { appId: string; secret: string };
+};
+
 export async function proxyAppRequest(
   id: string,
   request: Request,
   stripPrefix: string,
   prependPath = '',
-  options: {
-    stripSecretParam?: boolean;
-    signWithSecret?: string;
-    expectedDeploymentId?: string;
-  } = {},
+  options: ProxyAppRequestOptions = {},
 ): Promise<Response> {
   const { port, release } = await acquireInstance(
     id,
@@ -2149,7 +2186,10 @@ async function forwardProxiedRequest(
   request: Request,
   stripPrefix: string,
   prependPath: string,
-  options: { stripSecretParam?: boolean; signWithSecret?: string },
+  options: Pick<
+    ProxyAppRequestOptions,
+    'stripSecretParam' | 'signWithSecret' | 'caller'
+  >,
 ): Promise<BackendUpstream | Response> {
   const url = new URL(request.url);
   const stripped = url.pathname.startsWith(stripPrefix)
@@ -2265,10 +2305,30 @@ async function forwardProxiedRequest(
       HATCH_SIGNATURE_HEADER,
       hatchSignature(options.signWithSecret, timestamp, payload),
     );
-  } else if (hasBody && request.body) {
-    // Stream the request body straight through rather than buffering the whole
-    // upload in memory, so a large body can't exhaust the server process.
-    backendBody = request.body;
+  } else {
+    if (options.caller) {
+      // The body is not part of an App-to-App signature, so it streams.
+      const timestamp = String(Date.now());
+      headers.set(HATCH_TIMESTAMP_HEADER, timestamp);
+      headers.set(HATCH_CALLER_APP_HEADER, options.caller.appId);
+      headers.set(
+        HATCH_CALLER_SIGNATURE_HEADER,
+        hatchSignature(
+          options.caller.secret,
+          timestamp,
+          appAccessSignaturePayload(
+            options.caller.appId,
+            request.method,
+            `${rest}${search}`,
+          ),
+        ),
+      );
+    }
+    if (hasBody && request.body) {
+      // Stream the request body straight through rather than buffering the
+      // whole upload in memory, so a large body can't exhaust the server.
+      backendBody = request.body;
+    }
   }
 
   // Bound only the time to response headers: abort if the backend never

@@ -3,6 +3,7 @@ import { type NetworkPolicy } from '~/network-policy';
 import {
   sourceManifestSchema,
   type SourceManifest,
+  type AppAccessGrant,
   type AppCapabilitiesShape,
   type AppRoute,
   type CronJob,
@@ -225,6 +226,11 @@ export type NormalizedManifest = {
    * the build; absent on deployments without docs and on historical ones.
    */
   docs?: PublishedAppDoc[];
+  /**
+   * What this App's backend may reach in other Apps through the platform
+   * relay. Absent when nothing is granted and on historical deployments.
+   */
+  appAccess?: AppAccessGrant[];
 };
 
 /** Root path the platform serves an app's runtime APIs and assets under. */
@@ -325,6 +331,11 @@ export function taskRunUrl(id: string, taskName: string): string {
 /** Signed endpoint an App backend calls to enqueue one of its own tasks. */
 export function taskEnqueueUrl(id: string): string {
   return `${appBasePath(id)}/tasks/enqueue`;
+}
+
+/** Base of the relay an App backend uses to reach other Apps. */
+export function appAccessUrl(id: string): string {
+  return `${appBasePath(id)}/access`;
 }
 
 /** Parse + validate raw manifest JSON authored by the Agent. */
@@ -477,6 +488,15 @@ export function normalizeManifest(src: SourceManifest): NormalizedManifest {
         inputType: '',
       })),
     };
+  }
+  // Only the backend holds the signing secret the relay authenticates.
+  if (
+    src.capabilities.backend &&
+    src.backend &&
+    src.appAccess &&
+    src.appAccess.length > 0
+  ) {
+    out.appAccess = src.appAccess;
   }
   return out;
 }

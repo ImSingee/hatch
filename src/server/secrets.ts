@@ -21,6 +21,29 @@ export const HATCH_TIMESTAMP_HEADER = 'x-hatch-timestamp';
 export const HATCH_SIGNATURE_HEADER = 'x-hatch-signature';
 
 /**
+ * App-to-App access headers. Requests the platform relays from App A to
+ * App B carry A's id and a signature B can verify with its own secret.
+ */
+export const HATCH_CALLER_APP_HEADER = 'x-hatch-caller-app';
+export const HATCH_CALLER_SIGNATURE_HEADER = 'x-hatch-caller-signature';
+
+/**
+ * What an App-to-App access signature covers besides the timestamp: the
+ * calling App, the HTTP method and the path with its query. The body is not
+ * signed so large uploads stream through untouched.
+ *
+ * The caller signs the path below `/api/app/<caller>/access`; the platform
+ * signs the path the target backend receives.
+ */
+export function appAccessSignaturePayload(
+  callerAppId: string,
+  method: string,
+  pathAndQuery: string,
+): string {
+  return `${callerAppId}.${method.toUpperCase()} ${pathAndQuery}`;
+}
+
+/**
  * Compute the platform's request signature: hex HMAC-SHA256 over
  * `<timestamp>.<payload>` keyed by the per-app signing secret. Binding the
  * timestamp lets the verifier reject replays; `payload` is whatever the caller

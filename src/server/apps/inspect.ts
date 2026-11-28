@@ -1,4 +1,5 @@
 /** Server-only: read-only app inventory + details for Agent tools. */
+import { type AppAccessOverview, appAccessOverview } from './app-access';
 import { appCompatibility, type AppCompatibility } from '~/app-compatibility';
 import { db } from '~/db';
 import type { AppCapabilities, AppStatus } from '~/db/schema';
@@ -145,6 +146,8 @@ export type AppRuntimeOps = {
     dbName: string | null;
     schemaHash: string | null;
   };
+  /** Apps this one reaches and Apps that reach it (live deployments). */
+  appAccess: AppAccessOverview;
 };
 
 export type AppDetail = {
@@ -286,6 +289,7 @@ export async function getAppDetailForAgent(
         dbName: app.dataDbName ?? null,
         schemaHash: app.dataSchemaHash ?? null,
       },
+      appAccess: await appAccessOverview(id),
     },
     deployments: deployments.map((d) => ({
       id: d.id,

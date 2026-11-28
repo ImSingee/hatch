@@ -174,12 +174,15 @@ function findTask(context: TaskContext, taskName: string): NormalizedTask {
 
 /* --------------------------------- start ---------------------------------- */
 
+/** Run actor prefix for runs another App started (`app:<id>`). */
+export const APP_ACTOR_PREFIX = 'app:';
+
 export type StartTaskRunOptions = {
   trigger: AppTaskTrigger;
   input?: unknown;
   /** Schedule that fired a `cron` run. */
   cronName?: string;
-  /** User id, or `agent` for an Agent Run. */
+  /** User id, `agent` for an Agent Run, or `app:<id>` for another App. */
   actor?: string | null;
   /**
    * Only for webhooks: the task must have its webhook trigger enabled. Other
@@ -365,7 +368,13 @@ async function dispatchPass(appId: string): Promise<void> {
     where: { appId, status: 'queued' },
     orderBy: { createdAt: 'asc', id: 'asc' },
     limit: TASK_QUEUE_LIMIT,
-    columns: { id: true, taskName: true, input: true, trigger: true },
+    columns: {
+      id: true,
+      taskName: true,
+      input: true,
+      trigger: true,
+      actor: true,
+    },
   });
   if (queued.length === 0) return;
   let context: TaskContext;
@@ -465,6 +474,7 @@ async function dispatchPass(appId: string): Promise<void> {
       validation.data as JsonValue,
       run.trigger,
       active,
+      run.actor,
     )
       .catch(async (error) => {
         await finalizeRun(run.id, {
@@ -637,6 +647,7 @@ async function executeRun(
   input: JsonValue | null,
   trigger: AppTaskTrigger,
   active: ActiveRun,
+  actor: string | null,
 ): Promise<void> {
   const body = JSON.stringify(input ?? {});
   const timestamp = String(Date.now());
@@ -687,7 +698,14 @@ async function executeRun(
       },
       deploymentId: context.deploymentId,
       maxResponseBytes: MAX_TASK_OUTPUT_BYTES,
-      env: { HATCH_RUN_ID: runId, HATCH_TASK: task.name },
+      env: {
+        HATCH_RUN_ID: runId,
+        HATCH_TASK: task.name,
+        // Another App started this run through the access relay.
+        ...(actor?.startsWith(APP_ACTOR_PREFIX)
+          ? { HATCH_CALLER_APP: actor.slice(APP_ACTOR_PREFIX.length) }
+          : {}),
+      },
       onStdout: (chunk) => stream.stdout(chunk),
       onStderr: (chunk) => stream.stderr(chunk),
       onSpawn: (handle) => {

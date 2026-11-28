@@ -28,7 +28,7 @@ import { MAX_TASK_INPUT_BYTES, startTaskRun } from './service';
 /** The task input cap, which matches other inbound webhook bodies. */
 const MAX_TASK_BODY_BYTES = MAX_TASK_INPUT_BYTES;
 
-function accepted(result: { runId: string; status: string }): Response {
+export function accepted(result: { runId: string; status: string }): Response {
   return Response.json(
     { runId: result.runId, status: result.status },
     { status: 202 },
@@ -36,7 +36,7 @@ function accepted(result: { runId: string; status: string }): Response {
 }
 
 /** Caller-facing 4xx text; never echo internal detail on a public endpoint. */
-function failure(error: unknown, label: string): Response {
+export function failure(error: unknown, label: string): Response {
   if (error instanceof AppError && error.status !== 500) {
     return new Response(error.message, { status: error.status });
   }
@@ -44,7 +44,7 @@ function failure(error: unknown, label: string): Response {
   return new Response('Task error', { status: 502 });
 }
 
-async function readJsonBody(
+export async function readJsonBody(
   request: Request,
 ): Promise<{ ok: true; value: unknown } | { ok: false; response: Response }> {
   const text = await readCappedText(request, MAX_TASK_BODY_BYTES);
