@@ -1,3 +1,4 @@
+import { optionName } from '@hatch/platform-api';
 import { NativeField, type NativeFieldRef } from './native-field';
 import { useRef, useState } from 'react';
 import { Pressable, View } from 'react-native';
@@ -39,6 +40,8 @@ export function OptionRow({
   return (
     <Pressable
       accessibilityRole={multiple ? 'checkbox' : 'radio'}
+      // The note and badge are part of what a screen reader announces.
+      accessibilityLabel={optionName({ label, note, badge })}
       accessibilityState={{ checked: selected, disabled: disabled || readOnly }}
       disabled={disabled || readOnly}
       onPress={onPress}

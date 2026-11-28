@@ -28,6 +28,7 @@ import {
 } from '../../../packages/hatch-platform-api/notification-content';
 import {
   answerOf,
+  optionName,
   submitsWithButtons,
   type ReplyAnswers,
   type ReplyField,
@@ -206,6 +207,7 @@ export function ChoiceInput({ node }: { node: ContentNode }) {
         radius="md"
         className={classes.option}
         disabled={disabled}
+        aria-label={optionName(option)}
         data-selected={selected || undefined}
         data-dimmed={(answered && !selected) || undefined}
       >
@@ -331,14 +333,21 @@ export function ButtonsInput({ node }: { node: ContentNode }) {
 
 /** A written answer. */
 export function TextAnswerInput({ node }: { node: ContentNode }) {
-  const { id, field, control, value, readOnly } = useField(node, [
+  const { t } = useI18n();
+  const { id, field, control, value, answered, readOnly } = useField(node, [
     'text',
   ] as const);
   if (!id) return null;
   const common = {
     label: propString(node, 'label'),
     description: propString(node, 'description'),
-    placeholder: readOnly ? undefined : propString(node, 'placeholder'),
+    // Read-only, the box says when the answer left it blank; a preview,
+    // which nobody has answered yet, stays empty.
+    placeholder: answered
+      ? t('notifications.reply.noAnswer')
+      : readOnly
+        ? undefined
+        : propString(node, 'placeholder'),
     withAsterisk: (field?.required ?? propBool(node, 'required')) && !readOnly,
     error: control?.fieldError(id),
     readOnly,

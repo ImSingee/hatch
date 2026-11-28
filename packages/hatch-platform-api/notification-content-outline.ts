@@ -18,6 +18,7 @@ import {
   type ContentChild,
   type ContentNode,
 } from './notification-content';
+import { optionName } from './notification-reply';
 
 export type OutlineEntry =
   | {
@@ -182,10 +183,16 @@ export function contentOutline(content: ContentNode): ContentOutline {
         for (const option of children.filter(isNode)) {
           if (option.type !== 'Option') continue;
           const label = textOf(nodeChildren(option));
-          entry({ role, name: label, checked: propBool(option, 'default') });
+          const note = propString(option, 'note');
+          const badge = propString(option, 'badge');
+          entry({
+            role,
+            name: outlineText(optionName({ label, note, badge })),
+            checked: propBool(option, 'default'),
+          });
           text(label);
-          text(propString(option, 'note'));
-          text(propString(option, 'badge'));
+          text(note);
+          text(badge);
         }
         return;
       }

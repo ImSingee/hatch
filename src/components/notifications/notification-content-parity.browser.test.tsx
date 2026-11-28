@@ -43,47 +43,7 @@ type Difference = {
  * Where the Desk knowingly differs from the outline, by example id.
  * Anything not listed here must match.
  */
-const KNOWN_DIFFERENCES: Record<string, Difference> = {
-  // A choice option is a Mantine Radio.Card or Checkbox.Card named from its
-  // content, so its note or badge (OptionExtras) is part of its name; the
-  // outline names an option by its label alone.
-  alert: {
-    entries: [
-      {
-        at: 2,
-        outline: { role: 'radio', name: '回滚到 v11', checked: false },
-        desk: { role: 'radio', name: '回滚到 v11 约 1 分钟', checked: false },
-      },
-      {
-        at: 3,
-        outline: { role: 'radio', name: '把内存上限提到 1 GB', checked: false },
-        desk: {
-          role: 'radio',
-          name: '把内存上限提到 1 GB 立即生效',
-          checked: false,
-        },
-      },
-    ],
-  },
-  deps: {
-    entries: [
-      ...['@mantine/core', 'vitest', 'zod'].map((label, index) => ({
-        at: index + 1,
-        outline: { role: 'checkbox' as const, name: label, checked: true },
-        desk: {
-          role: 'checkbox' as const,
-          name: `${label} 补丁`,
-          checked: true,
-        },
-      })),
-      {
-        at: 4,
-        outline: { role: 'checkbox', name: 'drizzle-orm', checked: false },
-        desk: { role: 'checkbox', name: 'drizzle-orm 破坏性', checked: false },
-      },
-    ],
-  },
-};
+const KNOWN_DIFFERENCES: Record<string, Difference> = {};
 
 const EXAMPLES: { id: string; content: ContentNode }[] = [
   ...CARD_EXAMPLES.map((example) => ({

@@ -19,7 +19,9 @@ import {
 } from '../../../packages/hatch-platform-api/notification-content';
 import {
   DEFAULT_TEXT_MAX_LENGTH,
+  defaultAnswers,
   submitsWithButtons,
+  type ReplyAnswers,
   type ReplyField,
   type ReplyForm,
 } from '../../../packages/hatch-platform-api/notification-reply';
@@ -162,7 +164,14 @@ export function flowGroups(children: readonly ContentChild[]): FlowGroup[] {
 }
 
 export type ButtonItem =
-  | { kind: 'answer'; fieldId: string; optionId: string; primary: boolean }
+  | {
+      kind: 'answer';
+      /** The `Buttons` the button belongs to. */
+      field: ContentNode;
+      fieldId: string;
+      optionId: string;
+      primary: boolean;
+    }
   | { kind: 'submit'; node: ContentNode }
   | { kind: 'link'; node: ContentNode; href: string };
 
@@ -191,13 +200,15 @@ export function stackButtons(children: readonly ContentChild[]): {
   const questions: ContentNode[] = [];
   const items: ButtonItem[] = [];
   const others: ContentChild[] = [];
-  const take = (node: ContentNode, fieldId: string | null) => {
+  const take = (node: ContentNode, field: ContentNode | null) => {
     const href = propString(node, 'href');
     const optionId = propString(node, 'id');
+    const fieldId = field ? propString(field, 'id') : undefined;
     if (href) items.push({ kind: 'link', node, href });
-    else if (fieldId && optionId) {
+    else if (field && fieldId && optionId) {
       items.push({
         kind: 'answer',
+        field,
         fieldId,
         optionId,
         primary: propBool(node, 'primary'),
@@ -211,9 +222,8 @@ export function stackButtons(children: readonly ContentChild[]): {
       if (propString(child, 'label') || propString(child, 'description')) {
         questions.push(child);
       }
-      const fieldId = propString(child, 'id') ?? null;
       for (const button of resolveChildren(nodeChildren(child))) {
-        if (isNode(button) && button.type === 'Button') take(button, fieldId);
+        if (isNode(button) && button.type === 'Button') take(button, child);
       }
     } else if (child.type === 'Button') {
       take(child, null);
@@ -364,6 +374,34 @@ export function cardIconGlyph(name: unknown): GlyphName | null {
   return typeof name === 'string' && Object.hasOwn(CARD_ICON_GLYPHS, name)
     ? CARD_ICON_GLYPHS[name as CardIconName]
     : null;
+}
+
+/**
+ * The question an inline input asks: the notification's own reply field of
+ * that id, which a live form can answer (`bound`), else the question the
+ * tree declares, drawn read-only.
+ */
+export function inlineField(
+  node: ContentNode,
+  reply: ReplyForm | null,
+): { field: ReplyField | null; bound: boolean } {
+  const id = propString(node, 'id');
+  const bound = id ? reply?.fields.find((field) => field.id === id) : undefined;
+  return bound
+    ? { field: bound, bound: true }
+    : { field: fieldFromTree(node), bound: false };
+}
+
+/**
+ * What a read-only question shows: the round's answer once someone gave
+ * it, else the sender's defaults, as a card nobody has answered yet shows
+ * them everywhere.
+ */
+export function shownAnswers(
+  field: ReplyField,
+  chosen: ReplyAnswers | null,
+): ReplyAnswers {
+  return chosen ?? defaultAnswers({ fields: [field], submitLabel: '' });
 }
 
 /**

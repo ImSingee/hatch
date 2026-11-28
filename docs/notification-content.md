@@ -512,7 +512,8 @@ hand-written form. A card whose only input is one `Buttons` (or one required
 inputs and also a `reply` is rejected (`400`).
 
 **After an answer**, the inputs turn read-only in place and show what was
-chosen; the platform's "✓ Ada chose …" line stays in its fixed place below.
+chosen (a text input left blank says "No answer"); the platform's "✓ Ada
+chose …" line stays in its fixed place below.
 If the chosen `Option` or `Button` has `then-status` (with an optional
 `then-tone`), the card's status pill shows it instead of the status, and the
 flag is hidden, until the sender next edits the notification (its `editedAt`
@@ -527,9 +528,12 @@ from inline inputs:
 
 - `buttons` options may be `primary` (drawn filled); `destructive` as before.
 - `single` and `multiple` options may have a `note` (≤40, such as "about 1
-  minute") and a `badge` (≤16, such as "breaking").
+  minute") and a `badge` (≤16, such as "breaking"). Screen readers announce
+  them with the label, as one name ("Roll back to v11, about 1 minute").
 - `single` fields take `default` (one option id) and `multiple` fields a
-  list of them; the form starts with those options chosen.
+  list of them; the form starts with those options chosen, and a card shown
+  before anyone answers (a recalled notification, an earlier version)
+  shows them chosen.
 - When the last field is a required `buttons` field, its buttons replace the
   submit button: clicking one submits the whole form with that answer.
 

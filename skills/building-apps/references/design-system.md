@@ -1410,15 +1410,15 @@ A single or multiple choice question, its options as rows.
 
 One option of a `Choice`.
 
-| Prop            | Type          | Description                                |
-| --------------- | ------------- | ------------------------------------------ |
-| `children`      | `string`      | The option's label.                        |
-| `id` (required) | `string`      | The answer's value.                        |
-| `note`          | `string`      | Shown beside it, such as "about 1 minute". |
-| `badge`         | `string`      | A tag, such as "breaking".                 |
-| `default`       | `boolean`     | Chosen to begin with.                      |
-| `thenStatus`    | `string`      | The card's status once this is chosen.     |
-| `thenTone`      | `ContentTone` | Tone of `thenStatus`.                      |
+| Prop            | Type          | Description                                                     |
+| --------------- | ------------- | --------------------------------------------------------------- |
+| `children`      | `string`      | The option's label.                                             |
+| `id` (required) | `string`      | The answer's value.                                             |
+| `note`          | `string`      | Shown beside it, such as "about 1 minute"; read with the label. |
+| `badge`         | `string`      | A tag, such as "breaking"; read with the label.                 |
+| `default`       | `boolean`     | Chosen to begin with.                                           |
+| `thenStatus`    | `string`      | The card's status once this is chosen.                          |
+| `thenTone`      | `ContentTone` | Tone of `thenStatus`.                                           |
 
 ##### Card.Buttons
 

@@ -51,6 +51,21 @@ export type ReplyOption = {
   badge?: string;
 };
 
+/**
+ * What assistive technology calls a choice option: its label, then its note
+ * and badge, as the option shows them. A note or badge such as "breaking"
+ * can matter to the choice, so it is part of the name every renderer gives
+ * the option rather than a description a reader may skip.
+ */
+export function optionName(
+  option: Pick<ReplyOption, 'label' | 'note' | 'badge'>,
+): string {
+  return [option.label, option.note, option.badge]
+    .map((part) => part?.trim())
+    .filter(Boolean)
+    .join(', ');
+}
+
 type FieldBase = {
   id: string;
   /** May be empty for a buttons field: the buttons say it all. */

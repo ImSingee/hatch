@@ -40,7 +40,7 @@ import {
   cardIconGlyph,
   codeLines,
   contentTime,
-  fieldFromTree,
+  inlineField,
   flowGroups,
   gridColumns,
   holdsButtons,
@@ -169,12 +169,8 @@ function useBoundField(node: ContentNode): {
   form: ReplyFormState | null;
 } {
   const env = useContext(Env);
-  const id = propString(node, 'id');
-  const bound = id
-    ? env.reply?.fields.find((field) => field.id === id)
-    : undefined;
-  if (bound) return { field: bound, form: env.form };
-  return { field: fieldFromTree(node), form: null };
+  const { field, bound } = inlineField(node, env.reply);
+  return { field, form: bound ? env.form : null };
 }
 
 // ----------------------------------------------------------------- inline
@@ -1076,8 +1072,12 @@ function Submit({ node }: { node: ContentNode }) {
 function ButtonRow({ node }: { node: ContentNode }) {
   const env = useContext(Env);
   const { questions, buttons, others } = stackButtons(nodeChildren(node));
-  const fieldOf = (fieldId: string) =>
-    env.reply?.fields.find((field) => field.id === fieldId) ?? null;
+  // Live when the notification's reply holds the field, else read-only as
+  // the tree declares it, like any other inline input.
+  const fieldOf = (buttonsNode: ContentNode) => {
+    const { field, bound } = inlineField(buttonsNode, env.reply);
+    return { field, form: bound ? env.form : null };
+  };
   const stacked: StackedButton[] = [];
   for (const item of buttons) {
     if (item.kind === 'link') {
@@ -1102,9 +1102,9 @@ function ButtonRow({ node }: { node: ContentNode }) {
         onPress: form.submit,
       });
     } else {
-      const field = fieldOf(item.fieldId);
+      const { field, form } = fieldOf(item.field);
       const button = field
-        ? answerButtons(field, env.form, env.chosen).find(
+        ? answerButtons(field, form, env.chosen).find(
             (entry) => entry.key === item.optionId,
           )
         : undefined;
@@ -1116,12 +1116,12 @@ function ButtonRow({ node }: { node: ContentNode }) {
     <View style={{ gap: 10 }}>
       {others.length > 0 ? <Blocks nodes={others} /> : null}
       {questions.map((question, index) => {
-        const field = fieldOf(propString(question, 'id') ?? '');
+        const { field, form } = fieldOf(question);
         return field ? (
           <ReplyFieldInput
             key={index}
             field={field}
-            form={env.form}
+            form={form}
             chosen={env.chosen}
             buttons={false}
             markOptional={false}
