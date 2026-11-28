@@ -175,13 +175,25 @@ export function NativeAppSurface({
       }
       if (turn === pending) await nativeApps.cover(key, true);
     };
-    return trackSurface(node, {
+    const stop = trackSurface(node, {
       place: (rect: CssRect, viewportWidth: number) =>
         void nativeApps.place(key, rect, viewportWidth, showing),
       covered: (next) => {
         if (next !== covered) void cover(next);
       },
     });
+    return () => {
+      stop();
+      // The next tracker starts uncovered and may never see the overlay go
+      // (the App hidden meanwhile): uncover now, and let no picture still
+      // being taken cover it again.
+      pending += 1;
+      if (covered) {
+        covered = false;
+        void nativeApps.cover(key, false);
+        setPicture(null);
+      }
+    };
   }, [key, ready, showing]);
 
   // A picture is a blob URL: free it once it is replaced or gone.
@@ -193,6 +205,20 @@ export function NativeAppSurface({
   useEffect(() => {
     if (key && ready) void nativeApps.message(key, { type: 'theme' });
   }, [key, ready, surfaceTheme]);
+
+  // A new deployment may reserve other shortcuts: the running App's key
+  // monitor follows (also after a change while the App loaded), as a frame
+  // reads them on every press.
+  const shortcuts = JSON.stringify(
+    unreservedPlatformChords(reservedShortcuts ?? []),
+  );
+  useEffect(() => {
+    if (!key || !ready) return;
+    void nativeApps.message(key, {
+      type: 'shortcuts',
+      shortcuts: JSON.parse(shortcuts) as string[],
+    });
+  }, [key, ready, shortcuts]);
 
   // "Update available" once the host's live deployment and the App's differ.
   useEffect(() => {

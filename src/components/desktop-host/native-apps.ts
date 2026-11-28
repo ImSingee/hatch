@@ -22,7 +22,8 @@ export type NativeAppEvent =
 export type NativeSurfaceMessage =
   | { type: 'navigate'; route: string }
   | { type: 'theme' }
-  | { type: 'update-available' };
+  | { type: 'update-available' }
+  | { type: 'shortcuts'; shortcuts: string[] };
 
 export type CssRect = { x: number; y: number; width: number; height: number };
 

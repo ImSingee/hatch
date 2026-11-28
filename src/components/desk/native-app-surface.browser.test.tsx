@@ -248,3 +248,84 @@ test('a renamed App starts again from its new slug, as a frame would', async () 
   await vi.waitFor(() => expect(calls('native_app_open')).toHaveLength(2));
   expect(calls('native_app_close')).toEqual([{ key }]);
 });
+
+test('an App hidden while an overlay covers it comes back uncovered', async () => {
+  const { screen, key } = await renderNative();
+  emit({ type: 'ready', key, deploymentId: 'dep-1', build: 3 });
+  await vi.waitFor(() => expect(calls('native_app_place')).not.toHaveLength(0));
+
+  const portal = document.createElement('div');
+  portal.dataset.portal = 'true';
+  portal.innerHTML =
+    '<div style="position:fixed;inset:0;background:rgb(0 0 0 / .3)"></div>';
+  document.body.append(portal);
+  await vi.waitFor(() =>
+    expect(calls('native_app_cover').at(-1)).toEqual({ key, covered: true }),
+  );
+
+  // Switched away while the overlay still shows, then it closes.
+  const surface = (visible: boolean) => (
+    <MantineProvider>
+      <div style={{ display: 'flex', width: 600, height: 400 }}>
+        <AppSurface
+          app={{
+            slug: 'notes',
+            name: 'Notes',
+            id: 'app-notes',
+            runtime: 'native',
+          }}
+          route="/notes"
+          visible={visible}
+          latestDeployment="dep-1"
+        />
+      </div>
+    </MantineProvider>
+  );
+  await screen.rerender(surface(false));
+  portal.remove();
+  await screen.rerender(surface(true));
+
+  await vi.waitFor(() => {
+    expect(calls('native_app_cover').at(-1)).toEqual({ key, covered: false });
+    expect(calls('native_app_place').at(-1)).toMatchObject({
+      key,
+      visible: true,
+    });
+    expect(screen.container.querySelector('img')).toBeNull();
+  });
+});
+
+test("a running App's key monitor follows a new deployment's reservations", async () => {
+  const { screen, key } = await renderNative();
+  emit({ type: 'ready', key, deploymentId: 'dep-1', build: 3 });
+  const shortcutMessages = () =>
+    calls('native_app_message')
+      .map((args) => args.message as { type: string; shortcuts?: string[] })
+      .filter((message) => message.type === 'shortcuts');
+  await vi.waitFor(() =>
+    expect(shortcutMessages().at(-1)?.shortcuts).toHaveLength(1),
+  );
+
+  // The new deployment reserves ⌘K: the App keeps it, no restart.
+  await screen.rerender(
+    <MantineProvider>
+      <div style={{ display: 'flex', width: 600, height: 400 }}>
+        <AppSurface
+          app={{
+            slug: 'notes',
+            name: 'Notes',
+            id: 'app-notes',
+            runtime: 'native',
+          }}
+          route="/notes"
+          reservedShortcuts={['mod+K']}
+          latestDeployment="dep-1"
+        />
+      </div>
+    </MantineProvider>,
+  );
+  await vi.waitFor(() =>
+    expect(shortcutMessages().at(-1)?.shortcuts).toEqual([]),
+  );
+  expect(calls('native_app_open')).toHaveLength(1);
+});
