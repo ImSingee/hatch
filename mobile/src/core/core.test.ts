@@ -107,6 +107,22 @@ describe('instance and credential boundaries', () => {
       expect(await client.appIconSource(path, 128)).toBeNull();
   });
 
+  it('looks up the account of the credential it is given, not the vault', async () => {
+    const fetcher = vi.fn<FetchLike>().mockResolvedValue(
+      json({
+        session: {
+          user: { id: 'user-a', email: 'a@example.test', name: 'A' },
+        },
+      }),
+    );
+    const { client, vault } = setup(fetcher);
+    // The vault already holds another sign-in.
+    await vault.set(origin, 'token-b');
+    expect(await client.accountId('token-a')).toBe('user-a');
+    const headers = new Headers(fetcher.mock.calls[0]![1]!.headers);
+    expect(headers.get('authorization')).toBe('Bearer token-a');
+  });
+
   it('uses generated Connect clients and projects shared App/Agent messages for the UI', async () => {
     const app = {
       id: 'app-1',

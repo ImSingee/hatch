@@ -2,10 +2,9 @@
 export type RuntimeSession = { token: string; account: string };
 
 /**
- * Reads the session's credential and the account it belongs to, as one
- * snapshot: Apps keep their storage per account, so a credential must never
- * be paired with another account's id. A sign-in that replaces the
- * credential while the account is looked up starts over.
+ * Reads the session's credential and the account it belongs to. Apps keep
+ * their storage per account, so the account is looked up with that very
+ * credential, never another read of the vault: the pair always matches.
  */
 export async function readRuntimeSession({
   readToken,
@@ -13,14 +12,16 @@ export async function readRuntimeSession({
   signal,
 }: {
   readToken: () => Promise<string | null>;
-  /** The account of the credential the client sends now. */
-  accountId: (signal: AbortSignal) => Promise<string | null>;
+  /** The account `credential` belongs to. */
+  accountId: (
+    credential: string,
+    signal: AbortSignal,
+  ) => Promise<string | null>;
   signal: AbortSignal;
 }): Promise<RuntimeSession> {
   const token = await readToken();
   if (!token) throw new Error('This instance has no sign-in on this phone.');
-  const account = await accountId(signal);
-  if ((await readToken()) !== token) throw new Error('The sign-in changed.');
+  const account = await accountId(token, signal);
   // Signing out or switching instances cancels the caller: a credential read
   // for the session that ended configures nothing.
   if (signal.aborted) throw new Error('The session changed.');
