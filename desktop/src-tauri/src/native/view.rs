@@ -82,10 +82,100 @@ pub fn place(window: &NSWindow, container: &NSView, rect: CssRect, viewport_widt
     }
 }
 
-/// The view's pixels as PNG, drawn from its layers (Core Animation draws
-/// NSH's views; `cacheDisplayInRect` would ask their `drawRect`, which
-/// draws nothing).
+/// The view's pixels as PNG, as the screen shows them.
+///
+/// NSH draws text and images into IOSurfaces it sets as layer contents, which
+/// `CALayer.renderInContext` leaves out (and `cacheDisplayInRect` asks the
+/// views' `drawRect`, which draws nothing), so the picture is the window
+/// server's: [`composited`]. Only where that gives none is it drawn in
+/// process from the layers ([`drawn`]), backgrounds and borders without text.
 pub fn snapshot_png(container: &NSView) -> Option<Vec<u8>> {
+    composited(container).or_else(|| drawn(container))
+}
+
+/// `CGWindowListCreateImageFromArray`: a picture of windows as the window
+/// server composited them. Deprecated since macOS 14 and missing from the
+/// SDK's headers since macOS 15 but still exported, so it is looked up at run
+/// time (NSH's own screenshots do the same). An app may take pictures of its
+/// own windows without the Screen Recording permission, and windows over this
+/// one do not show in it.
+type CreateImageFromArray = unsafe extern "C" fn(
+    objc2_core_foundation::CGRect,
+    *const objc2_core_foundation::CFArray,
+    u32,
+) -> *mut objc2_core_graphics::CGImage;
+
+/// `kCGWindowImageBestResolution`: pixels at the display's backing scale.
+const IMAGE_BEST_RESOLUTION: u32 = 1 << 3;
+
+/// The part of the window's picture `container` covers.
+fn composited(container: &NSView) -> Option<Vec<u8>> {
+    use objc2::MainThreadMarker;
+    use objc2_app_kit::{NSBitmapImageRep, NSScreen};
+    use objc2_core_foundation::{CFArray, CFRetained, CGPoint, CGRect, CGSize};
+
+    let window = container.window()?;
+    if !window.isVisible() || container.isHiddenOrHasHiddenAncestor() {
+        return None;
+    }
+    // SAFETY: `dlsym` with `RTLD_DEFAULT` and a NUL-terminated name only
+    // looks the symbol up.
+    let symbol = unsafe {
+        libc::dlsym(
+            libc::RTLD_DEFAULT,
+            c"CGWindowListCreateImageFromArray".as_ptr(),
+        )
+    };
+    if symbol.is_null() {
+        return None;
+    }
+    // SAFETY: the symbol is CoreGraphics' function of this signature.
+    let create: CreateImageFromArray = unsafe { std::mem::transmute(symbol) };
+    let mtm = MainThreadMarker::from(&*window);
+    let primary = NSScreen::screens(mtm).firstObject()?.frame();
+    let frame = window.convertRectToScreen(container.convertRect_toView(container.bounds(), None));
+    if frame.size.width <= 0.0 || frame.size.height <= 0.0 {
+        return None;
+    }
+    // Screen coordinates from the primary screen's top left, as the window
+    // server's.
+    let rect = CGRect::new(
+        CGPoint::new(
+            frame.origin.x,
+            primary.size.height - frame.origin.y - frame.size.height,
+        ),
+        CGSize::new(frame.size.width, frame.size.height),
+    );
+    let mut ids = [window.windowNumber() as usize as *const std::ffi::c_void];
+    // SAFETY: the array holds a window number as its value (as the function
+    // takes it), so it gets no callbacks; `ids` outlives the call that
+    // copies it.
+    let array = unsafe { CFArray::new(None, ids.as_mut_ptr(), 1, std::ptr::null()) }?;
+    // SAFETY: a rectangle, an array of window numbers and image options, as
+    // the function takes them; it returns a +1 image or null.
+    let image = std::ptr::NonNull::new(unsafe { create(rect, &*array, IMAGE_BEST_RESOLUTION) })?;
+    // SAFETY: the function returns an image the caller owns.
+    let image = unsafe { CFRetained::from_raw(image) };
+    if objc2_core_graphics::CGImage::width(Some(&image)) == 0 {
+        return None;
+    }
+    let rep = NSBitmapImageRep::initWithCGImage(NSBitmapImageRep::alloc(), &image);
+    png(&rep)
+}
+
+fn png(rep: &objc2_app_kit::NSBitmapImageRep) -> Option<Vec<u8>> {
+    // SAFETY: PNG with no properties.
+    let data = unsafe {
+        rep.representationUsingType_properties(
+            objc2_app_kit::NSBitmapImageFileType::PNG,
+            &NSDictionary::new(),
+        )
+    }?;
+    Some(data.to_vec())
+}
+
+/// The view's layers drawn in process: what `composited` falls back to.
+fn drawn(container: &NSView) -> Option<Vec<u8>> {
     use objc2_app_kit::{NSBitmapImageRep, NSGraphicsContext};
     {
         let layer = container.layer()?;
@@ -124,13 +214,7 @@ pub fn snapshot_png(container: &NSView) -> Option<Vec<u8>> {
         }
         layer.renderInContext(&cg);
         context.flushGraphics();
-        let data = unsafe {
-            rep.representationUsingType_properties(
-                objc2_app_kit::NSBitmapImageFileType::PNG,
-                &NSDictionary::new(),
-            )
-        }?;
-        Some(data.to_vec())
+        png(&rep)
     }
 }
 

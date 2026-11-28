@@ -89,6 +89,8 @@ web view (`src-tauri/src/native/`):
 - **Overlays.** Nothing of the page draws over a native view, so while one of
   the page's overlays (a Mantine portal, a toast) covers the App, the surface
   shows a picture of it and the view steps aside until the overlay is gone.
+  The picture is the window server's image of the window (NSH draws text into
+  IOSurfaces, which drawing the view's layers in process leaves out).
 - **Keyboard.** Key presses inside an NSH view never reach the page, so the
   app hands the page's platform shortcuts the App did not reserve (`⌘K`) back
   to it.
