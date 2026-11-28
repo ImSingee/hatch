@@ -197,6 +197,7 @@ export function createNativeWebSearchCollector(
   >();
   const openAIItems = new Map<number, { id?: string; visible: boolean }>();
   let visibleBlocks = 0;
+  let receivedDeferredSearchResult = false;
 
   function open(id: string, contentIndex: number) {
     const existing = entries.get(id) ?? inherited.get(id);
@@ -254,9 +255,10 @@ export function createNativeWebSearchCollector(
         block.type === 'web_search_tool_result' &&
         typeof block.tool_use_id === 'string'
       ) {
-        const entry =
-          entries.get(block.tool_use_id) ?? inherited.get(block.tool_use_id);
+        const deferred = inherited.get(block.tool_use_id);
+        const entry = entries.get(block.tool_use_id) ?? deferred;
         if (!entry) return;
+        if (deferred) receivedDeferredSearchResult = true;
         entry.search.sources = sources(block.content);
         const error = boundedText(record(block.content)?.error_code, 128);
         if (error) entry.search.error = error;
@@ -359,7 +361,8 @@ export function createNativeWebSearchCollector(
         pending,
       };
     },
-    hasPending: () =>
+    needsReplayForToolUse: () =>
+      receivedDeferredSearchResult ||
       [...inherited.values(), ...entries.values()].some(
         (entry) => !entry.ended,
       ),
@@ -463,12 +466,12 @@ export function withNativeWebSearch(
         message.stopReason !== 'error' &&
         message.stopReason !== 'aborted' &&
         continuations < MAX_NATIVE_SEARCH_CONTINUATIONS;
-      const pendingClientTool =
+      const replayForClientTool =
         api === 'anthropic-messages' &&
         message.stopReason === 'toolUse' &&
         message.content.some((block) => block.type === 'toolCall') &&
-        collector.hasPending();
-      if (paused || pendingClientTool) {
+        collector.needsReplayForToolUse();
+      if (paused || replayForClientTool) {
         const content = collector.replay();
         if (content) {
           replies.set(message, content);
@@ -478,7 +481,7 @@ export function withNativeWebSearch(
           message.stopReason = 'error';
           message.errorMessage = paused
             ? 'The provider paused web search without a replayable reply.'
-            : 'The provider left web search pending without a replayable reply.';
+            : 'The provider combined deferred web search and local tools without a replayable reply.';
         }
       }
       const finished = collector.finish(willContinue);

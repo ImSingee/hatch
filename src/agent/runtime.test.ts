@@ -176,15 +176,17 @@ describe('runAgentTurn terminal outcomes', () => {
             requests.push(
               (await options?.onPayload?.(payload, model)) ?? payload,
             );
-            const pause = enabled && requests.length === 1;
+            const startingSearch = enabled && requests.length === 1;
+            const receivingSearch = enabled && requests.length === 2;
             const clientCall = {
               type: 'tool_use',
               name: 'write_file',
-              id: 'toolu_write',
+              id: requests.length === 1 ? 'toolu_write' : 'toolu_write_after',
               input: { path: 'search.txt', content: 'Searching' },
             };
-            const usesClientTool = pause && stop === 'tool_use';
-            if (pause) {
+            const usesClientTool =
+              stop === 'tool_use' && (startingSearch || receivingSearch);
+            if (startingSearch) {
               for (const raw of [
                 startBlock(0, {
                   type: 'server_tool_use',
@@ -201,15 +203,9 @@ describe('runAgentTurn terminal outcomes', () => {
                   },
                 },
                 { type: 'content_block_stop', index: 0 },
-                ...(usesClientTool
-                  ? [
-                      startBlock(1, clientCall),
-                      { type: 'content_block_stop', index: 1 },
-                    ]
-                  : []),
               ])
                 await options?.onProviderStreamEvent?.(raw, model);
-            } else if (enabled) {
+            } else if (receivingSearch) {
               await options?.onProviderStreamEvent?.(
                 startBlock(0, {
                   type: 'web_search_tool_result',
@@ -227,6 +223,16 @@ describe('runAgentTurn terminal outcomes', () => {
                 model,
               );
             }
+            if (usesClientTool) {
+              await options?.onProviderStreamEvent?.(
+                startBlock(1, clientCall),
+                model,
+              );
+              await options?.onProviderStreamEvent?.(
+                { type: 'content_block_stop', index: 1 },
+                model,
+              );
+            }
             const stopReason = usesClientTool ? 'toolUse' : 'stop';
             const message: AssistantMessage = {
               role: 'assistant',
@@ -236,7 +242,7 @@ describe('runAgentTurn terminal outcomes', () => {
                       id: clientCall.id,
                     }),
                   ]
-                : pause
+                : startingSearch
                   ? []
                   : [{ type: 'text', text: 'Search complete' }],
               api: model.api,
@@ -244,7 +250,9 @@ describe('runAgentTurn terminal outcomes', () => {
               model: model.id,
               timestamp: Date.now(),
               stopReason,
-              ...(pause ? { rawStopReason: stop } : {}),
+              ...(startingSearch || usesClientTool
+                ? { rawStopReason: stop }
+                : {}),
               usage: {
                 input: 0,
                 output: 0,
@@ -300,7 +308,9 @@ describe('runAgentTurn terminal outcomes', () => {
       const noClientSearch = expect.not.arrayContaining([
         expect.objectContaining({ name: 'web_search', type: 'function' }),
       ]);
-      expect(stream).toHaveBeenCalledTimes(enabled ? 2 : 1);
+      expect(stream).toHaveBeenCalledTimes(
+        stop === 'tool_use' ? 3 : enabled ? 2 : 1,
+      );
       expect(stream.mock.calls[1]?.[2]?.disableContinuation).toBe(
         enabled ? true : undefined,
       );
@@ -330,7 +340,42 @@ describe('runAgentTurn terminal outcomes', () => {
               ]
             : [],
       };
-      expect(requests.slice(1)).toMatchObject(enabled ? [replayed] : []);
+      const replayedResult = {
+        messages: [
+          ...replayed.messages,
+          {
+            role: 'assistant',
+            content: [
+              {
+                type: 'web_search_tool_result',
+                tool_use_id: 'srvtoolu_test',
+                content: [
+                  {
+                    url: 'https://hatch.example.test',
+                    encrypted_content: 'opaque',
+                  },
+                ],
+              },
+              { type: 'tool_use', id: 'toolu_write_after' },
+            ],
+          },
+        ],
+        clientResults: [
+          ...replayed.clientResults,
+          {
+            role: 'toolResult',
+            toolCallId: 'toolu_write_after',
+            isError: false,
+          },
+        ],
+      };
+      expect(requests.slice(1)).toMatchObject(
+        stop === 'tool_use'
+          ? [replayed, replayedResult]
+          : enabled
+            ? [replayed]
+            : [],
+      );
       const nativeEvents = [
         { type: 'tool_start', name: 'web_search', args: { query: 'Hatch' } },
         {
@@ -365,7 +410,14 @@ describe('runAgentTurn terminal outcomes', () => {
               ],
             },
             ...(stop === 'tool_use'
-              ? [{ role: 'toolResult', toolCallId: 'toolu_write' }]
+              ? [
+                  { role: 'toolResult', toolCallId: 'toolu_write' },
+                  {
+                    role: 'assistant',
+                    content: [{ type: 'toolCall', id: 'toolu_write_after' }],
+                  },
+                  { role: 'toolResult', toolCallId: 'toolu_write_after' },
+                ]
               : []),
           ]
         : [];
