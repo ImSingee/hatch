@@ -54,6 +54,7 @@ import {
   type SessionDetail,
   type StreamState,
 } from '../core';
+import { useBesideApp } from '../state/beside';
 import { useSession } from '../state/session';
 import {
   useAskDraft,
@@ -72,6 +73,7 @@ import { useHeldReplies } from '../state/use-held-replies';
 import { markConversationWorking } from '../state/conversation-follow';
 import { useConversationLifetime } from '../state/conversation-lifetime';
 import { AskCard } from '../ui/ask-card';
+import { useBesideRoom } from '../ui/beside-layout';
 import { Button, IconButton } from '../ui/button';
 import { Glyph } from '../ui/glyph';
 import { LiveTranscript, TranscriptMessage } from '../ui/transcript';
@@ -123,6 +125,8 @@ function ConversationBody({
   const type = useType();
   const insets = useSafeAreaInsets();
   const queryClient = useQueryClient();
+  const besideRoom = useBesideRoom();
+  const [, setBeside] = useBesideApp();
   const {
     draft,
     setDraft,
@@ -1142,44 +1146,65 @@ function ConversationBody({
                     const app = apps.data?.find((item) => item.id === appId);
                     const name = app?.name ?? 'App';
                     return (
-                      <Pressable
+                      <View
                         key={appId}
-                        accessibilityRole="button"
-                        accessibilityLabel={`Open ${name}`}
-                        onPress={() =>
-                          router.push({
-                            pathname: '/apps/[id]',
-                            params: { id: appId },
-                          })
-                        }
-                        style={({ pressed }) => ({
-                          minHeight: 64,
+                        style={{
                           flexDirection: 'row',
                           alignItems: 'center',
-                          gap: 12,
-                          padding: 12,
-                          paddingRight: 16,
-                          borderRadius: radii.xl,
-                          backgroundColor: pressed ? c.muted : c.card,
-                          boxShadow: shadows.card,
-                        })}
+                          gap: 8,
+                        }}
                       >
-                        <AppTile
-                          name={name}
-                          seed={appId}
-                          iconPath={app?.iconPath}
-                          size={44}
-                        />
-                        <View style={{ flex: 1, gap: 1 }}>
-                          <Text style={type.heading} numberOfLines={1}>
-                            {name}
+                        <Pressable
+                          accessibilityRole="button"
+                          accessibilityLabel={`Open ${name}`}
+                          onPress={() =>
+                            router.push({
+                              pathname: '/apps/[id]',
+                              params: { id: appId },
+                            })
+                          }
+                          style={({ pressed }) => ({
+                            flex: 1,
+                            minHeight: 64,
+                            flexDirection: 'row',
+                            alignItems: 'center',
+                            gap: 12,
+                            padding: 12,
+                            paddingRight: 16,
+                            borderRadius: radii.xl,
+                            backgroundColor: pressed ? c.muted : c.card,
+                            boxShadow: shadows.card,
+                          })}
+                        >
+                          <AppTile
+                            name={name}
+                            seed={appId}
+                            iconPath={app?.iconPath}
+                            size={44}
+                          />
+                          <View style={{ flex: 1, gap: 1 }}>
+                            <Text style={type.heading} numberOfLines={1}>
+                              {name}
+                            </Text>
+                            <Text style={type.small}>Built here</Text>
+                          </View>
+                          <Text style={[type.heading, { color: accent.ink }]}>
+                            Open
                           </Text>
-                          <Text style={type.small}>Built here</Text>
-                        </View>
-                        <Text style={[type.heading, { color: accent.ink }]}>
-                          Open
-                        </Text>
-                      </Pressable>
+                        </Pressable>
+                        {/* Where the window has room for two: the App beside
+                          this conversation, a preview while it is built. */}
+                        {besideRoom && app?.live ? (
+                          <IconButton
+                            label={`Open ${name} beside`}
+                            glyph="open"
+                            tone="card"
+                            onPress={() =>
+                              setBeside({ id: app.id, slug: app.slug, name })
+                            }
+                          />
+                        ) : null}
+                      </View>
                     );
                   })}
                 </View>

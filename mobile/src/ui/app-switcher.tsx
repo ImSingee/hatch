@@ -1,7 +1,10 @@
 import { useQuery } from '@tanstack/react-query';
 import { Pressable, ScrollView, View } from 'react-native';
 import type { AppSummary } from '../core';
+import { useBesideApp } from '../state/beside';
 import { useSession } from '../state/session';
+import { useBesideRoom } from './beside-layout';
+import { IconButton } from './button';
 import { Busy, Notice, errorText } from './primitives';
 import { AppTile } from './rows';
 import { SectionLabel, pageScrollProps } from './screen';
@@ -32,6 +35,8 @@ export function AppSwitcher({
   const accent = useAccent();
   const { radii } = useTheme();
   const type = useType();
+  const room = useBesideRoom();
+  const [, setBeside] = useBesideApp();
   const apps = useQuery({
     queryKey: [origin, 'apps'],
     queryFn: ({ signal }) => api!.apps(signal),
@@ -64,46 +69,68 @@ export function AppSwitcher({
           {items.map((item) => {
             const selected = item.id === current;
             return (
-              <Pressable
+              <View
                 key={item.id}
-                accessibilityRole="button"
-                accessibilityLabel={item.name}
-                accessibilityState={{ selected }}
-                onPress={() => {
-                  if (!selected) onSelect(item);
-                }}
-                style={({ pressed }) => ({
-                  minHeight: 52,
-                  paddingHorizontal: 10,
-                  paddingVertical: 6,
-                  borderRadius: radii.md,
-                  flexDirection: 'row',
-                  alignItems: 'center',
-                  gap: 12,
-                  backgroundColor: selected
-                    ? accent.tint
-                    : pressed
-                      ? c.hover
-                      : 'transparent',
-                })}
+                style={{ flexDirection: 'row', alignItems: 'center' }}
               >
-                <AppTile
-                  name={item.name}
-                  seed={item.id}
-                  iconPath={item.iconPath}
-                  size={36}
-                />
-                <Text
-                  numberOfLines={2}
-                  style={[
-                    type.heading,
-                    { flex: 1 },
-                    selected ? { color: accent.ink } : null,
-                  ]}
+                <Pressable
+                  accessibilityRole="button"
+                  accessibilityLabel={item.name}
+                  accessibilityState={{ selected }}
+                  onPress={() => {
+                    if (!selected) onSelect(item);
+                  }}
+                  style={({ pressed }) => ({
+                    flex: 1,
+                    minHeight: 52,
+                    paddingHorizontal: 10,
+                    paddingVertical: 6,
+                    borderRadius: radii.md,
+                    flexDirection: 'row',
+                    alignItems: 'center',
+                    gap: 12,
+                    backgroundColor: selected
+                      ? accent.tint
+                      : pressed
+                        ? c.hover
+                        : 'transparent',
+                  })}
                 >
-                  {item.name}
-                </Text>
-              </Pressable>
+                  <AppTile
+                    name={item.name}
+                    seed={item.id}
+                    iconPath={item.iconPath}
+                    size={36}
+                  />
+                  <Text
+                    numberOfLines={2}
+                    style={[
+                      type.heading,
+                      { flex: 1 },
+                      selected ? { color: accent.ink } : null,
+                    ]}
+                  >
+                    {item.name}
+                  </Text>
+                </Pressable>
+                {/* Where the window has room for two, a running App can sit
+                  beside the screen in front (web Desk: "Open beside"). */}
+                {room && item.live && !selected ? (
+                  <IconButton
+                    label={`Open ${item.name} beside`}
+                    glyph="open"
+                    tone="clear"
+                    size={40}
+                    onPress={() =>
+                      setBeside({
+                        id: item.id,
+                        slug: item.slug,
+                        name: item.name,
+                      })
+                    }
+                  />
+                ) : null}
+              </View>
             );
           })}
         </View>
