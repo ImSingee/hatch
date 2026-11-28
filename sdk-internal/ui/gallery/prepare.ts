@@ -57,7 +57,10 @@ export function prepareAppRoot(
     theme: read('theme.json'),
     tailwind: read('tailwind.json'),
     resolve: {
-      alias: { '@hatch/ui': './.hatch/sdk/@hatch/ui/dist/index.ts' },
+      alias: {
+        '@hatch/ui': './.hatch/sdk/@hatch/ui/dist/index.ts',
+        '@hatch/ui/card': './.hatch/sdk/@hatch/ui/dist/card/index.ts',
+      },
     },
   };
   fs.writeFileSync(
@@ -74,6 +77,7 @@ export function prepareAppRoot(
         nsh: ['./.nsh/types/nsh/index.d.ts'],
         'nsh/*': ['./.nsh/types/nsh/*.d.ts'],
         '@hatch/ui': ['../.hatch/sdk/@hatch/ui/dist/index.ts'],
+        '@hatch/ui/card': ['../.hatch/sdk/@hatch/ui/dist/card/index.ts'],
       },
     },
     include: [

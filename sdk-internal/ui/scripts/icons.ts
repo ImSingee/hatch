@@ -88,6 +88,10 @@ export const ICON_GROUPS: Record<string, readonly string[]> = {
     'bookmark',
     'bolt',
     'sparkles',
+    'circle',
+    'loader-2',
+    'activity',
+    'bug',
   ],
   Objects: [
     'user',
@@ -134,6 +138,9 @@ export const ICON_GROUPS: Record<string, readonly string[]> = {
     'wifi',
     'device-mobile',
     'device-desktop',
+    'apps',
+    'rocket',
+    'git-pull-request',
     'code',
     'terminal',
     'database',
@@ -160,6 +167,7 @@ export const ICON_GROUPS: Record<string, readonly string[]> = {
   ],
   'Money and shopping': [
     'currency-dollar',
+    'coin',
     'cash',
     'wallet',
     'credit-card',

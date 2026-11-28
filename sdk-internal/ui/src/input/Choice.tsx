@@ -44,7 +44,7 @@ const CHOICE_ROW =
  * white dot on the accent, the outlined 40 by 20 toggle whose thumb turns
  * white when on, and the slider's accent thumb in a white ring.
  */
-const STYLE = byLook({
+export const CHOICE_STYLE = byLook({
   web: {
     row: CHOICE_ROW,
     label: 'text-body font-label text-foreground',
@@ -154,6 +154,8 @@ const STYLE = byLook({
     sliderThumb: `size-5 rounded-full border-4 border-card bg-primary shadow-card transition-transform active:scale-90 motion-reduce:transition-none ${FOCUS_RING}`,
   },
 });
+
+const STYLE = CHOICE_STYLE;
 
 export type CheckboxProps = Omit<FieldProps, 'required'> & {
   /** Checked, when the App controls it. */

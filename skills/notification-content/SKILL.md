@@ -168,3 +168,10 @@ Interpolate only into text and quoted attribute values, and repeat elements
 with an array of `cardFragment` results. Never concatenate user text into
 markup. See the `building-apps` Skill's
 notifications reference for the rest of the App side.
+
+An App's native frontend shows the same cards with `@hatch/ui/card`: compose
+them in TSX, or show markup (one the backend kept, one an Agent wrote) with
+`<Card.CardMarkup source={markup} />`, which compiles it exactly as
+`hatch notification card check` does. Its questions answer the App's
+`onSubmit`, not a notification. See the `building-apps` Skill's design
+system reference, "Cards".

@@ -6,6 +6,10 @@
     ".": {
       "types": "./dist/index.ts",
       "default": "./dist/index.ts"
+    },
+    "./card": {
+      "types": "./dist/card/index.ts",
+      "default": "./dist/card/index.ts"
     }
   },
   "sideEffects": false,
