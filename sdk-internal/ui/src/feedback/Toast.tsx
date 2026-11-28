@@ -95,6 +95,19 @@ const CARD = byLook({
   },
 });
 
+/**
+ * The space under the toasts: the screen's safe area, which phones need; on
+ * macOS, whose windows have none, a banner's 16 pt margin, so a toast does
+ * not sit on the window's edge.
+ */
+const BOTTOM = byLook({
+  web: 'pb-[env(safe-area-inset-bottom)]',
+  ios: 'pb-[env(safe-area-inset-bottom)]',
+  android: 'pb-[env(safe-area-inset-bottom)]',
+  macos: 'pb-4',
+  windows: 'pb-[env(safe-area-inset-bottom)]',
+});
+
 const VISIBLE = 3;
 const TICK_MS = 50;
 
@@ -231,7 +244,7 @@ export function ToastRegion(): JSX.Element {
   const clear = () => mobileLook && bottomBarShown();
   return (
     <Overlay
-      class={`pointer-events-none inset-x-0 bottom-0 p-4 pb-[env(safe-area-inset-bottom)] ${compact() ? 'items-center' : 'items-end'} ${clear() ? 'mb-20' : ''}`}
+      class={`pointer-events-none inset-x-0 bottom-0 p-4 ${BOTTOM} ${compact() ? 'items-center' : 'items-end'} ${clear() ? 'mb-20' : ''}`}
     >
       <ToastStack
         placement={compact() ? 'bottomCenter' : 'bottomRight'}

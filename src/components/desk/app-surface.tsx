@@ -15,7 +15,9 @@ import {
   type SurfaceMessage,
 } from '../../../sdk-internal/app/src/native-surface';
 import { useSurfaceTheme } from '~/ui/theme';
+import { nativeAppsAvailable } from '~components/desktop-host/native-apps';
 import { appSurfaceFrameSource } from './app-surface-source';
+import { NativeAppSurface } from './native-app-surface';
 import { attachPlatformShortcuts } from './platform-shortcuts';
 import classes from './app-surface.module.css';
 
@@ -29,8 +31,16 @@ export type AppSurfaceHandle = {
 
 export type AppSurfaceProps = {
   ref?: Ref<AppSurfaceHandle>;
-  /** The App this surface runs. A surface runs one App for its lifetime. */
-  app: { slug: string; name: string };
+  /**
+   * The App this surface runs. A surface runs one App for its lifetime.
+   * `id` and `runtime` let the macOS app run a `native` App itself.
+   */
+  app: {
+    slug: string;
+    name: string;
+    id?: string;
+    runtime?: 'web' | 'native' | null;
+  };
   /**
    * The route inside the App to open when it loads or reloads; '' is the
    * App's home. Routes cross this interface still percent-encoded, exactly as
@@ -120,7 +130,15 @@ type NativeChannel = {
  * minus its reservations up front, because it must decide to cancel a key
  * press synchronously.
  */
-export function AppSurface({
+export function AppSurface(props: AppSurfaceProps) {
+  const { id, runtime } = props.app;
+  if (runtime === 'native' && id && nativeAppsAvailable()) {
+    return <NativeAppSurface {...props} app={{ ...props.app, id }} />;
+  }
+  return <FrameAppSurface {...props} />;
+}
+
+function FrameAppSurface({
   ref,
   app,
   route,

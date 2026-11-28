@@ -204,3 +204,30 @@ export function attachPlatformShortcuts(
     }
   };
 }
+
+/**
+ * The physical chords of the platform shortcuts an App has not reserved:
+ * what a native App's host must hand back to the page, because key presses
+ * inside an NSH view never reach the page's document.
+ */
+export function unreservedPlatformChords(
+  reserved: readonly string[],
+): string[] {
+  const apple = isApplePlatform();
+  const taken = resolveAll(reserved);
+  return PLATFORM_SHORTCUTS.filter(
+    (shortcut) => !isReserved(shortcut, taken),
+  ).flatMap((shortcut) => resolveKeyboardChord(shortcut.keys, apple) ?? []);
+}
+
+/** Runs the platform shortcut of a physical chord a native App's host saw. */
+export function dispatchPlatformChord(chord: string): boolean {
+  const apple = isApplePlatform();
+  const shortcut = PLATFORM_SHORTCUTS.find(
+    (item) => resolveKeyboardChord(item.keys, apple) === chord,
+  );
+  const handler = shortcut ? handlers.get(shortcut.id) : undefined;
+  if (!handler) return false;
+  handler();
+  return true;
+}

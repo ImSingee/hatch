@@ -84,6 +84,10 @@ pub fn build<R: Runtime>(app: &AppHandle<R>) -> tauri::Result<Menu<R>> {
             &separator()?,
             &item("reload", "Reload", Some("CmdOrCtrl+R"))?,
             &separator()?,
+            &item("zoom-actual", "Actual Size", None)?,
+            &item("zoom-in", "Zoom In", Some("CmdOrCtrl+="))?,
+            &item("zoom-out", "Zoom Out", Some("CmdOrCtrl+-"))?,
+            &separator()?,
             &PredefinedMenuItem::fullscreen(app, None)?,
         ],
     )?;

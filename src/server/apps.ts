@@ -22,6 +22,7 @@ import { normalizedManifestFor } from './apps/access';
 import { type AppAccessOverview, appAccessOverview } from './apps/app-access';
 import {
   APP_DOC_ID_RE,
+  frontendRuntime,
   type NormalizedManifest,
   reservedShortcuts,
   type WebhookAuth,
@@ -131,6 +132,11 @@ export type AppDetail = {
   compatibility: AppCompatibility | null;
   /** Chords the live deployment handles itself; see `keyboard.reserve`. */
   reservedShortcuts: string[];
+  /**
+   * How the live deployment's frontend runs: `native` Apps run in NSH (the
+   * web player, or a native view in the macOS app). Null without one.
+   */
+  frontendRuntime: 'web' | 'native' | null;
   currentSourceCommit: string | null;
   dbName: string | null;
   createdAt: string;
@@ -179,6 +185,9 @@ export const getAppBySlug = createServerFn({ method: 'GET' })
         ? appCompatibility(deployment.compatibilityVersion)
         : null,
       reservedShortcuts: reservedShortcuts(
+        deployment?.manifestNormalized as NormalizedManifest | null,
+      ),
+      frontendRuntime: frontendRuntime(
         deployment?.manifestNormalized as NormalizedManifest | null,
       ),
       createdAt: row.createdAt.toISOString(),

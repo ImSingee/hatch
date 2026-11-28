@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-native-app-close"
+description = "Enables the native_app_close command without any pre-configured scope."
+commands.allow = ["native_app_close"]
+
+[[permission]]
+identifier = "deny-native-app-close"
+description = "Denies the native_app_close command without any pre-configured scope."
+commands.deny = ["native_app_close"]

@@ -78,6 +78,7 @@ function appDetail(slug: string): AppDetail {
       isLatest: true,
     },
     reservedShortcuts: [],
+    frontendRuntime: 'web',
     currentSourceCommit: null,
     dbName: null,
     createdAt: '2026-11-20T00:00:00.000Z',

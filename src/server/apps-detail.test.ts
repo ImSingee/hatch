@@ -88,6 +88,7 @@ describe('App deployment revision views', () => {
         isLatest: false,
       },
       reservedShortcuts: [],
+      frontendRuntime: null,
       currentSourceCommit: 'commit-two',
       dbName: null,
       createdAt: '2026-08-13T00:00:00.000Z',

@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-native-app-snapshot"
+description = "Enables the native_app_snapshot command without any pre-configured scope."
+commands.allow = ["native_app_snapshot"]
+
+[[permission]]
+identifier = "deny-native-app-snapshot"
+description = "Denies the native_app_snapshot command without any pre-configured scope."
+commands.deny = ["native_app_snapshot"]

@@ -1,5 +1,6 @@
 import { Menu, UnstyledButton } from '@mantine/core';
-import { useQuery } from '@tanstack/react-query';
+import { useMediaQuery } from '@mantine/hooks';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Link, useNavigate, useRouterState } from '@tanstack/react-router';
 import {
   IconActivity,
@@ -7,8 +8,11 @@ import {
   IconBell,
   IconLayoutDashboard,
   IconLayoutGrid,
+  IconLayoutSidebarRight,
   IconLogout,
   IconMessage,
+  IconPin,
+  IconPower,
   IconSearch,
 } from '@tabler/icons-react';
 import { spotlight } from '@mantine/spotlight';
@@ -26,12 +30,22 @@ import type { DockOpenItem } from '~components/desk/dock-item';
 import { isAppPinOpen } from '~components/desk/dock';
 import { DESK_HOME } from '~components/desk/paths';
 import { platformShortcutKeys } from '~components/desk/platform-shortcuts';
+import { RunningApps, useVisibleBeside } from '~components/desk/running-apps';
+import { useSessionActions } from '~components/desk/use-session-actions';
+import { openContextMenuFromKeyboard } from '~components/system/context-menu-key';
+import { setSidebarPin } from '~server/sidebar';
 import { type PlainTranslationKey, useI18n } from '~i18n';
 import { agentRunnerStatusQueryOptions } from '~queries/agent';
 import { appsQueryOptions } from '~queries/apps';
 import { sidebarItemsQueryOptions } from '~queries/sidebar';
 import { DESKTOP_COMMAND_EVENT, parseDesktopCommand } from './host';
 import classes from './desktop-shell.module.css';
+
+/** Which App row a right-click or key press landed on. */
+function rowKeyOf(target: EventTarget | null) {
+  if (!(target instanceof Element)) return null;
+  return target.closest<HTMLElement>('[data-row-key]')?.dataset.rowKey ?? null;
+}
 
 function isUnder(pathname: string, to: string) {
   return pathname === to || pathname.startsWith(`${to}/`);
@@ -54,6 +68,9 @@ export function DesktopShell({
   const { t } = useI18n();
   const navigate = useNavigate();
   const [collapsed, setCollapsed] = useState(false);
+  // As on the desk, an App sits beside the page in front from tablet width.
+  const besideShown = useMediaQuery('(min-width: 48em)') ?? false;
+  const split = useVisibleBeside(besideShown) !== null;
 
   const onCommand = useEffectEvent((event: Event) => {
     const command = parseDesktopCommand((event as CustomEvent).detail);
@@ -77,15 +94,18 @@ export function DesktopShell({
       </a>
       <aside className={classes.sidebar} aria-label={t('desktop.sidebar')}>
         <div className={classes.titleStrip} data-tauri-drag-region />
-        <SidebarBody openItems={openItems} />
+        <SidebarBody openItems={openItems} besideAvailable={besideShown} />
       </aside>
       <main id="desktop-content" className={classes.content}>
         {collapsed ? (
           <div className={classes.collapsedStrip} data-tauri-drag-region />
         ) : null}
-        <div className={classes.stage}>
+        <div className={classes.stage} data-split={split || undefined}>
           <InsideDeskShellProvider value>
-            <WindowFrameProvider value="host">{children}</WindowFrameProvider>
+            <WindowFrameProvider value="host">
+              {children}
+              <RunningApps besideShown={besideShown} />
+            </WindowFrameProvider>
           </InsideDeskShellProvider>
         </div>
       </main>
@@ -94,8 +114,25 @@ export function DesktopShell({
   );
 }
 
-function SidebarBody({ openItems }: { openItems: readonly DockOpenItem[] }) {
+function SidebarBody({
+  openItems,
+  besideAvailable,
+}: {
+  openItems: readonly DockOpenItem[];
+  besideAvailable: boolean;
+}) {
   const { t } = useI18n();
+  const queryClient = useQueryClient();
+  const { sessions, front, sessionOf, quit, openBeside } = useSessionActions();
+  const [menuKey, setMenuKey] = useState<string | null>(null);
+  const pin = useMutation({
+    mutationFn: (appId: string) =>
+      setSidebarPin({ data: { appId, pinned: true } }),
+    onSettled: () =>
+      void queryClient.invalidateQueries({
+        queryKey: sidebarItemsQueryOptions.queryKey,
+      }),
+  });
   const searchKeys = platformShortcutKeys('palette.open');
   const pathname = useRouterState({ select: (s) => s.location.pathname });
   const { data: pins } = useQuery(sidebarItemsQueryOptions);
@@ -136,6 +173,50 @@ function SidebarBody({ openItems }: { openItems: readonly DockOpenItem[] }) {
       hint: '⌘,',
     },
   ];
+
+  // Running Apps that have no pin, after the pins, as in the dock.
+  const pinnedIds = new Set((pins ?? []).map((p) => p.appId));
+  const pinnedSlugs = new Set((pins ?? []).map((p) => p.appSlug));
+  const running = sessions
+    .filter((session) =>
+      session.appId
+        ? !pinnedIds.has(session.appId)
+        : !pinnedSlugs.has(session.slug),
+    )
+    .map((session) => ({
+      session,
+      app: apps?.find((a) =>
+        session.appId ? a.id === session.appId : a.slug === session.slug,
+      ),
+    }));
+
+  const menuTarget = (() => {
+    if (menuKey?.startsWith('pin:')) {
+      const item = pins?.find((p) => `pin:${p.id}` === menuKey);
+      if (!item) return null;
+      const session = sessionOf(item.appId, item.appSlug);
+      return {
+        name: item.label,
+        appId: item.appId,
+        slug: session?.slug ?? item.appSlug,
+        route: item.entryHash ?? '',
+        session,
+        pinnable: false,
+      };
+    }
+    const found = running.find(
+      ({ session }) => `session:${session.key}` === menuKey,
+    );
+    if (!found) return null;
+    return {
+      name: found.app?.name ?? found.session.slug,
+      appId: found.app?.id ?? found.session.appId ?? '',
+      slug: found.session.slug,
+      route: '',
+      session: found.session,
+      pinnable: Boolean(found.app),
+    };
+  })();
 
   return (
     <>
@@ -180,26 +261,106 @@ function SidebarBody({ openItems }: { openItems: readonly DockOpenItem[] }) {
           </nav>
 
           <h2 className={classes.heading}>{t('desktop.appsHeading')}</h2>
-          <nav aria-label={t('desktop.pinnedApps')} className={classes.list}>
-            {pins && pins.length === 0 ? (
-              <span className={classes.empty}>{t('desktop.pinHint')}</span>
-            ) : null}
-            {(pins ?? []).map((pin) => (
-              <Link
-                key={pin.id}
-                to="/app/$appSlug"
-                params={{ appSlug: pin.appSlug }}
-                hash={pin.entryHash ?? undefined}
-                className={classes.item}
-                data-active={
-                  isAppPinOpen(pin, pins ?? [], openItems) || undefined
-                }
+          <Menu
+            shadow="md"
+            width={220}
+            returnFocus={false}
+            onClose={() => setMenuKey(null)}
+          >
+            <Menu.ContextMenu>
+              {/* oxlint-disable-next-line jsx-a11y/no-noninteractive-element-interactions -- Notes which row a right-click or Shift+F10 is on; the rows stay the interactive elements. */}
+              <nav
+                aria-label={t('desktop.pinnedApps')}
+                className={classes.list}
+                onContextMenu={(event) => setMenuKey(rowKeyOf(event.target))}
+                onKeyDown={(event) => {
+                  setMenuKey(rowKeyOf(event.target));
+                  openContextMenuFromKeyboard(event);
+                }}
               >
-                <AppGlyph name={pin.label} seed={pin.appId} size="sm" />
-                <span className={classes.name}>{pin.label}</span>
-              </Link>
-            ))}
-          </nav>
+                {pins && pins.length === 0 ? (
+                  <span className={classes.empty}>{t('desktop.pinHint')}</span>
+                ) : null}
+                {(pins ?? []).map((pin) => (
+                  <Link
+                    key={pin.id}
+                    to="/app/$appSlug"
+                    params={{ appSlug: pin.appSlug }}
+                    hash={pin.entryHash ?? undefined}
+                    className={classes.item}
+                    data-row-key={`pin:${pin.id}`}
+                    data-active={
+                      isAppPinOpen(pin, pins ?? [], openItems) || undefined
+                    }
+                    data-running={
+                      sessionOf(pin.appId, pin.appSlug) ? true : undefined
+                    }
+                  >
+                    <AppGlyph name={pin.label} seed={pin.appId} size="sm" />
+                    <span className={classes.name}>{pin.label}</span>
+                  </Link>
+                ))}
+                {running.map(({ session, app }) => (
+                  <Link
+                    key={session.key}
+                    to="/app/$appSlug"
+                    params={{ appSlug: app?.slug ?? session.slug }}
+                    className={classes.item}
+                    data-row-key={`session:${session.key}`}
+                    data-active={session.slug === front || undefined}
+                    data-running
+                  >
+                    <AppGlyph
+                      name={app?.name ?? session.slug}
+                      seed={app?.id ?? session.appId ?? session.slug}
+                      size="sm"
+                    />
+                    <span className={classes.name}>
+                      {app?.name ?? session.slug}
+                    </span>
+                  </Link>
+                ))}
+              </nav>
+            </Menu.ContextMenu>
+            {menuTarget ? (
+              <Menu.Dropdown>
+                <Menu.Label>{menuTarget.name}</Menu.Label>
+                {besideAvailable && front !== menuTarget.slug ? (
+                  <Menu.Item
+                    leftSection={
+                      <IconLayoutSidebarRight size={15} stroke={1.7} />
+                    }
+                    onClick={() =>
+                      void openBeside(
+                        menuTarget.appId,
+                        menuTarget.slug,
+                        menuTarget.route,
+                      )
+                    }
+                  >
+                    {t('dock.openBeside')}
+                  </Menu.Item>
+                ) : null}
+                {menuTarget.session ? (
+                  <Menu.Item
+                    leftSection={<IconPower size={15} stroke={1.7} />}
+                    onClick={() => quit(menuTarget.session!.slug)}
+                  >
+                    {t('dock.quit')}
+                  </Menu.Item>
+                ) : null}
+                {menuTarget.pinnable ? (
+                  <Menu.Item
+                    leftSection={<IconPin size={15} stroke={1.7} />}
+                    disabled={pin.isPending}
+                    onClick={() => pin.mutate(menuTarget.appId)}
+                  >
+                    {t('desktop.pinApp')}
+                  </Menu.Item>
+                ) : null}
+              </Menu.Dropdown>
+            ) : null}
+          </Menu>
         </>
       </div>
 

@@ -13,7 +13,6 @@ import {
 } from '~components/desk/app-sessions';
 import { DeskShell } from '~components/desk/desk-shell';
 import type { DockOpenItem } from '~components/desk/dock-item';
-import { RunningApps } from '~components/desk/running-apps';
 import { LivePins } from '~components/desk/use-live-pins';
 import { DesktopShell } from '~components/desktop-host/desktop-shell';
 import { isDesktopHost } from '~components/desktop-host/host';
@@ -42,20 +41,13 @@ const DESKTOP_HOST = isDesktopHost();
 /** Windows that keep the tab bar below 560 wide: the tab destinations. */
 const TAB_DESTINATIONS = ['/apps', '/settings'];
 
-/**
- * Running Apps per window. The macOS app shows one page at a time in its
- * sidebar layout and offers no way to stop an App, so it keeps only the
- * last one running until its own session manager arrives (plan phase 6).
- */
-const RUNNING_APP_LIMIT = DESKTOP_HOST ? 1 : WEB_RUNNING_APP_LIMIT;
-
 function AppLayout() {
   return (
     <PlatformEventsProvider>
-      <AppSessionsProvider
-        limit={RUNNING_APP_LIMIT}
-        besideEnabled={!DESKTOP_HOST}
-      >
+      {/* The macOS app runs as many Apps as the desk, side by side too: its
+          sidebar marks them and quits them, and it runs `native` Apps in
+          native views of its own. */}
+      <AppSessionsProvider limit={WEB_RUNNING_APP_LIMIT} besideEnabled>
         <LivePins />
         <AppLayoutShell />
       </AppSessionsProvider>
@@ -71,8 +63,9 @@ function AppLayoutShell() {
   const { dashboardId } = useParams({ strict: false });
   const { sessions, front } = useAppSessions();
 
-  // The dock marks every running App. The macOS sidebar marks the row of the
-  // page on screen, so it gets only the App in front.
+  // The dock marks every running App. The macOS sidebar highlights the row
+  // of the page on screen and marks the others it runs itself, so it gets
+  // only the App in front.
   const openItems = useMemo<DockOpenItem[]>(
     () =>
       sessions
@@ -88,7 +81,6 @@ function AppLayoutShell() {
   return DESKTOP_HOST ? (
     <DesktopShell openItems={openItems}>
       <Outlet />
-      <RunningApps besideShown={false} />
     </DesktopShell>
   ) : (
     <DeskShell

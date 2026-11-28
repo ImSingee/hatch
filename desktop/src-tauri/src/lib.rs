@@ -15,6 +15,7 @@ mod api;
 mod appearance;
 mod deep_link;
 mod menu;
+mod native;
 mod policy;
 #[cfg(any(debug_assertions, feature = "probes"))]
 mod probes;
@@ -92,6 +93,12 @@ struct Shared {
     bundled_requested: AtomicBool,
     /// The current session flow (see `Flow`).
     flow: AtomicU64,
+    /// The page's zoom factor (View → Zoom In / Out).
+    zoom: Mutex<f64>,
+    /// The session the window was signed in with (instance origin, token,
+    /// user id), for native Apps: read once from the Keychain, not on every
+    /// App.
+    session: Mutex<Option<(String, String, String)>>,
 }
 
 /// One session action: launch or retry, connect, browser sign-in, cancel,
@@ -148,6 +155,10 @@ fn payload(app: &AppHandle) -> ScreenPayload {
 /// Shows `screen`. Anything but `Instance` brings back the bundled page.
 fn set_screen(app: &AppHandle, screen: Screen) {
     let bundled = !matches!(screen, Screen::Instance);
+    if bundled {
+        *shared(app).session.lock().unwrap() = None;
+        let _ = app.run_on_main_thread(native::session::close_all);
+    }
     *shared(app).screen.lock().unwrap() = screen;
     if bundled {
         if let Some(window) = main_window(app) {
@@ -188,7 +199,14 @@ fn allow_instance_drag(app: &AppHandle, origin: &str) {
         .remote(format!("{origin}/*"))
         .window(MAIN)
         .permission("core:window:allow-start-dragging")
-        .permission("core:window:allow-internal-toggle-maximize");
+        .permission("core:window:allow-internal-toggle-maximize")
+        .permission("allow-native-app-open")
+        .permission("allow-native-app-place")
+        .permission("allow-native-app-cover")
+        .permission("allow-native-app-snapshot")
+        .permission("allow-native-app-focus")
+        .permission("allow-native-app-message")
+        .permission("allow-native-app-close");
     if let Err(error) = app.add_capability(capability) {
         eprintln!("hatch: drag regions unavailable: {error}");
     }
@@ -246,15 +264,17 @@ async fn restore(app: AppHandle, origin: String, token: String, flow: Flow) {
         origin: &origin,
     };
     let result = async {
-        instance.status(&token).await?;
-        instance.handoff(&token).await
+        let signed_in = instance.status(&token).await?;
+        Ok::<_, ApiError>((signed_in, instance.handoff(&token).await?))
     }
     .await;
     if !flow.current(&app) {
         return;
     }
     match result {
-        Ok(handoff) => {
+        Ok((signed_in, handoff)) => {
+            *shared(&app).session.lock().unwrap() =
+                Some((origin.clone(), token.clone(), signed_in.user_id));
             tauri::async_runtime::spawn(refresh_accent(app.clone(), origin.clone(), token));
             let path = shared(&app)
                 .pending_path
@@ -410,6 +430,16 @@ async fn sign_out(app: AppHandle) {
     if let Some(window) = main_window(&app) {
         let _ = window.clear_all_browsing_data();
     }
+    // Native Apps keep this account's data apart, like the window's browsing
+    // data: it goes too, after `set_screen` below stops the engines (both
+    // run on the main thread, in order).
+    let account = shared(&app)
+        .session
+        .lock()
+        .unwrap()
+        .clone()
+        .filter(|(signed_in, _, _)| *signed_in == origin)
+        .and_then(|(_, _, user)| native::session::account_dir(&app, &origin, &user));
     set_screen(
         &app,
         Screen::SignIn {
@@ -417,6 +447,11 @@ async fn sign_out(app: AppHandle) {
             error: None,
         },
     );
+    if let Some(dir) = account {
+        let _ = app.run_on_main_thread(move || {
+            let _ = std::fs::remove_dir_all(dir);
+        });
+    }
     if let Some(token) = token {
         let http = shared(&app).http.clone();
         if let Err(error) = (Instance {
@@ -615,6 +650,81 @@ fn open_instance_in_browser(app: AppHandle) {
 }
 
 // ---------------------------------------------------------------------------
+// Commands from the instance's pages: native Apps (see `native::session`)
+
+/// The signed-in instance, for native Apps: only while the window shows it.
+fn native_instance(app: &AppHandle) -> Option<native::session::Instance> {
+    if !matches!(*shared(app).screen.lock().unwrap(), Screen::Instance) {
+        return None;
+    }
+    let (origin, token, user) = shared(app).session.lock().unwrap().clone()?;
+    if instance_origin(app).as_deref() != Some(origin.as_str()) {
+        return None;
+    }
+    native::session::Instance::new(app, &origin, &token, &user, &user_agent(app))
+}
+
+#[tauri::command]
+async fn native_app_open(
+    app: AppHandle,
+    request: native::session::OpenRequest,
+) -> Result<(), String> {
+    let instance = native_instance(&app).ok_or("Not signed in.")?;
+    tauri::async_runtime::spawn(native::session::open(app, instance, request));
+    Ok(())
+}
+
+#[tauri::command]
+fn native_app_place(
+    app: AppHandle,
+    key: String,
+    rect: native::view::CssRect,
+    viewport_width: f64,
+    visible: bool,
+) {
+    let for_main = app.clone();
+    let _ = app.run_on_main_thread(move || {
+        native::session::place(&for_main, &key, rect, viewport_width, visible)
+    });
+}
+
+#[tauri::command]
+fn native_app_cover(app: AppHandle, key: String, covered: bool) {
+    let _ = app.run_on_main_thread(move || native::session::cover(&key, covered));
+}
+
+#[tauri::command]
+async fn native_app_snapshot(app: AppHandle, key: String) -> Result<tauri::ipc::Response, String> {
+    let (tx, rx) = tokio::sync::oneshot::channel();
+    app.run_on_main_thread(move || {
+        let _ = tx.send(native::session::snapshot(&key));
+    })
+    .map_err(|e| e.to_string())?;
+    let png = rx
+        .await
+        .map_err(|e| e.to_string())?
+        .ok_or("No picture of this App.")?;
+    Ok(tauri::ipc::Response::new(png))
+}
+
+#[tauri::command]
+fn native_app_focus(app: AppHandle, key: String) {
+    let for_main = app.clone();
+    let _ = app.run_on_main_thread(move || native::session::focus(&for_main, &key));
+}
+
+#[tauri::command]
+async fn native_app_message(app: AppHandle, key: String, message: native::session::SurfaceMessage) {
+    let instance = native_instance(&app);
+    native::session::message(app, instance, key, message).await;
+}
+
+#[tauri::command]
+fn native_app_close(app: AppHandle, key: String) {
+    let _ = app.run_on_main_thread(move || native::session::close(&key));
+}
+
+// ---------------------------------------------------------------------------
 // Links, menu, navigation
 
 fn open_externally(app: &AppHandle, url: &Url) {
@@ -695,6 +805,21 @@ fn on_menu(app: &AppHandle, id: &str) {
                 } else {
                     "history.forward()"
                 });
+            }
+        }
+        "zoom-in" | "zoom-out" | "zoom-actual" => {
+            let state = shared(app);
+            let factor = {
+                let mut zoom = state.zoom.lock().unwrap();
+                *zoom = match id {
+                    "zoom-in" => (*zoom * 1.1).min(3.0),
+                    "zoom-out" => (*zoom / 1.1).max(0.5),
+                    _ => 1.0,
+                };
+                *zoom
+            };
+            if let Some(window) = main_window(app) {
+                let _ = window.set_zoom(factor);
             }
         }
         "reload" => {
@@ -841,10 +966,13 @@ fn create_window(app: &AppHandle) -> tauri::Result<WebviewWindow> {
         // from the Keychain at launch.
         .incognito(true)
         .visible(false)
-        .on_page_load(|window, payload| {
-            if payload.event() == PageLoadEvent::Finished {
-                on_page_load(&window, payload.url());
+        .on_page_load(|window, payload| match payload.event() {
+            // A new page (a reload, or another instance page loaded whole)
+            // never closes the surfaces of the one it replaces.
+            PageLoadEvent::Started => {
+                let _ = window.run_on_main_thread(native::session::close_all);
             }
+            PageLoadEvent::Finished => on_page_load(&window, payload.url()),
         })
         .on_new_window(move |url, _features| {
             match policy::decide_new_window(url.as_str()) {
@@ -886,7 +1014,29 @@ fn create_window(app: &AppHandle) -> tauri::Result<WebviewWindow> {
     Ok(window)
 }
 
+/// Developer builds print NSH's log (the App's errors) to stderr.
+#[cfg(debug_assertions)]
+struct StderrLog;
+
+#[cfg(debug_assertions)]
+impl log::Log for StderrLog {
+    fn enabled(&self, metadata: &log::Metadata) -> bool {
+        metadata.level() <= log::Level::Info
+    }
+    fn log(&self, record: &log::Record) {
+        if self.enabled(record.metadata()) {
+            eprintln!("[{} {}] {}", record.level(), record.target(), record.args());
+        }
+    }
+    fn flush(&self) {}
+}
+
 pub fn run() {
+    #[cfg(debug_assertions)]
+    {
+        static LOGGER: StderrLog = StderrLog;
+        let _ = log::set_logger(&LOGGER).map(|()| log::set_max_level(log::LevelFilter::Info));
+    }
     tauri::Builder::default()
         .plugin(tauri_plugin_deep_link::init())
         .plugin(tauri_plugin_opener::init())
@@ -899,6 +1049,13 @@ pub fn run() {
             change_instance,
             retry,
             open_instance_in_browser,
+            native_app_open,
+            native_app_place,
+            native_app_cover,
+            native_app_snapshot,
+            native_app_focus,
+            native_app_message,
+            native_app_close,
         ])
         .setup(|app| {
             let handle = app.handle().clone();
@@ -916,9 +1073,15 @@ pub fn run() {
                 completion: Mutex::new(None),
                 bundled_requested: AtomicBool::new(false),
                 flow: AtomicU64::new(0),
+                zoom: Mutex::new(1.0),
+                session: Mutex::new(None),
             });
 
             app.set_menu(menu::build(&handle)?)?;
+            native::session::install_shortcut_monitor(&handle);
+            // Native Apps are TSX: every engine serves all of `nsh/base`, as
+            // the web player does.
+            nsh_platform_macos::set_ui_sets(vec![nsh_base::registry()]);
             app.on_menu_event(|app, event| on_menu(app, event.id().as_ref()));
 
             let window = create_window(&handle)?;

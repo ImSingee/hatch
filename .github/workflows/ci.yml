@@ -92,6 +92,11 @@ jobs:
       - name: Check Platform API contract
         run: pnpm platform-api:check
 
+      # The macOS app's vendored NSH backend: the published crate plus one
+      # documented line (desktop/src-tauri/vendor/nsh-platform-macos).
+      - name: Check vendored NSH macOS backend
+        run: pnpm nsh:vendor:check
+
       # Fails when a key is added without translations; see AGENTS.md.
       - name: Check translations
         run: pnpm i18n:check

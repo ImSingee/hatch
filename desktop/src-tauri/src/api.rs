@@ -154,20 +154,22 @@ impl Instance<'_> {
         }
     }
 
-    /// The signed-in user's display name, proving the session is live.
-    pub async fn status(&self, token: &str) -> Result<String, ApiError> {
+    /// Who is signed in, proving the session is live.
+    pub async fn status(&self, token: &str) -> Result<SignedIn, ApiError> {
         let value = self
             .rpc("AuthService/GetStatus", Some(token), json!({}))
             .await?;
         let user = value
             .pointer("/session/user")
             .ok_or_else(|| ApiError::Failed("This credential is not a sign-in session.".into()))?;
-        let name = user.get("name").and_then(Value::as_str).unwrap_or_default();
-        let email = user
-            .get("email")
+        let id = user
+            .get("id")
             .and_then(Value::as_str)
-            .unwrap_or_default();
-        Ok(if name.is_empty() { email } else { name }.to_owned())
+            .filter(|id| !id.is_empty())
+            .ok_or_else(|| ApiError::Failed("The session names no user.".into()))?;
+        Ok(SignedIn {
+            user_id: id.to_owned(),
+        })
     }
 
     /// A one-use ticket that signs the window's browser session in.
@@ -430,4 +432,11 @@ mod tests {
         assert!(!valid_token("a\nb"));
         assert!(!valid_token(&"a".repeat(8193)));
     }
+}
+
+/// The user a session belongs to.
+#[derive(Debug, Clone)]
+pub struct SignedIn {
+    /// The account's id: keeps each account's native App data apart.
+    pub user_id: String,
 }

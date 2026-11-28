@@ -320,6 +320,56 @@ test('Escape closes the window unless a field or a menu owns the key', async () 
   await vi.waitFor(() => expect(path()).toBe('/dashboard'));
 });
 
+test('Escape that closes the search palette leaves the window open', async () => {
+  const { screen, path } = await renderDesk('/settings');
+  await expect
+    .element(screen.getByRole('heading', { name: 'Settings' }))
+    .toBeVisible();
+
+  await screen.getByRole('button', { name: 'Search apps and pages' }).click();
+  const search = screen.getByRole('textbox', {
+    name: 'Search apps and pages',
+  });
+  await expect.element(search).toBeVisible();
+  // Focus off the field, as when the palette opens without taking it.
+  (document.activeElement as HTMLElement | null)?.blur();
+  await userEvent.keyboard('{Escape}');
+  await expect.element(search).not.toBeInTheDocument();
+  expect(path()).toBe('/settings');
+});
+
+test('Escape that cancels an input method composition keeps the search palette open', async () => {
+  const { screen, path } = await renderDesk('/settings');
+  await expect
+    .element(screen.getByRole('heading', { name: 'Settings' }))
+    .toBeVisible();
+  await screen.getByRole('button', { name: 'Search apps and pages' }).click();
+  const search = screen.getByRole('textbox', {
+    name: 'Search apps and pages',
+  });
+  await expect.element(search).toBeVisible();
+
+  // Chromium marks the key `isComposing`; WebKit (Safari, the macOS app)
+  // sends it with `keyCode` 229 instead.
+  for (const init of [{ isComposing: true }, { keyCode: 229 }]) {
+    search.element().dispatchEvent(
+      new KeyboardEvent('keydown', {
+        key: 'Escape',
+        bubbles: true,
+        cancelable: true,
+        ...init,
+      }),
+    );
+  }
+  await new Promise((resolve) => setTimeout(resolve, 300));
+  await expect.element(search).toBeVisible();
+  expect(path()).toBe('/settings');
+
+  await userEvent.keyboard('{Escape}');
+  await expect.element(search).not.toBeInTheDocument();
+  expect(path()).toBe('/settings');
+});
+
 test('the dock lists pins and marks the one whose window is open', async () => {
   fixtures.pins = [
     {

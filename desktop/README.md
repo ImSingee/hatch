@@ -10,6 +10,7 @@ desktop layout. macOS only, light only.
 | Window, traffic lights, window state, Dock reopen         | Every page: desk, Agent, Apps, Settings           |
 | Application menu and shortcuts (`⌘,` `⌘N` `⌘1`–`⌘4` `⌘[`) | The sidebar (`src/components/desktop-host/`)      |
 | First-run page: instance address, sign-in, errors         | Apps, through the same `AppSurface` as on the web |
+| `native` Apps: NSH views over their surfaces (see below)  | Which Apps run, where, and when they stop         |
 | Session in the Keychain, browser sign-in, browser handoff |                                                   |
 | `hatch://` deep links, navigation rules, downloads        |                                                   |
 
@@ -58,6 +59,52 @@ Passkeys cannot work inside the window: WKWebView in an app without Apple's
 browser entitlement reports no platform authenticator. That is why sign-in is
 in the browser.
 
+## Native Apps
+
+A `native` App does not run in the web player here. The page's `AppSurface`
+keeps the App's place in the layout and reports, over the app's IPC, where it
+is (CSS pixels and the viewport width, so page zoom is followed), whether it
+shows, and what the App should hear (route, theme, "update available"). The
+app runs the App in an NSH `AppView` it places at that rectangle, above the
+web view (`src-tauri/src/native/`):
+
+- **Package.** The app downloads the App's live signed package
+  (`AppService.GetAppPackage`) and the instance's trust material
+  (`GetAppRuntimeTrust`) with its session, verifies the package with
+  `nsh-package` (release key certified by the instance's root, signature,
+  hashes, revocation list, never an older build than one accepted), checks it
+  is this App's (`dev.hatch.app.<id>`), and loads the verified bundle. The
+  trust store and the App's assets live per instance under
+  `~/Library/Application Support/app.hatch.desktop/native/<instance hash>/`;
+  what an App keeps (its NSH data) lives per account below it
+  (`users/<user hash>/`), so two accounts on one Mac never share it, and
+  **Sign Out** removes it with the window's browsing data.
+- **Grant.** Exactly the host calls of the bridge (`NATIVE_HOST_CALLS`), and
+  nothing else: no network, clipboard, files or URLs, whatever the package
+  declares. NSH would otherwise give an App what it declared.
+- **Bridge.** Every `host.call` is checked and scoped to the App the surface
+  opened: `hatch.rpc` reaches only `/api/app/<id>/rpc/<service>/<method>`, the
+  data calls `/api/app/<id>/data/*` with the deployment header.
+- **Limits.** One engine per running App, at most 12, each with a 96 MB
+  JavaScript heap. The page decides which Apps run, which is in front or
+  beside, when a minimised App has waited too long, and when an update is
+  available, as on the web Desk; a hidden App keeps its size.
+- **Overlays.** Nothing of the page draws over a native view, so while one of
+  the page's overlays (a Mantine portal, a toast) covers the App, the surface
+  shows a picture of it and the view steps aside until the overlay is gone.
+  The picture is the window server's image of the window (NSH draws text into
+  IOSurfaces, which drawing the view's layers in process leaves out).
+- **Keyboard.** Key presses inside an NSH view never reach the page, so the
+  app hands the page's platform shortcuts the App did not reserve (`⌘K`) back
+  to it.
+
+The app uses NSH's crates at exactly the platform's release (`=0.7.0`), with
+an upstream fix merged after 0.7.2 applied to the macOS backend, so an
+embedded view draws a JS App inside itself instead of opening a window of its
+own: `src-tauri/vendor/nsh-platform-macos/HATCH-VENDOR.md` says what and why,
+and `pnpm nsh:vendor:check` proves the copy is the published crate plus
+exactly that upstream change. They need Rust 1.97 or later.
+
 ## What the window may load
 
 `src-tauri/src/policy.rs` holds the rules, with tests:
@@ -76,16 +123,18 @@ fails at startup: dayjs assigns `valueOf` on its own prototype, which throws
 once the inherited `Object.prototype.valueOf` is frozen (JavaScript's
 "override mistake"). Agent-built Apps use arbitrary libraries with the same
 pattern. The option guards the IPC bridge against prototype pollution, and
-the instance's pages can only ask for window dragging.
+the instance's pages can only ask for window dragging and the native App
+commands, which run the instance's own Apps under the grant above.
 
-The instance's pages can call one app command: window dragging. The bundled
-page can call only the sign-in commands it uses
+The instance's pages can call window dragging and the native App commands
+(`native_app_*`: open, place, cover, picture, focus, message, close). The
+bundled page can call only the sign-in commands it uses
 (`src-tauri/capabilities/bundled.json`). There is no shell, filesystem or
 HTTP plugin.
 
 ## Develop
 
-Requires Rust (stable, 1.90 or later), Xcode command line tools, Node and pnpm.
+Requires Rust (stable, 1.97 or later), Xcode command line tools, Node and pnpm.
 Install from the repository root with `pnpm install`.
 
 ```bash

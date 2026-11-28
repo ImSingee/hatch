@@ -440,6 +440,13 @@ running App can sit beside the window in front (the dock's Open beside): two
 windows of equal width, 16 apart, the App on the right, with Minimise (stop
 showing it there) and Close (quit). Narrower, only the window in front shows.
 
+The macOS app keeps the same rules in its sidebar layout: up to 12 running
+Apps per window, one beside the page in front from 768 wide (two columns, 1
+apart, the App on the right). The sidebar's Apps list marks running rows with
+a 5 px neutral dot after the name, lists running Apps that have no pin after
+the pins, and its right-click menu offers Open beside, Quit and, for an App
+without a pin, Pin to sidebar.
+
 ### Dock tile
 
 - Tile 40 (`sizes.dockTile`), radius 12: the App icon, or a `tiles` fill
