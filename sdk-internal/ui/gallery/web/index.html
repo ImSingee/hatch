@@ -32,8 +32,9 @@
   <script type="module">
     // A stand-in for the platform's web player: it hosts the App, answers
     // hatch.theme.get and sends hatch.theme when the accent changes.
-    // `?platform=ios|android` passes the platform as the Mobile app's
-    // WebView does, through `host.params.platform`.
+    // `?platform=ios|android|macos|windows` passes the platform as a shell
+    // (the Mobile app's WebView, the macOS app) does, through
+    // `host.params.platform`.
     import { createPlayer } from '/runtime/nsh.js';
 
     const params = new URLSearchParams(location.search);

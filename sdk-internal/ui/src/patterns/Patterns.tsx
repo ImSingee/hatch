@@ -1,7 +1,7 @@
 import { Scroll, Text, View, signal, untracked } from 'nsh';
 import type { JSX } from 'nsh';
 import { Each, If } from '../core/control';
-import { WIDE_MIN, byLook, look, paneWidth } from '../core/env';
+import { WIDE_MIN, byLook, look, mobileLook, paneWidth } from '../core/env';
 import { SurfaceContext } from '../core/surface';
 import { ShellScopeContext, claimTitle } from '../core/shell';
 import type { ShellScope } from '../core/shell';
@@ -16,7 +16,7 @@ import { Form } from '../input/Form';
 import type { FormValues } from '../input/Form';
 import { TextField } from '../input/TextField';
 import { Card } from '../layout/Card';
-import { Page } from '../layout/Page';
+import { Page, SidebarToggleButton } from '../layout/Page';
 import { Grid, Row } from '../layout/Stack';
 import { PageNavContext } from '../navigation/nav-context';
 
@@ -57,6 +57,8 @@ const WIDE_FRAME = byLook({
   web: 'flex-1 flex-row',
   ios: 'flex-1 flex-row bg-background',
   android: 'flex-1 flex-row bg-background',
+  macos: 'flex-1 flex-row',
+  windows: 'flex-1 flex-row',
 });
 /**
  * A list of records and the detail of the chosen one: side by side in a
@@ -184,11 +186,14 @@ export function ListDetailPage<T>(props: ListDetailPageProps<T>): JSX.Element {
               >
                 <View class="gap-4 p-5">
                   <Row justify="between" align="start">
+                    <SidebarToggleButton />
                     {nav?.canGoBack() ? (
                       <View class="-ml-2">
                         <IconButton
                           icon={
-                            look === 'android' ? IconArrowLeft : IconChevronLeft
+                            look === 'android' || look === 'windows'
+                              ? IconArrowLeft
+                              : IconChevronLeft
                           }
                           label="Back"
                           onPress={nav.back}
@@ -211,7 +216,7 @@ export function ListDetailPage<T>(props: ListDetailPageProps<T>): JSX.Element {
                     {props.actions ?? null}
                   </Row>
                   <SurfaceContext.Provider
-                    value={look === 'web' ? 'window' : 'background'}
+                    value={mobileLook ? 'background' : 'window'}
                   >
                     {list(true)}
                   </SurfaceContext.Provider>

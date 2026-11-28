@@ -110,7 +110,7 @@ describe.skipIf(!nsh)('with NSH', () => {
 
   it('takes the look of the platform NSH or the web shell names', () => {
     expect(run(['test', 'app/platform.test.tsx'], fixture('platform'))).toMatch(
-      /^ok\n[\s\S]*9 passed/,
+      /^ok\n[\s\S]*12 passed/,
     );
   }, 240_000);
 

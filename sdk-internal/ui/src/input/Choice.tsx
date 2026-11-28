@@ -38,7 +38,11 @@ const CHOICE_ROW =
  * The controls' classes on each look. iOS: a round check, the 51 by 31
  * switch, a white slider knob; rows 44 points. Android (Material 3): the
  * 18-point box and the radio in a 40-point circle that a press tints, the
- * 52 by 32 switch whose thumb grows when on; rows 48 points.
+ * 52 by 32 switch whose thumb grows when on; rows 48 points. macOS: the
+ * 16-point box and radio filled with the accent when on, the 38 by 22
+ * switch, a white knob. Windows (Fluent): the 20-point box, the radio's
+ * white dot on the accent, the outlined 40 by 20 toggle whose thumb turns
+ * white when on, and the slider's accent thumb in a white ring.
  */
 const STYLE = byLook({
   web: {
@@ -105,6 +109,49 @@ const STYLE = byLook({
     sliderTrack:
       'h-1 self-stretch rounded-full bg-primary-tint disabled:opacity-40',
     sliderThumb: `size-5 rounded-full bg-primary transition-transform active:scale-110 motion-reduce:transition-none ${FOCUS_RING}`,
+  },
+  macos: {
+    row: 'group flex-row items-start gap-2 self-stretch rounded-(--radius-xs) py-0.5 disabled:opacity-50',
+    label: 'text-mac-body font-regular text-foreground',
+    description:
+      'text-mac-callout font-regular text-muted-foreground text-pretty',
+    value: 'text-mac-body font-medium text-foreground',
+    checkbox:
+      'mt-px size-4 items-center justify-center rounded-sm border border-control-border bg-card shadow-card transition-colors checked:border-primary checked:bg-primary indeterminate:border-primary indeterminate:bg-primary',
+    checkboxBox: '',
+    radio:
+      'mt-px size-4 items-center justify-center rounded-full border border-control-border bg-card shadow-card group-checked:border-primary group-checked:bg-primary',
+    radioDot: 'size-1.5 rounded-full group-checked:bg-primary-foreground',
+    radioRing: '',
+    track:
+      'h-5.5 w-9.5 justify-center rounded-full bg-track p-px transition-colors checked:bg-primary',
+    thumb:
+      'size-5 rounded-full bg-card shadow-card transition-transform checked:translate-x-4',
+    slider: 'h-5 self-stretch justify-center',
+    sliderTrack: 'h-1 self-stretch rounded-full bg-track disabled:opacity-50',
+    sliderThumb: `size-5 rounded-full border border-hairline bg-card shadow-card transition-transform motion-reduce:transition-none ${FOCUS_RING}`,
+  },
+  windows: {
+    row: 'group flex-row items-start gap-2.5 self-stretch rounded-(--radius-xs) py-1 disabled:opacity-50',
+    label: 'text-win-body font-regular text-foreground',
+    description:
+      'text-win-caption font-regular text-muted-foreground text-pretty',
+    value: 'text-win-body font-semibold text-foreground',
+    checkbox:
+      'size-5 items-center justify-center rounded-sm border border-control-border bg-card transition-colors hover:bg-muted checked:border-primary checked:bg-primary indeterminate:border-primary indeterminate:bg-primary',
+    checkboxBox: '',
+    radio:
+      'size-5 items-center justify-center rounded-full border border-control-border bg-card group-checked:border-primary group-checked:bg-primary',
+    radioDot:
+      'size-2 rounded-full transition-transform group-hover:scale-110 group-checked:bg-primary-foreground',
+    radioRing: '',
+    track:
+      'h-5 w-10 justify-center rounded-full border border-control-border bg-card px-0.75 transition-colors checked:border-primary checked:bg-primary',
+    thumb:
+      'size-3 rounded-full bg-control-border transition-all checked:translate-x-5 checked:bg-primary-foreground',
+    slider: 'h-8 self-stretch justify-center',
+    sliderTrack: 'h-1 self-stretch rounded-full bg-track disabled:opacity-50',
+    sliderThumb: `size-5 rounded-full border-4 border-card bg-primary shadow-card transition-transform active:scale-90 motion-reduce:transition-none ${FOCUS_RING}`,
   },
 });
 

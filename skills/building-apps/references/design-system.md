@@ -148,17 +148,21 @@ The same source runs everywhere; the components adapt:
 | Compact panes (below 600)       | `Grid` shows one column, `Row collapse` stacks, page padding shrinks                             |
 
 The platform changes the habits, never the brand. On iOS and Android (the
-Mobile app, and native shells later) the components take that platform's
-font (SF Pro, Roboto), navigation, controls, sheets, touch targets and
-pressed feedback; the colours, the accent, the radius scale, the icons and
-the App's content stay the theme's. The web, macOS and Windows keep the Desk
-look.
+Mobile app, and native shells later), macOS (the macOS app) and Windows the
+components take that platform's font (SF Pro, Roboto, Segoe UI Variable),
+navigation, controls, popups, targets and feedback; the colours, the accent,
+the radius scale, the icons and the App's content stay the theme's. The web
+(and Linux) keeps the Desk look. On a desktop the layout still follows the
+App's pane: an App in a narrow window or a split pane lays out as a narrow
+App.
 
-| Platform | What it looks like                                                                                                                                                                        |
-| -------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| iOS      | Large page titles; a back button that names the page it leads to; a floating tab bar; fields as inset rows (label above the value); sheets with a grabber and Cancel; 44-point targets    |
-| Android  | Material 3: a top app bar; a navigation bar with a tinted pill; outlined fields with the label on the border; pill buttons; bottom sheets with a drag handle; snackbars; 48-point targets |
-| Web      | The Desk look (`DESIGN.md`)                                                                                                                                                               |
+| Platform | What it looks like                                                                                                                                                                               |
+| -------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| iOS      | Large page titles; a back button that names the page it leads to; a floating tab bar; fields as inset rows (label above the value); sheets with a grabber and Cancel; 44-point targets           |
+| Android  | Material 3: a top app bar; a navigation bar with a tinted pill; outlined fields with the label on the border; pill buttons; bottom sheets with a drag handle; snackbars; 48-point targets        |
+| macOS    | SF Pro at 13 points; a sidebar people can hide (its button starts the page's title row); 28-point push buttons and fields; an accent focus ring; translucent menus; compact alerts               |
+| Windows  | Fluent: Segoe UI Variable at 14 points; a navigation pane with an accent line on the selection; 32-point buttons and fields with an accent underline on focus; content dialogs with a button bar |
+| Web      | The Desk look (`DESIGN.md`)                                                                                                                                                                      |
 
 Write the same App for all of them: never read the platform in App code,
 never pass sizes or colours to make one platform look like another.
@@ -218,7 +222,7 @@ do not edit between the markers.
 
 #### Page
 
-One screen of the App: a scrolling body with the title row. In a `NavStack` above its first page, the title row starts with a back button. While it is shown (the selected section, the top of its stack) its title is the App's title in the shell; the deepest shown page wins. On iOS the first page of a stack shows a large title that scrolls with the content, and a page above it a navigation bar: back with the title of the page it leads to, the title in the middle, the actions at the end. On Android every page has a top app bar.
+One screen of the App: a scrolling body with the title row. In a `NavStack` above its first page, the title row starts with a back button. While it is shown (the selected section, the top of its stack) its title is the App's title in the shell; the deepest shown page wins. On iOS the first page of a stack shows a large title that scrolls with the content, and a page above it a navigation bar: back with the title of the page it leads to, the title in the middle, the actions at the end. On Android every page has a top app bar. On macOS the title row starts with the button that hides the `AppShell`'s sidebar.
 
 | Prop               | Type          | Description                                                                                                                             |
 | ------------------ | ------------- | --------------------------------------------------------------------------------------------------------------------------------------- |
@@ -305,7 +309,7 @@ A hairline between groups of content.
 
 #### AppShell
 
-The frame of an App with top-level sections. It decides the navigation from the App's own pane: a sidebar when the pane is wide, a bottom tab bar on narrow touch screens, a row of tabs at the top in a narrow desktop window. Each section's `content` is usually a `Page` or a `NavStack`. The selected section is the first segment of the App's address (`/<section id>`, then the section's `NavStack` path), so a deep link or a reload opens the same section and the shell can navigate between them.
+The frame of an App with top-level sections. It decides the navigation from the App's own pane: a sidebar when the pane is wide, a bottom tab bar on narrow touch screens, a row of tabs at the top in a narrow desktop window. On macOS people can hide the sidebar. Each section's `content` is usually a `Page` or a `NavStack`. The selected section is the first segment of the App's address (`/<section id>`, then the section's `NavStack` path), so a deep link or a reload opens the same section and the shell can navigate between them.
 
 | Prop                  | Type                    | Description                                                                              |
 | --------------------- | ----------------------- | ---------------------------------------------------------------------------------------- |
@@ -345,18 +349,18 @@ A segmented control that switches between views of the same content. With `conte
 
 A button that runs an action of the App.
 
-| Prop               | Type                   | Description                                                       |
-| ------------------ | ---------------------- | ----------------------------------------------------------------- |
-| `label` (required) | `string`               | The button's text, in sentence case: a verb for what it does.     |
-| `kind`             | `ButtonKind`           | Its emphasis.                                                     |
-| `size`             | `ControlSize`          | `sm` 30, `md` 36 (default), `lg` 46 points tall; taller on touch. |
-| `icon`             | `IconData`             | An icon before the label.                                         |
-| `iconEnd`          | `IconData`             | An icon after the label, such as a chevron for a menu.            |
-| `loading`          | `boolean`              | Shows a spinner in place of the label and ignores presses.        |
-| `disabled`         | `boolean`              | Turns it off: it shows dimmed and takes no input.                 |
-| `fullWidth`        | `boolean`              | Fills the width of its container.                                 |
-| `type`             | `'button' \| 'submit'` | `submit` submits the `Form` the button is in.                     |
-| `onPress`          | `() => void`           | Called when it is pressed.                                        |
+| Prop               | Type                   | Description                                                                                                         |
+| ------------------ | ---------------------- | ------------------------------------------------------------------------------------------------------------------- |
+| `label` (required) | `string`               | The button's text, in sentence case: a verb for what it does.                                                       |
+| `kind`             | `ButtonKind`           | Its emphasis.                                                                                                       |
+| `size`             | `ControlSize`          | `sm` 30, `md` 36 (default), `lg` 46 points tall; taller on touch; on macOS 24, 28 and 36, on Windows 28, 32 and 40. |
+| `icon`             | `IconData`             | An icon before the label.                                                                                           |
+| `iconEnd`          | `IconData`             | An icon after the label, such as a chevron for a menu.                                                              |
+| `loading`          | `boolean`              | Shows a spinner in place of the label and ignores presses.                                                          |
+| `disabled`         | `boolean`              | Turns it off: it shows dimmed and takes no input.                                                                   |
+| `fullWidth`        | `boolean`              | Fills the width of its container.                                                                                   |
+| `type`             | `'button' \| 'submit'` | `submit` submits the `Form` the button is in.                                                                       |
+| `onPress`          | `() => void`           | Called when it is pressed.                                                                                          |
 
 #### IconButton
 

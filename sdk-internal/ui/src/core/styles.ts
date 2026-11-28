@@ -6,13 +6,32 @@
 import { byLook } from './env';
 import type { Align, Justify, Space, Tone } from './types';
 
-/** DESIGN.md "Focus": a 2-point ink outline, 2 points out, on keyboard focus. */
-export const FOCUS_RING =
-  'focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring';
+/** DESIGN.md "Focus": a 2-point ink outline, 2 points out, on keyboard
+ * focus. macOS draws its focus ring in the accent, 1 point out so it shows
+ * on accent-filled buttons too; Windows its ink focus rectangle, 1 point
+ * out. */
+export const FOCUS_RING = byLook({
+  web: 'focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring',
+  ios: 'focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring',
+  android:
+    'focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring',
+  macos:
+    'focus-visible:outline-3 focus-visible:outline-offset-1 focus-visible:outline-primary',
+  windows:
+    'focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-ring',
+});
 
 /** The same ring drawn inside, where an ancestor clips (rows in a list). */
-export const FOCUS_RING_INSET =
-  'focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-ring';
+export const FOCUS_RING_INSET = byLook({
+  web: 'focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-ring',
+  ios: 'focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-ring',
+  android:
+    'focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-ring',
+  macos:
+    'focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-primary',
+  windows:
+    'focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-ring',
+});
 
 export const GAP: Record<Space, string> = {
   none: 'gap-0',
@@ -71,24 +90,34 @@ export const TONE_TEXT: Record<Tone, string> = {
 /** DESIGN.md "Menu, popover": the one treatment of every anchored popup.
  * On phones the same classes style the sheet NSH shows instead. iOS: a
  * rounded menu without an edge; Android: Material's menu, 4-point steps of
- * the radius scale, rows 48 points. */
+ * the radius scale, rows 48 points. macOS: a compact menu of translucent
+ * material over the content (vibrancy), 24-point rows; Windows: Fluent's
+ * flyout, 32-point rows. */
 export const POPUP = byLook({
   web: 'rounded-(--radius-lg) border border-hairline bg-popover p-1.5 shadow-dock transition-all duration-150 ease-out',
   ios: 'rounded-(--radius-md) bg-popover py-1 shadow-window transition-all duration-150 ease-out',
   android:
     'rounded-(--radius-xs) bg-popover py-2 shadow-dock transition-all duration-150 ease-out',
+  macos:
+    'rounded-(--radius-sm) border border-hairline bg-surface-dock p-1 shadow-dock backdrop-blur-xl transition-all duration-150 ease-out',
+  windows:
+    'rounded-(--radius-sm) border border-hairline bg-popover p-1 shadow-dock transition-all duration-150 ease-out',
 });
 export const POPUP_STARTING = 'opacity-0 -translate-y-1';
 export const POPUP_ENDING = 'opacity-0';
 export const BACKDROP = 'bg-scrim';
 
 /** A row of a menu or a list box: 32 points, 44 on touch; 44 on iOS and
- * 48 on Android. */
+ * 48 on Android; 24 on macOS and 32 on Windows. */
 export const POPUP_ITEM = byLook({
   web: 'group min-h-8 flex-row items-center gap-2 rounded-(--radius-sm) px-2.5 py-1.5 text-body font-strong text-popover-foreground focus:bg-surface-hover hover:bg-surface-hover disabled:opacity-50 pointer-coarse:min-h-11',
   ios: 'group min-h-11 flex-row items-center gap-3 px-4 py-2 text-ios-body font-regular text-popover-foreground focus:bg-surface-hover active:bg-surface-pressed disabled:opacity-40',
   android:
     'group min-h-12 flex-row items-center gap-3 px-3 py-2 text-m3-label-lg font-medium text-popover-foreground focus:bg-surface-hover active:bg-surface-pressed disabled:opacity-40',
+  macos:
+    'group min-h-6 flex-row items-center gap-2 rounded-(--radius-xs) px-2 py-0.5 text-mac-body font-regular text-popover-foreground focus:bg-surface-hover hover:bg-surface-hover disabled:opacity-50',
+  windows:
+    'group min-h-8 flex-row items-center gap-3 rounded-(--radius-xs) px-3 py-1.5 text-win-body font-regular text-popover-foreground focus:bg-surface-hover hover:bg-surface-hover active:bg-surface-pressed disabled:opacity-50',
 });
 
 /** The text of a popup row. */
@@ -96,6 +125,8 @@ export const POPUP_ITEM_TEXT = byLook({
   web: 'text-body font-strong',
   ios: 'text-ios-body font-regular',
   android: 'text-m3-label-lg font-medium',
+  macos: 'text-mac-body font-regular',
+  windows: 'text-win-body font-regular',
 });
 
 /** A group's label inside a popup. */
@@ -103,4 +134,7 @@ export const POPUP_GROUP = byLook({
   web: 'px-2.5 pb-1 pt-2 text-eyebrow font-heading uppercase tracking-eyebrow text-muted-foreground',
   ios: 'px-4 pb-1 pt-2 text-ios-footnote font-regular text-muted-foreground',
   android: 'px-3 pb-1 pt-2 text-m3-title-sm font-medium text-muted-foreground',
+  macos: 'px-2 pb-0.5 pt-1.5 text-mac-subhead font-bold text-muted-foreground',
+  windows:
+    'px-3 pb-1 pt-2 text-win-caption font-semibold text-muted-foreground',
 });

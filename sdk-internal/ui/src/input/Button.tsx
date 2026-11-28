@@ -5,7 +5,7 @@ import { FOCUS_RING } from '../core/styles';
 import type { ControlSize, IconData } from '../core/types';
 import { Spinner } from '../display/Spinner';
 import { TooltipBubble } from '../feedback/Tooltip';
-import { byLook, look, touch } from '../core/env';
+import { byLook, look, mobileLook, touch } from '../core/env';
 import {
   BarActionsContext,
   InOverlayContext,
@@ -174,6 +174,69 @@ const ANDROID_LABEL: Record<ControlSize, string> = {
   lg: 'text-m3-title-md font-medium',
 };
 
+/**
+ * macOS: push buttons with a hairline edge on the card colour, the main one
+ * filled with the accent; 24, 28 and 36 points tall, 13-point labels; a
+ * hover tints them, as pointer controls do.
+ */
+const MAC_KIND: Record<ButtonKind, string> = {
+  primary: 'bg-primary hover:bg-primary-pressed active:bg-primary-pressed',
+  default:
+    'border border-hairline bg-card shadow-card hover:bg-surface-hover active:bg-surface-pressed',
+  tint: 'bg-primary-tint hover:bg-primary-tint-hover active:bg-primary-tint-hover',
+  subtle: 'hover:bg-surface-hover active:bg-surface-pressed',
+  danger: 'bg-danger hover:bg-danger-pressed active:bg-danger-pressed',
+};
+
+const MAC_SIZE: Record<ControlSize, string> = {
+  sm: 'h-6 px-2.5',
+  md: 'h-7 px-3',
+  lg: 'h-9 px-4',
+};
+
+const MAC_SQUARE: Record<ControlSize, string> = {
+  sm: 'size-6',
+  md: 'size-7',
+  lg: 'size-9',
+};
+
+const MAC_LABEL: Record<ControlSize, string> = {
+  sm: 'text-mac-callout font-medium',
+  md: 'text-mac-body font-semibold',
+  lg: 'text-mac-body font-semibold',
+};
+
+/**
+ * Windows 11 (Fluent): standard and accent buttons, 28, 32 and 40 points
+ * tall; the standard one lifts on a darker bottom edge.
+ */
+const WIN_KIND: Record<ButtonKind, string> = {
+  primary: 'bg-primary hover:bg-primary-pressed active:bg-primary-pressed',
+  default:
+    'border border-hairline border-b-control-border bg-card hover:bg-muted active:bg-surface-pressed',
+  tint: 'bg-primary-tint hover:bg-primary-tint-hover active:bg-primary-tint-hover',
+  subtle: 'hover:bg-surface-hover active:bg-surface-pressed',
+  danger: 'bg-danger hover:bg-danger-pressed active:bg-danger-pressed',
+};
+
+const WIN_SIZE: Record<ControlSize, string> = {
+  sm: 'h-7 px-2.5',
+  md: 'h-8 px-3',
+  lg: 'h-10 px-5',
+};
+
+const WIN_SQUARE: Record<ControlSize, string> = {
+  sm: 'size-7',
+  md: 'size-8',
+  lg: 'size-10',
+};
+
+const WIN_LABEL: Record<ControlSize, string> = {
+  sm: 'text-win-label font-semibold',
+  md: 'text-win-label font-semibold',
+  lg: 'text-win-body font-semibold',
+};
+
 /** A button's classes on the App's look. */
 const STYLE = byLook({
   web: {
@@ -211,13 +274,36 @@ const STYLE = byLook({
     iconKind: { ...ANDROID_KIND, subtle: 'active:bg-surface-pressed' },
     iconGlyph: { ...ANDROID_GLYPH_COLOR, subtle: 'foreground' as GlyphColor },
   },
+  macos: {
+    base: `flex-row items-center justify-center rounded-(--radius-xs) transition-colors disabled:opacity-50 ${FOCUS_RING}`,
+    kind: MAC_KIND,
+    size: MAC_SIZE,
+    square: MAC_SQUARE,
+    label: MAC_LABEL,
+    labelColor: LABEL_COLOR,
+    glyphColor: GLYPH_COLOR,
+    iconKind: MAC_KIND,
+    iconGlyph: GLYPH_COLOR,
+  },
+  windows: {
+    base: `flex-row items-center justify-center rounded-(--radius-xs) transition-colors disabled:opacity-50 ${FOCUS_RING}`,
+    kind: WIN_KIND,
+    size: WIN_SIZE,
+    square: WIN_SQUARE,
+    label: WIN_LABEL,
+    labelColor: LABEL_COLOR,
+    glyphColor: GLYPH_COLOR,
+    iconKind: WIN_KIND,
+    iconGlyph: GLYPH_COLOR,
+  },
 });
 
 export type ButtonProps = {
   /** The button's text, in sentence case: a verb for what it does. */
   label: string;
   kind?: ButtonKind;
-  /** `sm` 30, `md` 36 (default), `lg` 46 points tall; taller on touch. */
+  /** `sm` 30, `md` 36 (default), `lg` 46 points tall; taller on touch;
+   * on macOS 24, 28 and 36, on Windows 28, 32 and 40. */
   size?: ControlSize;
   /** An icon before the label. */
   icon?: IconData;
@@ -407,7 +493,7 @@ export function IconButton(props: IconButtonProps): JSX.Element {
     >
       <Glyph
         icon={props.icon}
-        size={look === 'web' ? ICON[size()] : PLATFORM_ICON[size()]}
+        size={mobileLook ? PLATFORM_ICON[size()] : ICON[size()]}
         color={
           props.selected ? 'primary-tint-foreground' : STYLE.iconGlyph[kind()]
         }

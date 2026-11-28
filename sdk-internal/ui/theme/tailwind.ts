@@ -28,9 +28,11 @@ export const typeScale = {
 } as const;
 
 /**
- * The type the iOS and Android looks set (`src/core/look.ts`): Apple's
- * Dynamic Type at its default size and Material 3's type scale, which the
- * design boards follow. The web keeps `typeScale`.
+ * The type the platform looks set (`src/core/platform.ts`): Apple's Dynamic
+ * Type at its default size, Material 3's type scale, macOS's text styles
+ * (13-point body) and Windows 11's Fluent type ramp (14-point body; `label`
+ * is the 13-point label of the design boards' controls), which the design
+ * boards follow. The web keeps `typeScale`.
  */
 export const platformTypeScale = {
   'ios-large-title': type(34, 41),
@@ -55,11 +57,25 @@ export const platformTypeScale = {
   'm3-label-lg': type(14, 20),
   'm3-label-md': type(12, 16),
   'm3-label-sm': type(11, 16),
+  'mac-large-title': type(26, 32),
+  'mac-title-1': type(22, 26),
+  'mac-title-2': type(17, 22),
+  'mac-title-3': type(15, 20),
+  'mac-body': type(13, 18),
+  'mac-callout': type(12, 16),
+  'mac-subhead': type(11, 14),
+  'win-title-lg': type(40, 52),
+  'win-title': type(28, 36),
+  'win-subtitle': type(20, 28),
+  'win-body-lg': type(18, 24),
+  'win-body': type(14, 20),
+  'win-label': type(13, 18),
+  'win-caption': type(12, 16),
 } as const;
 
-/** The weights of the system faces: SF Pro and Roboto read heavier than
- * Nunito at the same number, so the platform looks name these instead of
- * the Desk's `fontWeights`. */
+/** The weights of the system faces: SF Pro, Roboto and Segoe UI read
+ * heavier than Nunito at the same number, so the platform looks name these
+ * instead of the Desk's `fontWeights`. */
 export const platformWeights = {
   regular: 400,
   medium: 500,

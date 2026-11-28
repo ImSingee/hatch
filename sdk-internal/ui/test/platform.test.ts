@@ -26,19 +26,19 @@ describe('the platform an App runs on', () => {
   });
 
   it('is the one the web shell passes in host.params', () => {
-    expect(resolvePlatform('web', { platform: 'ios' })).toBe('ios');
-    expect(resolvePlatform('web', { platform: 'android' })).toBe('android');
+    for (const platform of ['ios', 'android', 'macos', 'windows'])
+      expect(resolvePlatform('web', { platform })).toBe(platform);
   });
 
   it('is the web in a browser and for anything else the shell passes', () => {
-    for (const platform of [undefined, '', 'windows', 'IOS', 7, null])
+    for (const platform of [undefined, '', 'linux', 'IOS', 7, null])
       expect(resolvePlatform('web', { platform })).toBe('web');
   });
 
-  it('draws macOS, Windows and Linux with the web look for now', () => {
+  it('has a look of its own on iOS, Android, macOS and Windows; Linux takes the web look', () => {
     expect(
       ['ios', 'android', 'macos', 'windows', 'linux', 'web'].map(lookOf),
-    ).toEqual(['ios', 'android', 'web', 'web', 'web', 'web']);
+    ).toEqual(['ios', 'android', 'macos', 'windows', 'web', 'web']);
   });
 });
 
@@ -54,10 +54,14 @@ const withSans = (face: string) => {
 };
 
 describe('the font an App draws with', () => {
-  it('is the platform font for every bundled sans choice on iOS and Android', () => {
+  it('is the platform font for every bundled sans choice on the platform looks', () => {
     for (const face of BUNDLED_FONTS.sans) {
       expect(sans(platformTheme(withSans(face), 'ios'))).toBe('system-ui');
       expect(sans(platformTheme(withSans(face), 'android'))).toBe('Roboto');
+      expect(sans(platformTheme(withSans(face), 'macos'))).toBe('system-ui');
+      expect(sans(platformTheme(withSans(face), 'windows'))).toBe(
+        'Segoe UI Variable',
+      );
     }
   });
 
@@ -71,7 +75,7 @@ describe('the font an App draws with', () => {
 
   it('is a face the theme names besides the default one everywhere', () => {
     const theme = withSans('JetBrains Mono');
-    for (const look of ['ios', 'android'] as const)
+    for (const look of ['ios', 'android', 'macos', 'windows'] as const)
       expect(platformTheme(theme, look).cssVars.theme['font-sans']).toBe(
         theme.cssVars.theme['font-sans'],
       );
@@ -81,9 +85,13 @@ describe('the font an App draws with', () => {
 describe('the platform theme', () => {
   it("adds the platform's sheet radius and keeps every other token", () => {
     const theme = buildAppTheme();
+    const window = theme.cssVars.theme['radius-window'];
     for (const [look, radius] of [
       ['ios', '24px'],
       ['android', '28px'],
+      // Desktops have no bottom sheet: theirs stays the window radius.
+      ['macos', window],
+      ['windows', window],
     ] as const) {
       const platform = platformTheme(theme, look);
       const {
@@ -178,14 +186,15 @@ function over(fill: string, backdrop: string): string {
   return mix(backdrop, hex, Number(a));
 }
 
-describe('platform looks on the translucent and popup fills', () => {
-  const themes = (['desk', 'desk-dark'] as const).flatMap((preset) =>
-    Object.entries(tokens.accents).map(([accent, color]) => ({
-      name: `${preset}/${accent}`,
-      t: buildAppTheme({ theme: resolvePreset(preset, color) }).cssVars.light,
-    })),
-  );
+/** Every preset in every accent, as an App's theme. */
+const themes = (['desk', 'desk-dark'] as const).flatMap((preset) =>
+  Object.entries(tokens.accents).map(([accent, color]) => ({
+    name: `${preset}/${accent}`,
+    t: buildAppTheme({ theme: resolvePreset(preset, color) }).cssVars.light,
+  })),
+);
 
+describe('platform looks on the translucent and popup fills', () => {
   it('draw popups (alerts, menus, toasts) on the card colour', () => {
     for (const { name, t } of themes)
       expect([name, t.popover]).toEqual([name, t.card]);
@@ -205,6 +214,55 @@ describe('platform looks on the translucent and popup fills', () => {
           .map(([pair]) => `${name}: ${pair} over ${backdrop}`);
       }),
     );
+    expect(failing).toEqual([]);
+  });
+});
+
+describe('desktop looks on their selections and materials', () => {
+  it('keep text at 4.5:1 on the fills the desktops add', () => {
+    const failing = themes.flatMap(({ name, t }) => {
+      const checks: [string, string, string][] = [
+        // macOS's selected sidebar row: a pressed fill over the ground.
+        [
+          'foreground on the selected macOS sidebar row',
+          t.foreground,
+          over(t['surface-pressed'], t.background),
+        ],
+        // macOS's segmented control: labels on the sunken track.
+        [
+          'foreground on the macOS segmented track',
+          t.foreground,
+          t['surface-sunken'],
+        ],
+      ];
+      // Fluent's selected navigation and list rows: a hover fill over the
+      // ground (the pane) or a card (a list).
+      for (const backdrop of [t.background, t.card])
+        checks.push([
+          `foreground on a selected Windows row over ${backdrop}`,
+          t.foreground,
+          over(t['surface-hover'], backdrop),
+        ]);
+      // macOS's menus and toasts: translucent material over a page, the
+      // ground or a card.
+      for (const backdrop of [t['surface-window'], t.background, t.card]) {
+        const material = over(t['surface-dock'], backdrop);
+        for (const token of [
+          'foreground',
+          'muted-foreground',
+          'danger-strong',
+          'primary-strong',
+        ])
+          checks.push([
+            `${token} on macOS material over ${backdrop}`,
+            t[token],
+            material,
+          ]);
+      }
+      return checks
+        .filter(([, text, fill]) => contrast(text, fill) < 4.5)
+        .map(([pair]) => `${name}: ${pair}`);
+    });
     expect(failing).toEqual([]);
   });
 });
