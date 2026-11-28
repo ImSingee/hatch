@@ -107,6 +107,22 @@ describe('instance and credential boundaries', () => {
       expect(await client.appIconSource(path, 128)).toBeNull();
   });
 
+  it('looks up the account of the credential it is given, not the vault', async () => {
+    const fetcher = vi.fn<FetchLike>().mockResolvedValue(
+      json({
+        session: {
+          user: { id: 'user-a', email: 'a@example.test', name: 'A' },
+        },
+      }),
+    );
+    const { client, vault } = setup(fetcher);
+    // The vault already holds another sign-in.
+    await vault.set(origin, 'token-b');
+    expect(await client.accountId('token-a')).toBe('user-a');
+    const headers = new Headers(fetcher.mock.calls[0]![1]!.headers);
+    expect(headers.get('authorization')).toBe('Bearer token-a');
+  });
+
   it('uses generated Connect clients and projects shared App/Agent messages for the UI', async () => {
     const app = {
       id: 'app-1',
@@ -141,6 +157,7 @@ describe('instance and credential boundaries', () => {
       .mockResolvedValueOnce(
         json({
           resources: [
+            // A list item's view says nothing of the frontend.
             { ...app, view: { currentVersion: 3 } },
             // A first deployment that failed leaves nothing to open.
             {
@@ -152,7 +169,21 @@ describe('instance and credential boundaries', () => {
           ],
         }),
       )
-      .mockResolvedValueOnce(json({ resource: app }))
+      .mockResolvedValueOnce(
+        json({
+          resource: {
+            ...app,
+            view: {
+              currentVersion: 3,
+              frontend: {
+                runtime: 'native',
+                nshVersion: '0.7.0',
+                packageBuild: 1,
+              },
+            },
+          },
+        }),
+      )
       .mockResolvedValueOnce(json({}))
       .mockResolvedValueOnce(json({ id: session.id }))
       .mockResolvedValueOnce(json({ session }))
@@ -160,10 +191,14 @@ describe('instance and credential boundaries', () => {
     const { client, vault } = setup(fetcher);
     await vault.set(origin, 'fixture-token');
     expect(await client.apps()).toEqual([
-      { ...app, live: true },
-      { ...app, id: 'app-2', status: 'failed', live: false },
+      { ...app, live: true, runtime: null },
+      { ...app, id: 'app-2', status: 'failed', live: false, runtime: null },
     ]);
-    expect(await client.app(app.id)).toEqual({ ...app, live: false });
+    expect(await client.app(app.id)).toEqual({
+      ...app,
+      live: true,
+      runtime: 'native',
+    });
     expect(await client.sessions(app.id)).toEqual([]);
     expect(await client.createSession()).toEqual({ id: session.id });
     expect(await client.session(session.id)).toEqual({

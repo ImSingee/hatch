@@ -1,0 +1,9 @@
+{
+  "name": "hatch-app-view",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Shows a running Hatch native App: a thin view over the native App runtime (mobile/native), which owns the engines.",
+  "license": "UNLICENSED",
+  "author": "Hatch",
+  "homepage": "https://github.com/singee/hatch"
+}

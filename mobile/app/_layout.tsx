@@ -7,6 +7,7 @@ import { useDeepLinkLifecycle } from '../src/state/deep-links';
 import { useUnreadBadge } from '../src/state/notification-read-state';
 import { usePushLifecycle } from '../src/state/push';
 import { Busy } from '../src/ui/primitives';
+import { BesideLayout } from '../src/ui/beside-layout';
 import {
   NavigationProvider,
   useNavigationPreferences,
@@ -21,53 +22,55 @@ function Navigation() {
   useUnreadBadge();
   if (!ready || !navigation.ready) return <Busy label="Opening Hatch…" />;
   return (
-    <Stack
-      key={epoch}
-      screenOptions={{
-        contentStyle: { backgroundColor: c.ground },
-        // Dark glyphs on a light theme, light ones on a dark theme.
-        statusBarStyle: appearance === 'dark' ? 'light' : 'dark',
-        headerStyle: { backgroundColor: c.ground },
-        headerTintColor: c.ink,
-        // Navigation bars keep the system font and title weight.
-        headerTitleStyle: { color: c.ink },
-        headerShadowVisible: false,
-        headerBackButtonDisplayMode: 'minimal',
-      }}
-    >
-      <Stack.Protected guard={!origin}>
-        <Stack.Screen
-          name="connect"
-          options={{ title: 'Connect to Hatch', headerShown: false }}
-        />
-      </Stack.Protected>
-      <Stack.Protected guard={Boolean(origin)}>
-        <Stack.Screen name="index" options={{ headerShown: false }} />
-        <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
-        <Stack.Screen name="library" options={{ title: '' }} />
-        <Stack.Screen name="navigation" options={{ title: '' }} />
-        <Stack.Screen name="chat/[id]" options={{ title: 'Conversation' }} />
-        <Stack.Screen name="apps/[id]" options={{ title: 'App' }} />
-        <Stack.Screen name="manage/[id]" options={{ title: '' }} />
-        <Stack.Screen name="pin" options={{ title: '' }} />
-        <Stack.Screen name="notifications/index" options={{ title: '' }} />
-        <Stack.Screen name="notifications/settings" options={{ title: '' }} />
-        <Stack.Screen name="notifications/[id]" options={{ title: '' }} />
-        <Stack.Screen
-          name="notifications/history/[id]"
-          options={{
-            title: '',
-            presentation: 'formSheet',
-            sheetAllowedDetents: [0.75, 1],
-            sheetGrabberVisible: true,
-          }}
-        />
-        <Stack.Screen
-          name="settings"
-          options={{ title: '', presentation: 'modal' }}
-        />
-      </Stack.Protected>
-    </Stack>
+    <BesideLayout>
+      <Stack
+        key={epoch}
+        screenOptions={{
+          contentStyle: { backgroundColor: c.ground },
+          // Dark glyphs on a light theme, light ones on a dark theme.
+          statusBarStyle: appearance === 'dark' ? 'light' : 'dark',
+          headerStyle: { backgroundColor: c.ground },
+          headerTintColor: c.ink,
+          // Navigation bars keep the system font and title weight.
+          headerTitleStyle: { color: c.ink },
+          headerShadowVisible: false,
+          headerBackButtonDisplayMode: 'minimal',
+        }}
+      >
+        <Stack.Protected guard={!origin}>
+          <Stack.Screen
+            name="connect"
+            options={{ title: 'Connect to Hatch', headerShown: false }}
+          />
+        </Stack.Protected>
+        <Stack.Protected guard={Boolean(origin)}>
+          <Stack.Screen name="index" options={{ headerShown: false }} />
+          <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
+          <Stack.Screen name="library" options={{ title: '' }} />
+          <Stack.Screen name="navigation" options={{ title: '' }} />
+          <Stack.Screen name="chat/[id]" options={{ title: 'Conversation' }} />
+          <Stack.Screen name="apps/[id]" options={{ title: 'App' }} />
+          <Stack.Screen name="manage/[id]" options={{ title: '' }} />
+          <Stack.Screen name="pin" options={{ title: '' }} />
+          <Stack.Screen name="notifications/index" options={{ title: '' }} />
+          <Stack.Screen name="notifications/settings" options={{ title: '' }} />
+          <Stack.Screen name="notifications/[id]" options={{ title: '' }} />
+          <Stack.Screen
+            name="notifications/history/[id]"
+            options={{
+              title: '',
+              presentation: 'formSheet',
+              sheetAllowedDetents: [0.75, 1],
+              sheetGrabberVisible: true,
+            }}
+          />
+          <Stack.Screen
+            name="settings"
+            options={{ title: '', presentation: 'modal' }}
+          />
+        </Stack.Protected>
+      </Stack>
+    </BesideLayout>
   );
 }
 

@@ -1,0 +1,14 @@
+# The NSH embedding SDKs, fetched by scripts/fetch-nsh-sdk.mjs (nsh-sdk.json pins them).
+/ios/vendor/
+/android/vendor/
+# SwiftPM and Gradle outputs.
+/ios/**/.build/
+/ios/**/.swiftpm/
+/ios/**/Package.resolved
+/android/.gradle/
+/android/**/build/
+/android/local.properties
+/ios/RuntimeTests/Fixtures/
+/ios/RuntimeTests/*.xcodeproj/
+/android/runtime/src/androidTest/assets/
+/fixtures/**/.nsh/

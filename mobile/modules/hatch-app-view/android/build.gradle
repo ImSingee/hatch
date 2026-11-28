@@ -1,0 +1,20 @@
+plugins {
+  id 'com.android.library'
+  id 'expo-module-gradle-plugin'
+}
+
+group = 'dev.hatch'
+version = '0.1.0'
+
+android {
+  namespace "dev.hatch.appview"
+  defaultConfig {
+    versionCode 1
+    versionName '0.1.0'
+  }
+}
+
+dependencies {
+  // The runtime itself (mobile/native/android), wired in by the config plugin.
+  implementation project(':hatch-app-runtime')
+}

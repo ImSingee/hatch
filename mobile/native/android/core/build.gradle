@@ -1,0 +1,23 @@
+// Host-independent core: the host bridge, the platform client and the run
+// rules. Plain Kotlin on the JVM; JSON through org.json, which Android
+// provides (only tests bring their own).
+plugins {
+    id 'org.jetbrains.kotlin.jvm'
+}
+
+java {
+    sourceCompatibility = JavaVersion.VERSION_17
+    targetCompatibility = JavaVersion.VERSION_17
+}
+
+kotlin {
+    compilerOptions {
+        jvmTarget = org.jetbrains.kotlin.gradle.dsl.JvmTarget.JVM_17
+    }
+}
+
+dependencies {
+    compileOnly 'org.json:json:20231013'
+    testImplementation 'org.json:json:20231013'
+    testImplementation 'org.jetbrains.kotlin:kotlin-test-junit'
+}

@@ -1,0 +1,56 @@
+# The runtime's engine tests (`mobile/native/scripts/test-ios.sh` generates
+# the project with xcodegen and runs it in the iOS Simulator).
+name: HatchRuntimeTests
+options:
+  bundleIdPrefix: dev.hatch.tests
+  deploymentTarget:
+    iOS: '16.4'
+packages:
+  HatchAppRuntime:
+    path: ../HatchAppRuntime
+  HatchAppCore:
+    path: ../HatchAppCore
+targets:
+  RuntimeTestHost:
+    type: application
+    platform: iOS
+    sources: [Host]
+    dependencies:
+      - package: HatchAppRuntime
+    settings:
+      base:
+        GENERATE_INFOPLIST_FILE: YES
+        INFOPLIST_KEY_UILaunchScreen_Generation: YES
+        INFOPLIST_KEY_UIApplicationSceneManifest_Generation: YES
+        CODE_SIGNING_ALLOWED: NO
+        ARCHS: arm64
+        # The test bundle links against the host: load and keep what only
+        # tests use from the static packages.
+        DEAD_CODE_STRIPPING: NO
+  HatchAppRuntimeTests:
+    type: bundle.unit-test
+    platform: iOS
+    sources:
+      - Tests
+      - path: Fixtures/grant-probe
+        type: folder
+        buildPhase: resources
+    dependencies:
+      - target: RuntimeTestHost
+      - package: HatchAppRuntime
+      - package: HatchAppCore
+    settings:
+      base:
+        GENERATE_INFOPLIST_FILE: YES
+        CODE_SIGNING_ALLOWED: NO
+        ARCHS: arm64
+        TEST_HOST: $(BUILT_PRODUCTS_DIR)/RuntimeTestHost.app/RuntimeTestHost
+        BUNDLE_LOADER: $(TEST_HOST)
+schemes:
+  HatchAppRuntimeTests:
+    build:
+      targets:
+        RuntimeTestHost: all
+        HatchAppRuntimeTests: [test]
+    test:
+      targets: [HatchAppRuntimeTests]

@@ -1,14 +1,15 @@
 import { skipToken, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useCallback, useEffect } from 'react';
+import { listDetail } from '../ui/columns';
 import { useSession } from './session';
 
 /**
  * The conversation list and an open conversation share a screen once both
- * fit (see `useFoldSplit`); below that the conversation is pushed over the
+ * fit (see `useListDetail`); below that the conversation is pushed over the
  * list. Both screens measure with these values, so they agree on which
  * layout applies.
  */
-export const conversationSplit = { minColumn: 320, gap: 16 } as const;
+export const conversationSplit = listDetail;
 
 /** Route parameter of a conversation pushed from the conversation list. */
 export const fromConversationList = 'agent';

@@ -104,6 +104,10 @@ bridge for this yourself.
   (`/`, `/notes`, `/notes/$id`). They are discoverability metadata for pins
   and links; they do not register anything at run time.
 - To open another App, call `openApp(slug, route)` from `@hatch/app/native`.
+- To show which build of the App runs (an About page), call `packageBuild()`
+  from `@hatch/app/native`: the package's build number, which grows with
+  every deploy and rollback, or null in the web player. NSH's
+  `appInfo().build` is the build the bundle was compiled with and always 1.
 
 ## Rules the deploy enforces
 

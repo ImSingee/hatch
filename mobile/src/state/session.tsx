@@ -15,6 +15,7 @@ import {
 import { AppState } from 'react-native';
 import { canonicalizeInstanceUrl, type HatchApiClient } from '../core';
 import { createNativeClient, createNativeVault } from '../core/native';
+import { appRuntime } from '../native/app-runtime';
 import { endConversationLifetimes } from './conversation-lifetime';
 import { pushRegistrar } from './push-registrar';
 
@@ -67,7 +68,19 @@ export function SessionProvider({ children }: PropsWithChildren) {
       currentRevision++;
       setOrigin(null);
       setEpoch(currentRevision);
+      // First, so a runtime configuration still reading the credential stops.
       await queryClient.cancelQueries();
+      // Native Apps hold the session's credential: they stop with it, and what
+      // they saved here goes with the account, before anything signs in again.
+      try {
+        await appRuntime.configure(null, null, null);
+        await appRuntime.forgetStorage(expectedOrigin);
+      } catch {
+        // Each account has its own App storage, so no other account reads it.
+        setAuthError(
+          'Some data Apps saved on this phone could not be deleted. Other accounts cannot open it.',
+        );
+      }
       endConversationLifetimes();
       queryClient.clear();
       await SecureStore.deleteItemAsync(ACTIVE_KEY);
@@ -96,6 +109,17 @@ export function SessionProvider({ children }: PropsWithChildren) {
         : null,
     [origin, epoch],
   );
+
+  // A native App's request was refused for its credential. The App's own
+  // backend can refuse too, so ask the instance itself: the client above
+  // clears the session when the instance refuses as well.
+  useEffect(() => {
+    if (!api) return;
+    const subscription = appRuntime.addListener('onUnauthorized', () => {
+      void api.config().catch(() => undefined);
+    });
+    return () => subscription.remove();
+  }, [api]);
 
   useEffect(() => {
     let alive = true;
@@ -157,6 +181,8 @@ export function SessionProvider({ children }: PropsWithChildren) {
       }
       // The identity changes here; work started under the previous one ends.
       endConversationLifetimes();
+      // The next instance's configuration replaces this one in any case.
+      void appRuntime.configure(null, null, null).catch(() => undefined);
       currentInstance = next;
       currentRevision++;
       setOrigins(recent);
