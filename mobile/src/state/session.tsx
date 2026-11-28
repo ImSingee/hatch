@@ -72,12 +72,13 @@ export function SessionProvider({ children }: PropsWithChildren) {
       await queryClient.cancelQueries();
       // Native Apps hold the session's credential: they stop with it, and what
       // they saved here goes with the account, before anything signs in again.
-      await appRuntime.configure(null, null);
       try {
+        await appRuntime.configure(null, null, null);
         await appRuntime.forgetStorage(expectedOrigin);
       } catch {
+        // Each account has its own App storage, so no other account reads it.
         setAuthError(
-          'Some data Apps saved on this phone could not be deleted yet. Apps on this instance stay closed until it is.',
+          'Some data Apps saved on this phone could not be deleted. Other accounts cannot open it.',
         );
       }
       endConversationLifetimes();
@@ -180,7 +181,8 @@ export function SessionProvider({ children }: PropsWithChildren) {
       }
       // The identity changes here; work started under the previous one ends.
       endConversationLifetimes();
-      void appRuntime.configure(null, null);
+      // The next instance's configuration replaces this one in any case.
+      void appRuntime.configure(null, null, null).catch(() => undefined);
       currentInstance = next;
       currentRevision++;
       setOrigins(recent);

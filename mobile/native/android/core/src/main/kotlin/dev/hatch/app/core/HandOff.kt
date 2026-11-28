@@ -1,5 +1,6 @@
 package dev.hatch.app.core
 
+import java.util.concurrent.ExecutionException
 import java.util.concurrent.FutureTask
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.TimeoutException
@@ -21,12 +22,36 @@ object HandOff {
         val state = AtomicInteger(WAITING)
         val task = FutureTask { state.compareAndSet(WAITING, STARTED) && block() }
         post(task)
-        return try {
-            task.get(timeoutMillis, TimeUnit.MILLISECONDS)
-        } catch (_: TimeoutException) {
-            if (state.compareAndSet(WAITING, GIVEN_UP)) false else runCatching { task.get() }.getOrDefault(false)
-        } catch (_: Exception) {
-            false
+        val answer =
+            try {
+                return task.get(timeoutMillis, TimeUnit.MILLISECONDS)
+            } catch (_: ExecutionException) {
+                return false
+            } catch (_: TimeoutException) {
+                null
+            } catch (_: InterruptedException) {
+                // Interrupted like timed out, and the caller keeps the interrupt.
+                Thread.currentThread().interrupt()
+                null
+            }
+        return answer ?: if (state.compareAndSet(WAITING, GIVEN_UP)) false else finish(task)
+    }
+
+    /** The answer of a task that already started, however long it takes. */
+    private fun finish(task: FutureTask<Boolean>): Boolean {
+        var interrupted = Thread.interrupted()
+        try {
+            while (true) {
+                try {
+                    return task.get()
+                } catch (_: InterruptedException) {
+                    interrupted = true
+                } catch (_: ExecutionException) {
+                    return false
+                }
+            }
+        } finally {
+            if (interrupted) Thread.currentThread().interrupt()
         }
     }
 }

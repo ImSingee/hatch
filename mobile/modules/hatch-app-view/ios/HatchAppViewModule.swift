@@ -91,8 +91,11 @@ public final class HatchAppViewModule: Module {
             }
         }
 
-        AsyncFunction("configure") { (origin: String?, token: String?) in
-            MainActor.assumeIsolated { AppEngineManager.shared.configure(origin: origin.flatMap(URL.init(string:)), token: token) }
+        AsyncFunction("configure") { (origin: String?, token: String?, account: String?) in
+            MainActor.assumeIsolated {
+                AppEngineManager.shared.configure(
+                    origin: origin.flatMap(URL.init(string:)), token: token, account: account)
+            }
         }.runOnQueue(.main)
         AsyncFunction("forgetStorage") { (origin: String) in
             try MainActor.assumeIsolated {

@@ -101,6 +101,8 @@ public final class TrustDirectory<Store: TrustStore> {
     private var store: Store?
     private var busy = false
     private var waiting: [CheckedContinuation<Void, Never>] = []
+    /// Callers waiting for the store now (for tests).
+    var waitingCount: Int { waiting.count }
 
     public init(refresh: TrustRefresh, open: @escaping () throws -> Store, fresh: @escaping () throws -> TrustStore) {
         self.refresh = refresh

@@ -3,42 +3,32 @@ package dev.hatch.app.core
 import java.io.File
 import kotlin.test.Test
 import kotlin.test.assertEquals
-import org.junit.Assume.assumeTrue
+import kotlin.test.assertNotEquals
 
 class AppStorageTest {
     private val instance = kotlin.io.path.createTempDirectory().toFile()
-    private val storage = File(instance, "storage/app-1")
 
-    init {
-        storage.mkdirs()
-        File(storage, "draft").writeText("an unsent form")
+    private fun save(account: String): File =
+        File(AppStorage.accountDirectory(instance, account), "storage/app-1").apply {
+            mkdirs()
+            File(this, "draft").writeText("an unsent form")
+        }
+
+    @Test
+    fun anAccountNeverOpensWhatAnotherSaved() {
+        val first = save("account-a")
+        // Whatever happens to the first account's data, the next account's
+        // Apps look elsewhere.
+        assertNotEquals(first.canonicalPath, File(AppStorage.accountDirectory(instance, "account-b"), "storage/app-1").canonicalPath)
     }
 
     @Test
     fun signingOutDeletesWhatAppsSaved() {
+        save("account-a")
+        save("account-b")
         assertEquals(true, AppStorage.forget(instance))
-        assertEquals(false, File(instance, "storage").exists())
-        assertEquals(true, AppStorage.ready(instance))
         assertEquals(listOf(), instance.list()!!.toList())
-    }
-
-    @Test
-    fun aDeletionThatFailedKeepsTheStorageFromUseUntilItSucceeds() {
-        // Permissions are how the deletion is made to fail; root ignores them.
-        assumeTrue(System.getProperty("user.name") != "root")
-        // The instance directory refuses changes: neither the marker nor
-        // moving or removing the storage can happen.
-        instance.setWritable(false)
-        try {
-            assertEquals(false, AppStorage.forget(instance))
-            // The next session for this instance (signing in again) may not use it.
-            assertEquals(false, AppStorage.ready(instance))
-        } finally {
-            instance.setWritable(true)
-        }
-        // Once the deletion can finish, the next session finishes it first.
-        assertEquals(true, AppStorage.ready(instance))
-        assertEquals(false, File(instance, "storage").exists())
-        assertEquals(true, AppStorage.ready(instance))
+        // Nothing saved: nothing to delete.
+        assertEquals(true, AppStorage.forget(instance))
     }
 }

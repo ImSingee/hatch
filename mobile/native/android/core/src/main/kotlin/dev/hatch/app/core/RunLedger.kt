@@ -137,14 +137,15 @@ data class EngineSetup(
             route: String,
             packageBuild: Int,
             appId: String,
-            instanceDirectory: File,
+            /** The signed-in account's directory on this instance (`AppStorage`). */
+            accountDirectory: File,
             cacheRoot: File,
         ) =
             EngineSetup(
                 heapMegabytes = HEAP_MEGABYTES,
                 grant = HostCalls.grant,
                 params = mapOf("platform" to platform, "route" to route, "packageBuild" to packageBuild),
-                storageDirectory = File(instanceDirectory, "storage/$appId"),
+                storageDirectory = File(accountDirectory, "storage/$appId"),
                 cacheDirectory = File(cacheRoot, "nsh"),
             )
     }

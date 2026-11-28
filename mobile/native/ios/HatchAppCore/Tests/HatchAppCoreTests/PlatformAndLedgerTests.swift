@@ -374,21 +374,25 @@ final class TrustDirectoryTests: XCTestCase {
         let trust = directory()
         var order: [String] = []
         var release: CheckedContinuation<Void, Never>?
+        var firstFailed: Error?
         // A retired session still verifying a package…
         let first = Task {
-            try await trust.use(material: material(1), active: { true }) { _ in
-                await withCheckedContinuation { release = $0 }
-                order.append("first done")
-            }
+            do {
+                try await trust.use(material: material(1), active: { true }) { _ in
+                    await withCheckedContinuation { release = $0 }
+                    order.append("first done")
+                }
+            } catch { firstFailed = error }
         }
-        while release == nil { await Task.yield() }
+        try await checkpoint("the first caller verifies", { firstFailed }) { release != nil }
         // …and the new session for the same instance, with a newer list.
         let second = Task { try await trust.use(material: material(2), active: { true }) { _ in order.append("second") } }
-        for _ in 0..<20 { await Task.yield() }
+        try await checkpoint("the second caller waits", { firstFailed }) { trust.waitingCount == 1 }
         XCTAssertEqual(order, [])
         release?.resume()
-        try await first.value
+        await first.value
         try await second.value
+        XCTAssertNil(firstFailed)
         XCTAssertEqual(order, ["first done", "second"])
         XCTAssertEqual(FakeTrustStore.opened(state).sequence, 2)
     }
@@ -398,21 +402,25 @@ final class TrustDirectoryTests: XCTestCase {
         var oldActive = true
         var order: [String] = []
         var release: CheckedContinuation<Void, Never>?
+        var oldFailed: Error?
         let old = Task {
-            try await trust.use(material: material(1), active: { oldActive }) { _ in
-                await withCheckedContinuation { release = $0 }
-                order.append("old verified")
-            }
+            do {
+                try await trust.use(material: material(1), active: { oldActive }) { _ in
+                    await withCheckedContinuation { release = $0 }
+                    order.append("old verified")
+                }
+            } catch { oldFailed = error }
         }
-        while release == nil { await Task.yield() }
+        try await checkpoint("the old session verifies", { oldFailed }) { release != nil }
         // Signed out and in again while the old session was verifying.
         oldActive = false
         let next = Task { try await trust.use(material: material(2), active: { true }) { _ in order.append("next") } }
-        for _ in 0..<20 { await Task.yield() }
+        try await checkpoint("the next session waits", { oldFailed }) { trust.waitingCount == 1 }
         XCTAssertEqual(order, [])
         release?.resume()
-        try await old.value
+        await old.value
         try await next.value
+        XCTAssertNil(oldFailed)
         XCTAssertEqual(order, ["old verified", "next"])
         // The retired session can no longer start any trust work.
         do {
@@ -421,5 +429,20 @@ final class TrustDirectoryTests: XCTestCase {
         } catch {}
         XCTAssertEqual(opened.count, 1)
         XCTAssertEqual(FakeTrustStore.opened(state).sequence, 2)
+    }
+
+    private struct Missed: Error, CustomStringConvertible { let description: String }
+
+    /// Waits (bounded) until `condition` holds, and fails at once if the
+    /// parked task already failed (it threw before reaching its checkpoint).
+    private func checkpoint(
+        _ what: String, _ failure: () -> Error?, _ condition: () -> Bool
+    ) async throws {
+        let deadline = Date().addingTimeInterval(5)
+        while !condition() {
+            if let error = failure() { throw error }
+            guard Date() < deadline else { throw Missed(description: "\(what): not reached in 5 s") }
+            try await Task.sleep(nanoseconds: 5_000_000)
+        }
     }
 }

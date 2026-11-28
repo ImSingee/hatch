@@ -2,9 +2,11 @@ package dev.hatch.app.core
 
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit
+import java.util.concurrent.atomic.AtomicReference
 import kotlin.concurrent.thread
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFalse
 import kotlin.test.assertTrue
 
 class HandOffTest {
@@ -21,22 +23,49 @@ class HandOffTest {
         var ran = false
         assertEquals(false, HandOff.ask({ queued = it }, 50) { ran = true; true })
         queued!!.run()
-        assertEquals(false, ran)
+        assertFalse(ran)
     }
 
     @Test
     fun aQuestionAlreadyBeingAnsweredIsWaitedFor() {
         val started = CountDownLatch(1)
-        // The answer has begun before the timeout and ends well after it.
-        val answer =
-            HandOff.ask({ task ->
-                thread { task.run() }
-                assertTrue(started.await(1, TimeUnit.SECONDS))
-            }, 50) {
-                started.countDown()
-                Thread.sleep(300)
-                true
-            }
-        assertEquals(true, answer)
+        val release = CountDownLatch(1)
+        val answer = AtomicReference<Boolean>()
+        val asking = thread {
+            answer.set(
+                HandOff.ask({ thread { it.run() } }, 50) {
+                    started.countDown()
+                    release.await(5, TimeUnit.SECONDS)
+                }
+            )
+        }
+        assertTrue(started.await(5, TimeUnit.SECONDS))
+        // Well past its timeout, the caller is still waiting for the answer
+        // that started in time, not answering "no".
+        asking.join(500)
+        assertTrue(asking.isAlive)
+        release.countDown()
+        asking.join(5_000)
+        assertEquals(true, answer.get())
+    }
+
+    @Test
+    fun anInterruptedCallerGivesUpAndTheQuestionNeverRunsLater() {
+        val posted = CountDownLatch(1)
+        var queued: Runnable? = null
+        var ran = false
+        val answer = AtomicReference<Boolean>()
+        val stillInterrupted = AtomicReference<Boolean>()
+        val asking = thread {
+            answer.set(HandOff.ask({ queued = it; posted.countDown() }, 5_000) { ran = true; true })
+            stillInterrupted.set(Thread.currentThread().isInterrupted)
+        }
+        assertTrue(posted.await(5, TimeUnit.SECONDS))
+        asking.interrupt()
+        asking.join(5_000)
+        assertEquals(false, answer.get())
+        assertEquals(true, stillInterrupted.get())
+        queued!!.run()
+        assertFalse(ran)
     }
 }
