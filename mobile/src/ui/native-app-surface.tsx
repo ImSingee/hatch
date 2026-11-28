@@ -29,6 +29,8 @@ function failureText(code: string, message: string) {
       return 'This App was deployed before the platform signed native packages. Deploy it again to open it here.';
     case 'APP_NOT_DEPLOYED':
       return 'This App has no live version yet.';
+    case 'APP_ARCHIVED':
+      return 'This App is archived. Restore it on the web to open it again.';
     case 'unauthenticated':
       return 'Your session expired. Sign in again to continue.';
     case 'stopped':

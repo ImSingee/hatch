@@ -275,14 +275,15 @@ public final class HostBridge: @unchecked Sendable {
     private final class Found: @unchecked Sendable {
         let lock = NSLock()
         var events: [[String: Any]] = []
-        var block: [String] = []
+        var type: String?
+        var id: String?
     }
 
     private func events(_ input: [String: Any]) async -> [String: Any] {
         let scope = self.scope
         guard scope.hasData else { return Self.refuse("unimplemented", "This App has no Data Tables.") }
-        guard let table = input["table"] as? String, !table.isEmpty,
-            let sinceNumber = input["since"] as? NSNumber, !JSON.isBool(sinceNumber),
+        guard let table = input["table"] as? String, !table.isEmpty, let sinceValue = input["since"],
+            !JSON.isBool(sinceValue), let sinceNumber = sinceValue as? NSNumber,
             let since = Int64(exactly: sinceNumber.doubleValue), since >= 0, since <= 9_007_199_254_740_991
         else { return Self.refuse("invalid_argument", "hatch.data.events needs { table, since }.") }
         guard let headers = authorized(["x-hatch-data-deployment": scope.deploymentId, "accept": "text/event-stream"])
@@ -301,22 +302,24 @@ public final class HostBridge: @unchecked Sendable {
                 group.addTask {
                     try await transport.lines(request) { line in
                         found.lock.withLock {
-                            if !line.isEmpty {
-                                found.block.append(line)
+                            // An SSE block's fields until its blank line: only
+                            // the two this uses.
+                            if line.hasPrefix("event:") {
+                                if found.type == nil { found.type = line.dropFirst(6).trimmingCharacters(in: .whitespaces) }
                                 return true
                             }
-                            let block = found.block
-                            found.block = []
-                            guard
-                                let type = block.first(where: { $0.hasPrefix("event:") })?.dropFirst(6)
-                                    .trimmingCharacters(in: .whitespaces)
-                            else { return true }
-                            var event: [String: Any] = ["reset": type == "reset"]
-                            if let id = block.first(where: { $0.hasPrefix("id:") })?.dropFirst(3)
-                                .trimmingCharacters(in: .whitespaces), let revision = Int64(id), revision >= 0
-                            {
-                                event["revision"] = revision
+                            if line.hasPrefix("id:") {
+                                if found.id == nil { found.id = line.dropFirst(3).trimmingCharacters(in: .whitespaces) }
+                                return true
                             }
+                            guard line.isEmpty else { return true }
+                            let type = found.type
+                            let id = found.id
+                            found.type = nil
+                            found.id = nil
+                            guard let type else { return true }
+                            var event: [String: Any] = ["reset": type == "reset"]
+                            if let id, let revision = Int64(id), revision >= 0 { event["revision"] = revision }
                             found.events.append(event)
                             return false
                         }
@@ -332,6 +335,7 @@ public final class HostBridge: @unchecked Sendable {
             }
             if let response, !(200..<300).contains(response.status) {
                 if response.status == 401 { await shell?.unauthorized() }
+                if response.status == 409 { await shell?.deploymentStale() }
                 let text = String(decoding: response.body, as: UTF8.self)
                 return Self.refuse(
                     Self.code(forStatus: response.status), text.isEmpty ? "HTTP \(response.status)" : text)

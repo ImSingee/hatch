@@ -52,8 +52,11 @@ class GrantTest {
                 }
                 assertTrue(view.loadAssetBundle("grant-probe"), "run mobile/native/scripts/test-android.sh, which builds the fixture")
             }
-            assertTrue(reported.await(30, TimeUnit.SECONDS), "the probe reports")
-            scenario.onActivity { engine?.destroy() }
+            try {
+                assertTrue(reported.await(30, TimeUnit.SECONDS), "the probe reports")
+            } finally {
+                scenario.onActivity { engine?.destroy() }
+            }
         }
         assertNull(failure)
         results["reached"] = if (reached) "yes" else "no"

@@ -47,11 +47,15 @@ public protocol HTTPTransport: Sendable {
 
 public enum TransportError: Error, Equatable {
     case notHTTP
+    /// A streamed line longer than `URLSessionTransport.maxLine`.
+    case lineTooLong
 }
 
 /// The instance over URLSession: no cookies, no cache, no redirects that keep
 /// credentials (the session's delegate refuses redirects).
 public final class URLSessionTransport: NSObject, HTTPTransport, URLSessionTaskDelegate, @unchecked Sendable {
+    /// The longest line a streamed body may send (64 KiB).
+    public static let maxLine = 64 * 1024
     private lazy var session: URLSession = {
         let configuration = URLSessionConfiguration.ephemeral
         configuration.urlCache = nil
@@ -118,6 +122,7 @@ public final class URLSessionTransport: NSObject, HTTPTransport, URLSessionTaskD
                     current.removeAll(keepingCapacity: true)
                     if !line(text) { break }
                 } else {
+                    guard current.count < Self.maxLine else { throw TransportError.lineTooLong }
                     current.append(byte)
                 }
             }

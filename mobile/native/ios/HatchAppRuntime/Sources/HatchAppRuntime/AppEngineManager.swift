@@ -40,22 +40,103 @@ public enum AppEngineState: Equatable {
     case failed(code: String, message: String)
 }
 
+/// One signed-in instance. Everything started for it (engines, their host
+/// calls, package loads) uses its origin, credential and trust store, never
+/// another session's: a session that ends answers no more credentials.
+@MainActor
+final class EngineSession {
+    let origin: URL
+    let directory: URL
+    private let tokenBox: TokenBox
+    private var store: NshTrust?
+    private let trustRefresh: TrustRefresh
+    private(set) var active = true
+
+    /// The credential, readable off the main actor by the bridge.
+    final class TokenBox: @unchecked Sendable {
+        private let lock = NSLock()
+        private var token: String?
+        init(_ token: String?) { self.token = token }
+        var value: String? {
+            get { lock.withLock { token } }
+            set { lock.withLock { token = newValue } }
+        }
+    }
+
+    init(origin: URL, token: String?, directory: URL) {
+        self.origin = origin
+        self.directory = directory
+        tokenBox = TokenBox(token)
+        trustRefresh = TrustRefresh(marker: directory.appendingPathComponent("trust/revocations-sequence"))
+    }
+
+    var token: String? {
+        get { tokenBox.value }
+        set { tokenBox.value = newValue }
+    }
+
+    var credential: @Sendable () -> String? {
+        let box = tokenBox
+        return { box.value }
+    }
+
+    func client(_ transport: HTTPTransport) -> PlatformClient {
+        PlatformClient(origin: origin, credential: credential, transport: transport)
+    }
+
+    /// This session's trust store, first brought up to the instance's
+    /// material (a newer revocation list applies before any package opens).
+    func trust(_ client: PlatformClient) async throws -> NshTrust {
+        guard active else { throw PlatformError(code: "unauthenticated", message: "Sign in to this instance again.") }
+        let store = try self.store ?? NshTrust(stateDirectory: directory.appendingPathComponent("trust"))
+        self.store = store
+        let material = try await client.runtimeTrust()
+        guard active else { throw PlatformError(code: "unauthenticated", message: "Sign in to this instance again.") }
+        let probes = directory
+        try trustRefresh.refresh(StoreOf(store), material: material) {
+            let dir = probes.appendingPathComponent("trust-probe-\(UUID().uuidString)", isDirectory: true)
+            return StoreOf(try NshTrust(stateDirectory: dir), removing: dir)
+        }
+        return store
+    }
+
+    func retire() {
+        active = false
+        tokenBox.value = nil
+        store = nil
+    }
+}
+
+private final class StoreOf: TrustStore {
+    let trust: NshTrust
+    let directory: URL?
+    init(_ trust: NshTrust, removing directory: URL? = nil) {
+        self.trust = trust
+        self.directory = directory
+    }
+    deinit { if let directory { try? FileManager.default.removeItem(at: directory) } }
+    func addRoot(_ publicKey: String) throws { try trust.addRoot(publicKey) }
+    func updateRevocations(_ json: String) throws { try trust.updateRevocations(json) }
+}
+
 /// One running App: its engine, its bridge and what it last reported.
 @MainActor
 final class AppEngine {
     let appId: String
     let view: NshAppView
     let bridge: HostBridge
+    let session: EngineSession
     var state: AppEngineState = .loading
     var title: String?
     var build: Int?
     weak var listener: AppEngineListener?
     var task: Task<Void, Never>?
 
-    init(appId: String, view: NshAppView, bridge: HostBridge) {
+    init(appId: String, view: NshAppView, bridge: HostBridge, session: EngineSession) {
         self.appId = appId
         self.view = view
         self.bridge = bridge
+        self.session = session
     }
 
     func setState(_ next: AppEngineState) {
@@ -80,9 +161,12 @@ public final class AppEngineManager {
     public static let shared = AppEngineManager()
 
     public weak var delegate: AppEngineHostDelegate?
-    private var origin: URL?
-    private var token: String?
+    private var session: EngineSession?
     private let transport = URLSessionTransport()
+    /// Apps whose package is being fetched or opened: one load per App at a
+    /// time, since they share its cache directory.
+    private var packageBusy: Set<String> = []
+    private var packageWaiters: [String: [CheckedContinuation<Void, Never>]] = [:]
     private var engines: [String: AppEngine] = [:]
     /// Where each App is shown now; kept when its engine stops, so an App
     /// stopped while its page stayed open starts again when the app returns.
@@ -92,8 +176,6 @@ public final class AppEngineManager {
     private var appActive = UIApplication.shared.applicationState != .background
     private var waitTimer: Timer?
     private var themeJSON: String?
-    private var trust: NshTrust?
-    private var trustLoaded = false
     private var observers: [NSObjectProtocol] = []
 
     init() {
@@ -112,31 +194,30 @@ public final class AppEngineManager {
 
     // MARK: - Session
 
-    private var instanceDirectory: URL? {
-        guard let origin else { return nil }
-        return FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
-            .appendingPathComponent("hatch-apps/\(InstanceKey.of(origin))", isDirectory: true)
-    }
-
-    private var cacheRoot: URL? {
-        guard let origin else { return nil }
-        return FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask)[0]
+    private func cacheRoot(_ origin: URL) -> URL {
+        FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask)[0]
             .appendingPathComponent("hatch-apps/\(InstanceKey.of(origin))", isDirectory: true)
     }
 
     /// The signed-in instance and its session credential. Another instance,
     /// or none, stops every App.
     public func configure(origin: URL?, token: String?) {
-        if origin != self.origin || token == nil {
-            stopAll()
-            containers = [:]
-            listeners = [:]
-            ledger.reset()
-            trust = nil
-            trustLoaded = false
+        if let session, session.origin == origin, token != nil {
+            // The same instance with a renewed credential: its work goes on.
+            session.token = token
+            return
         }
-        self.origin = origin
-        self.token = token
+        stopAll()
+        containers = [:]
+        listeners = [:]
+        ledger.reset()
+        session?.retire()
+        session = nil
+        if let origin, let token {
+            let directory = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
+                .appendingPathComponent("hatch-apps/\(InstanceKey.of(origin))", isDirectory: true)
+            session = EngineSession(origin: origin, token: token, directory: directory)
+        }
     }
 
     /// The user's background minutes (`GetDeskPreferences`).
@@ -154,11 +235,6 @@ public final class AppEngineManager {
 
     var currentTheme: String? { themeJSON }
 
-    private func client() -> PlatformClient? {
-        guard let origin else { return nil }
-        let token = self.token
-        return PlatformClient(origin: origin, credential: { token }, transport: transport)
-    }
 
     // MARK: - Showing Apps
 
@@ -172,8 +248,7 @@ public final class AppEngineManager {
             if let route { navigate(appId, to: route) }
             return engine.state
         }
-        guard let origin, let instanceDirectory, let cacheRoot,
-            let scope = AppScope(appId: appId, deploymentId: "", rpcMethods: [:], hasData: false)
+        guard let session, let scope = AppScope(appId: appId, deploymentId: "", rpcMethods: [:], hasData: false)
         else {
             let failed = AppEngineState.failed(code: "unauthenticated", message: "Sign in to this instance again.")
             listener?.engineStateChanged(failed)
@@ -181,72 +256,94 @@ public final class AppEngineManager {
         }
         let start = route ?? ledger.route(of: appId) ?? ""
         for victim in ledger.start(appId, route: start) { stopEngine(victim) }
-        let token = self.token
         let shell = EngineShell(appId: appId, manager: self)
         let bridge = HostBridge(
-            origin: origin, scope: scope, credential: { token }, transport: transport, shell: shell)
+            origin: session.origin, scope: scope, credential: session.credential, transport: transport, shell: shell)
         let view = NshAppView()
-        let engine = AppEngine(appId: appId, view: view, bridge: bridge)
+        let engine = AppEngine(appId: appId, view: view, bridge: bridge, session: session)
+        shell.engine = engine
         engine.listener = listener
         engines[appId] = engine
+        let cacheRoot = cacheRoot(session.origin)
         engine.task = Task { [weak self] in
-            await self?.load(engine, route: start, instanceDirectory: instanceDirectory, cacheRoot: cacheRoot)
+            await self?.load(engine, route: start, instanceDirectory: session.directory, cacheRoot: cacheRoot)
         }
         updateVisibility()
         return engine.state
     }
 
-    private func loadTrust(_ client: PlatformClient, directory: URL) async throws -> NshTrust {
-        if let trust, trustLoaded { return trust }
-        let store = try trust ?? NshTrust(stateDirectory: directory.appendingPathComponent("trust"))
-        trust = store
-        let material = try await client.runtimeTrust()
-        guard material.initialized else {
-            throw PlatformError(code: "failed_precondition", message: "This instance has no native App keys yet.")
+    private func acquirePackage(_ appId: String) async {
+        if packageBusy.contains(appId) {
+            await withCheckedContinuation { packageWaiters[appId, default: []].append($0) }
+        } else {
+            packageBusy.insert(appId)
         }
-        for root in material.roots { try store.addRoot(root) }
-        // The store takes only a newer list (it refuses one it has already):
-        // apply each sequence once, and refuse to go on if a newer one fails.
-        let applied = directory.appendingPathComponent("trust/revocations-sequence")
-        let known = (try? String(contentsOf: applied, encoding: .utf8)).flatMap { Int($0) } ?? 0
-        if let revocations = material.revocations, material.revocationSequence > known {
-            try store.updateRevocations(revocations)
-            try String(material.revocationSequence).write(to: applied, atomically: true, encoding: .utf8)
+    }
+
+    private func releasePackage(_ appId: String) {
+        if var waiting = packageWaiters[appId], !waiting.isEmpty {
+            // The next load takes the App's turn as this one hands it over.
+            let next = waiting.removeFirst()
+            packageWaiters[appId] = waiting.isEmpty ? nil : waiting
+            next.resume()
+        } else {
+            packageBusy.remove(appId)
         }
-        trustLoaded = true
-        return store
     }
 
     private func load(_ engine: AppEngine, route: String, instanceDirectory: URL, cacheRoot: URL) async {
-        guard let client = client() else { return }
+        let client = engine.session.client(transport)
         do {
-            let app = try await client.describeApp(engine.appId)
+            var app = try await client.describeApp(engine.appId)
+            if app.archived {
+                throw PlatformError(
+                    code: "failed_precondition", publicCode: "APP_ARCHIVED", message: "This App is archived.")
+            }
             guard app.runtime == "native" else {
                 throw PlatformError(
                     code: "failed_precondition", publicCode: "APP_NOT_NATIVE",
                     message: "This App has a web frontend.")
             }
-            let trust = try await loadTrust(client, directory: instanceDirectory)
+            await acquirePackage(engine.appId)
+            defer { releasePackage(engine.appId) }
+            guard engines[engine.appId] === engine else { return }
             let packages = cacheRoot.appendingPathComponent("packages/\(engine.appId)", isDirectory: true)
             var file = app.packageBuild.map { packages.appendingPathComponent("\($0).nshpkg") }
-            var info: AppPackageInfo?
+            var deploymentId = app.deploymentId ?? ""
             if file == nil || !FileManager.default.fileExists(atPath: file!.path) {
-                let target = packages.appendingPathComponent("download.nshpkg")
-                let downloaded = try await client.downloadPackage(
-                    appId: engine.appId, to: target, hasher: SHA256Hasher())
+                let target = packages.appendingPathComponent("download-\(UUID().uuidString).nshpkg")
+                let downloaded: AppPackageInfo
+                do {
+                    downloaded = try await client.downloadPackage(
+                        appId: engine.appId, to: target, hasher: SHA256Hasher())
+                } catch {
+                    try? FileManager.default.removeItem(at: target)
+                    throw error
+                }
                 let named = packages.appendingPathComponent("\(downloaded.build).nshpkg")
-                try? FileManager.default.removeItem(at: named)
-                try FileManager.default.moveItem(at: target, to: named)
+                if FileManager.default.fileExists(atPath: named.path) {
+                    _ = try FileManager.default.replaceItemAt(named, withItemAt: target)
+                } else {
+                    try FileManager.default.moveItem(at: target, to: named)
+                }
                 // Only the live build is kept.
                 for old in (try? FileManager.default.contentsOfDirectory(at: packages, includingPropertiesForKeys: nil))
-                    ?? [] where old != named
+                    ?? [] where old.lastPathComponent != named.lastPathComponent
                 {
                     try? FileManager.default.removeItem(at: old)
                 }
                 file = named
-                info = downloaded
+                deploymentId = downloaded.deploymentId
+                // The package is the live one now: describe that deployment.
+                if deploymentId != app.deploymentId {
+                    app = try await client.describeApp(engine.appId)
+                    guard app.deploymentId == deploymentId else {
+                        throw PlatformError(code: "unavailable", message: "The App changed while it opened. Try again.")
+                    }
+                }
             }
             guard engines[engine.appId] === engine, let file else { return }
+            let trust = try await engine.session.trust(client)
             let package: NshPackage
             do {
                 package = try await trust.openPackage(at: file)
@@ -259,8 +356,7 @@ public final class AppEngineManager {
             guard engines[engine.appId] === engine else { return }
             let build = Int(package.info.build)
             engine.bridge.scope = AppScope(
-                appId: engine.appId, deploymentId: info?.deploymentId ?? app.deploymentId ?? "",
-                rpcMethods: app.rpcMethods, hasData: app.hasData)!
+                appId: engine.appId, deploymentId: deploymentId, rpcMethods: app.rpcMethods, hasData: app.hasData)!
             let setup = EngineSetup(
                 platform: "ios", route: route, packageBuild: build, appId: engine.appId,
                 instanceDirectory: instanceDirectory, cacheRoot: cacheRoot)
@@ -351,6 +447,8 @@ public final class AppEngineManager {
 
     private func stopEngine(_ appId: String) {
         guard let engine = engines.removeValue(forKey: appId) else { return }
+        // Its replacement starts hidden until shown: it is told so then.
+        lastVisible.remove(appId)
         engine.task?.cancel()
         engine.view.removeFromSuperview()
         engine.setState(.failed(code: "stopped", message: "The App was stopped."))
@@ -403,15 +501,17 @@ public final class AppEngineManager {
 
     // MARK: - From the bridge
 
-    fileprivate func engineSetTitle(_ appId: String, _ title: String?) {
-        guard let engine = engines[appId] else { return }
+    /// Calls queued for an engine that was since replaced are dropped.
+    fileprivate func engineSetTitle(_ engine: AppEngine, _ title: String?) {
+        guard engines[engine.appId] === engine else { return }
         engine.title = title
         engine.listener?.engineTitleChanged(title)
     }
 
-    fileprivate func engineSetRoute(_ appId: String, _ route: String) {
-        ledger.setRoute(route, of: appId)
-        engines[appId]?.listener?.engineRouteChanged(route)
+    fileprivate func engineSetRoute(_ engine: AppEngine, _ route: String) {
+        guard engines[engine.appId] === engine else { return }
+        ledger.setRoute(route, of: engine.appId)
+        engine.listener?.engineRouteChanged(route)
     }
 
     fileprivate func engineOpen(slug: String, route: String) -> Bool {
@@ -425,21 +525,24 @@ public final class AppEngineManager {
     /// A newer deployment went live (the Data API said so, or the app came
     /// back to the front): running Apps keep their code and are told.
     fileprivate func refreshDeployments(_ only: String? = nil) {
-        guard let client = client() else { return }
         for engine in engines.values where only == nil || engine.appId == only {
             guard let build = engine.build else { continue }
-            Task { [weak engine] in
-                guard let app = try? await client.describeApp(engine?.appId ?? ""),
-                    let live = app.packageBuild, live != build, let engine
+            let client = engine.session.client(transport)
+            Task { [weak self, weak engine] in
+                guard let appId = engine?.appId, let app = try? await client.describeApp(appId),
+                    let live = app.packageBuild, live != build, let engine, self?.engines[appId] === engine
                 else { return }
+                // A failed engine keeps its failure: reloading runs the new build anyway.
+                if case .failed = engine.state { return }
                 engine.view.send(HostEvents.update, [String: Any]())
                 engine.setState(.updateAvailable(build: live))
             }
         }
     }
 
-    fileprivate func engineDeploymentStale(_ appId: String) {
-        refreshDeployments(appId)
+    fileprivate func engineDeploymentStale(_ engine: AppEngine) {
+        guard engines[engine.appId] === engine else { return }
+        refreshDeployments(engine.appId)
     }
 }
 
@@ -452,6 +555,8 @@ private struct WeakListener {
 private final class EngineShell: BridgeShell, @unchecked Sendable {
     let appId: String
     weak var manager: AppEngineManager?
+    /// The engine this shell serves (set once, on the main actor).
+    weak var engine: AppEngine?
 
     init(appId: String, manager: AppEngineManager) {
         self.appId = appId
@@ -459,13 +564,19 @@ private final class EngineShell: BridgeShell, @unchecked Sendable {
     }
 
     func themeJSON() async -> String? { await MainActor.run { manager?.currentTheme } }
-    func setTitle(_ title: String?) async { await MainActor.run { manager?.engineSetTitle(appId, title) } }
-    func setRoute(_ route: String) async { await MainActor.run { manager?.engineSetRoute(appId, route) } }
+    func setTitle(_ title: String?) async {
+        await MainActor.run { if let engine { manager?.engineSetTitle(engine, title) } }
+    }
+    func setRoute(_ route: String) async {
+        await MainActor.run { if let engine { manager?.engineSetRoute(engine, route) } }
+    }
     func openApp(slug: String, route: String) async -> Bool {
         await MainActor.run { manager?.engineOpen(slug: slug, route: route) ?? false }
     }
     func unauthorized() async { await MainActor.run { manager?.engineUnauthorized() } }
-    func deploymentStale() async { await MainActor.run { manager?.engineDeploymentStale(appId) } }
+    func deploymentStale() async {
+        await MainActor.run { if let engine { manager?.engineDeploymentStale(engine) } }
+    }
 }
 
 extension NshAppView {

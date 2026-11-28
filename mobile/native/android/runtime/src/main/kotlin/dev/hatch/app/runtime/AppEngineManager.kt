@@ -3,6 +3,7 @@ package dev.hatch.app.runtime
 import android.app.Activity
 import android.app.Application
 import android.content.Context
+import android.content.ContextWrapper
 import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
@@ -24,9 +25,14 @@ import dev.hatch.app.core.PackageHasher
 import dev.hatch.app.core.PlatformClient
 import dev.hatch.app.core.PlatformException
 import dev.hatch.app.core.RunLedger
+import dev.hatch.app.core.TrustRefresh
+import dev.hatch.app.core.TrustStore
 import dev.hatch.app.core.UrlConnectionTransport
 import java.io.File
+import java.nio.file.Files
+import java.nio.file.StandardCopyOption
 import java.security.MessageDigest
+import java.util.UUID
 import java.util.concurrent.Executors
 
 class Sha256Hasher : PackageHasher {
@@ -96,7 +102,13 @@ fun NshView.apply(setup: EngineSetup) {
  * thread.
  */
 object AppEngineManager {
-    private class Engine(val appId: String, val view: NshView, val bridge: HostBridge, val activity: Activity?) {
+    private class Engine(
+        val appId: String,
+        val view: NshView,
+        val bridge: HostBridge,
+        val activity: Activity?,
+        val session: Session,
+    ) {
         var state: AppEngineState = AppEngineState.Loading
             private set
         var title: String? = null
@@ -109,9 +121,82 @@ object AppEngineManager {
         }
     }
 
+    /**
+     * One signed-in instance. Everything started for it (engines, their host
+     * calls, package loads) uses its origin, credential and trust store, never
+     * another session's: a session that ends answers no more credentials, and
+     * its trust store closes once the last verification using it is done.
+     */
+    private class Session(val origin: String, @Volatile var token: String?, val directory: File) {
+        @Volatile var active = true
+            private set
+
+        private var store: NshTrust? = null
+        private var users = 0
+        private val trustRefresh = TrustRefresh(File(directory, "trust/revocations-sequence"))
+
+        fun credential(): String? = if (active) token else null
+
+        fun client(): PlatformClient = PlatformClient(origin, ::credential, transport)
+
+        /** Runs `block` with this session's trust store, first brought up to the instance's material. */
+        fun <T> withTrust(client: PlatformClient, block: (NshTrust) -> T): T {
+            val store =
+                synchronized(this) {
+                    if (!active) throw PlatformException("unauthenticated", message = "Sign in to this instance again.")
+                    users += 1
+                    store ?: NshTrust(File(directory, "trust")).also { store = it }
+                }
+            try {
+                val material = client.runtimeTrust()
+                trustRefresh.refresh(StoreOf(store), material) {
+                    val dir = File(directory, "trust-probe-${UUID.randomUUID()}")
+                    StoreOf(NshTrust(dir), dir)
+                }
+                if (!active) throw PlatformException("unauthenticated", message = "Sign in to this instance again.")
+                return block(store)
+            } finally {
+                synchronized(this) {
+                    users -= 1
+                    if (!active && users == 0) closeStore()
+                }
+            }
+        }
+
+        fun retire() {
+            synchronized(this) {
+                active = false
+                if (users == 0) closeStore()
+            }
+        }
+
+        private fun closeStore() {
+            store?.close()
+            store = null
+        }
+    }
+
+    private class StoreOf(val trust: NshTrust, val directory: File? = null) : TrustStore {
+        override fun addRoot(publicKey: String) = trust.addRoot(publicKey)
+
+        override fun updateRevocations(json: String) = trust.updateRevocations(json)
+
+        override fun close() {
+            trust.close()
+            directory?.deleteRecursively()
+        }
+    }
+
     private val main = Handler(Looper.getMainLooper())
-    private val network = Executors.newFixedThreadPool(4) { Thread(it, "hatch-app-engine").apply { isDaemon = true } }
+    /** Package loads: downloads and verification, which can take a while. */
+    private val loads = Executors.newFixedThreadPool(2) { Thread(it, "hatch-app-load").apply { isDaemon = true } }
+    /** Short host calls (RPC, data queries and changes). */
+    private val calls = Executors.newFixedThreadPool(4) { Thread(it, "hatch-app-call").apply { isDaemon = true } }
+    /** `hatch.data.events` long polls, which wait up to 25 s each: apart, so they never hold up the rest. */
+    private val polls = Executors.newFixedThreadPool(8) { Thread(it, "hatch-app-poll").apply { isDaemon = true } }
     private val transport = UrlConnectionTransport()
+    /** One package load per App at a time: they share its cache directory. */
+    private val packageLocks = mutableMapOf<String, Any>()
     private val engines = mutableMapOf<String, Engine>()
     /**
      * Where each App is shown now; kept when its engine stops, so an App
@@ -122,11 +207,8 @@ object AppEngineManager {
     private var ledger: RunLedger? = null
     private var application: Application? = null
     private var started = 0
-    private var origin: String? = null
-    @Volatile private var token: String? = null
+    private var session: Session? = null
     private var themeJson: String? = null
-    private var trust: NshTrust? = null
-    @Volatile private var trustLoaded = false
     private var lastVisible = emptySet<String>()
     private val waitCheck = Runnable { scheduleWait() }
 
@@ -182,24 +264,28 @@ object AppEngineManager {
 
     private fun now() = SystemClock.elapsedRealtime()
 
-    private fun instanceDirectory(context: Context): File? =
-        origin?.let { File(context.filesDir, "hatch-apps/${InstanceKey.of(it)}") }
-
-    private fun cacheRoot(context: Context): File? = origin?.let { File(context.cacheDir, "hatch-apps/${InstanceKey.of(it)}") }
+    private fun cacheRoot(context: Context, origin: String): File = File(context.cacheDir, "hatch-apps/${InstanceKey.of(origin)}")
 
     /** The signed-in instance and its session credential. Another instance, or none, stops every App. */
-    fun configure(origin: String?, token: String?) {
-        if (origin != this.origin || token == null) {
-            stopAll()
-            containers.clear()
-            listeners.clear()
-            ledger().reset()
-            trust?.close()
-            trust = null
-            trustLoaded = false
+    fun configure(context: Context, origin: String?, token: String?) {
+        val next = origin?.trimEnd('/')
+        val current = session
+        if (current != null && current.origin == next && token != null) {
+            // The same instance with a renewed credential: its work goes on.
+            current.token = token
+            return
         }
-        this.origin = origin?.trimEnd('/')
-        this.token = token
+        stopAll()
+        containers.clear()
+        listeners.clear()
+        ledger().reset()
+        current?.retire()
+        session =
+            if (next != null && token != null) {
+                Session(next, token, File(context.applicationContext.filesDir, "hatch-apps/${InstanceKey.of(next)}"))
+            } else {
+                null
+            }
     }
 
     /** The user's background minutes (`GetDeskPreferences`). */
@@ -215,9 +301,14 @@ object AppEngineManager {
         for (engine in engines.values) engine.view.send(HostEvents.THEME, mapOf("theme" to theme))
     }
 
-    private fun client(): PlatformClient? {
-        val origin = origin ?: return null
-        return PlatformClient(origin, { token }, transport)
+    /** The activity a view's context belongs to (React Native wraps it). */
+    private fun activityOf(context: Context): Activity? {
+        var current: Context? = context
+        while (current != null) {
+            if (current is Activity) return current
+            current = (current as? ContextWrapper)?.baseContext
+        }
+        return null
     }
 
     /** The state of `appId`'s engine, starting it (at its remembered route) in `context`'s activity if it does not run. */
@@ -228,11 +319,9 @@ object AppEngineManager {
             if (route != null) navigate(appId, route)
             return engine.state
         }
-        val origin = origin
+        val session = session
         val scope = AppScope.of(appId, "", emptyMap(), false)
-        val instanceDirectory = instanceDirectory(context)
-        val cacheRoot = cacheRoot(context)
-        if (origin == null || scope == null || instanceDirectory == null || cacheRoot == null) {
+        if (session == null || scope == null) {
             val failed = AppEngineState.Failed("unauthenticated", "Sign in to this instance again.")
             listener?.engineStateChanged(failed)
             return failed
@@ -240,67 +329,68 @@ object AppEngineManager {
         val start = route ?: ledger().route(appId) ?: ""
         for (victim in ledger().start(appId, start, now())) stopEngine(victim)
         val shell = EngineShell(appId)
-        val bridge = HostBridge(origin, scope, { token }, transport, shell)
-        val engine = Engine(appId, NshView(context), bridge, context as? Activity)
+        val bridge = HostBridge(session.origin, scope, session::credential, transport, shell)
+        val engine = Engine(appId, NshView(context), bridge, activityOf(context), session)
+        shell.engine = engine
         engine.listener = listener
         engines[appId] = engine
-        network.execute { load(engine, start, instanceDirectory, cacheRoot) }
+        val cacheRoot = cacheRoot(context, session.origin)
+        loads.execute { load(engine, start, session.directory, cacheRoot) }
         updateVisibility()
         return engine.state
     }
 
-    @Synchronized
-    private fun loadTrust(client: PlatformClient, directory: File): NshTrust {
-        val store = trust ?: NshTrust(File(directory, "trust")).also { trust = it }
-        if (trustLoaded) return store
-        val material = client.runtimeTrust()
-        if (!material.initialized) {
-            throw PlatformException("failed_precondition", message = "This instance has no native App keys yet.")
-        }
-        for (root in material.roots) check(store.addRoot(root)) { "The instance's root key is not valid." }
-        // The store takes only a newer list (it refuses one it has already):
-        // apply each sequence once, and refuse to go on if a newer one fails.
-        val applied = File(directory, "trust/revocations-sequence")
-        val known = runCatching { applied.readText().trim().toInt() }.getOrDefault(0)
-        val revocations = material.revocations
-        if (revocations != null && material.revocationSequence > known) {
-            check(store.updateRevocations(revocations)) { "The instance's revocation list is not valid." }
-            applied.writeText(material.revocationSequence.toString())
-        }
-        trustLoaded = true
-        return store
-    }
-
     private fun load(engine: Engine, route: String, instanceDirectory: File, cacheRoot: File) {
         try {
-            val client = client() ?: return
-            val app = client.describeApp(engine.appId)
+            val session = engine.session
+            val client = session.client()
+            var app = client.describeApp(engine.appId)
+            if (app.archived) throw PlatformException("failed_precondition", "APP_ARCHIVED", "This App is archived.")
             if (app.runtime != "native") {
                 throw PlatformException("failed_precondition", "APP_NOT_NATIVE", "This App has a web frontend.")
             }
-            val trust = loadTrust(client, instanceDirectory)
-            val packages = File(cacheRoot, "packages/${engine.appId}")
-            var file = app.packageBuild?.let { File(packages, "$it.nshpkg") }
-            var deploymentId = app.deploymentId ?: ""
-            if (file == null || !file.exists()) {
-                val target = File(packages, "download.nshpkg")
-                val downloaded = client.downloadPackage(engine.appId, target, Sha256Hasher())
-                val named = File(packages, "${downloaded.build}.nshpkg")
-                named.delete()
-                check(target.renameTo(named)) { "Could not keep the package." }
-                // Only the live build is kept.
-                packages.listFiles()?.filter { it != named }?.forEach { it.delete() }
-                file = named
-                deploymentId = downloaded.deploymentId
-            }
-            val pkg: NshPackage =
-                try {
-                    trust.openPackage(file)
-                } catch (error: NshPackage.RefusedException) {
-                    // A cached package the store refuses (revoked, or older than
-                    // one it accepted) is fetched again when the App next opens.
-                    file.delete()
-                    throw PlatformException("failed_precondition", message = error.message ?: "The package was refused.")
+            val lock = synchronized(packageLocks) { packageLocks.getOrPut(engine.appId) { Any() } }
+            val (pkg, deploymentId) =
+                synchronized(lock) {
+                    val packages = File(cacheRoot, "packages/${engine.appId}")
+                    var file = app.packageBuild?.let { File(packages, "$it.nshpkg") }
+                    var deploymentId = app.deploymentId ?: ""
+                    if (file == null || !file.exists()) {
+                        val target = File(packages, "download-${UUID.randomUUID()}.nshpkg")
+                        val downloaded =
+                            try {
+                                client.downloadPackage(engine.appId, target, Sha256Hasher())
+                            } catch (error: Exception) {
+                                target.delete()
+                                throw error
+                            }
+                        val named = File(packages, "${downloaded.build}.nshpkg")
+                        Files.move(target.toPath(), named.toPath(), StandardCopyOption.REPLACE_EXISTING, StandardCopyOption.ATOMIC_MOVE)
+                        // Only the live build is kept.
+                        packages.listFiles()?.filter { it != named }?.forEach { it.delete() }
+                        file = named
+                        deploymentId = downloaded.deploymentId
+                        // The package is the live one now: describe that deployment.
+                        if (deploymentId != app.deploymentId) {
+                            app = client.describeApp(engine.appId)
+                            if (app.deploymentId != deploymentId) {
+                                throw PlatformException("unavailable", message = "The App changed while it opened. Try again.")
+                            }
+                        }
+                    }
+                    val opened =
+                        session.withTrust(client) { trust ->
+                            try {
+                                trust.openPackage(file)
+                            } catch (error: NshPackage.RefusedException) {
+                                // A cached package the store refuses (revoked, or
+                                // older than one it accepted) is fetched again when
+                                // the App next opens.
+                                file.delete()
+                                throw PlatformException("failed_precondition", message = error.message ?: "The package was refused.")
+                            }
+                        }
+                    opened to deploymentId
                 }
             val scope = AppScope.of(engine.appId, deploymentId, app.rpcMethods, app.hasData)!!
             val build = pkg.build.toInt()
@@ -317,6 +407,8 @@ object AppEngineManager {
                     engine.view.runPackage(pkg)
                     engine.moveTo(AppEngineState.Running(build))
                 } catch (error: Exception) {
+                    // Set up but never run: the package is still ours to close.
+                    pkg.close()
                     engine.moveTo(AppEngineState.Failed("unavailable", error.message ?: error.toString()))
                 }
             }
@@ -339,7 +431,8 @@ object AppEngineManager {
         }
         val bridge = engine.bridge
         for (name in HostCalls.names) {
-            view.handle(name) { data, reply -> network.execute { reply.resolve(bridge.call(name, data)) } }
+            val pool = if (name == "hatch.data.events") polls else calls
+            view.handle(name) { data, reply -> pool.execute { reply.resolve(bridge.call(name, data)) } }
         }
     }
 
@@ -388,10 +481,11 @@ object AppEngineManager {
 
     /** Stops and starts `appId` again at its current route. */
     fun reload(appId: String) {
-        val engine = engines[appId] ?: return
-        val listener = engine.listener
+        val engine = engines[appId]
         val container = containers[appId]
-        val context = engine.view.context
+        // A stopped App whose page stayed open starts again in that page.
+        val context = engine?.view?.context ?: container?.context ?: return
+        val listener = engine?.listener ?: listeners[appId]?.get()
         stop(appId)
         open(context, appId, null, listener)
         container?.let { attach(appId, it) }
@@ -416,6 +510,8 @@ object AppEngineManager {
 
     private fun stopEngine(appId: String) {
         val engine = engines.remove(appId) ?: return
+        // Its replacement starts hidden until shown: it is told so then.
+        lastVisible = lastVisible - appId
         engine.moveTo(AppEngineState.Failed("stopped", "The App was stopped."))
         engine.listener = null
         // Off the current dispatch: the view may be inside a detaching container.
@@ -447,14 +543,15 @@ object AppEngineManager {
 
     /** A newer deployment went live: running Apps keep their code and are told. */
     private fun refreshDeployments(only: String?) {
-        val client = client() ?: return
         for (engine in engines.values.filter { only == null || it.appId == only }) {
             val build = engine.build ?: continue
-            network.execute {
-                val live = runCatching { client.describeApp(engine.appId).packageBuild }.getOrNull()
+            calls.execute {
+                val live = runCatching { engine.session.client().describeApp(engine.appId).packageBuild }.getOrNull()
                 if (live != null && live != build) {
                     main.post {
                         if (engines[engine.appId] !== engine) return@post
+                        // A failed engine keeps its failure: reloading runs the new build anyway.
+                        if (engine.state is AppEngineState.Failed) return@post
                         engine.view.send(HostEvents.UPDATE, emptyMap<String, Any>())
                         engine.moveTo(AppEngineState.UpdateAvailable(live))
                     }
@@ -468,11 +565,16 @@ object AppEngineManager {
 
     /** The bridge's view of the manager for one App; calls arrive off the main thread. */
     private class EngineShell(val appId: String) : BridgeShell {
+        /** The engine this shell serves; calls queued for an engine that was replaced are dropped. */
+        @Volatile var engine: Engine? = null
+
+        private fun current(): Engine? = engine?.takeIf { engines[appId] === it }
+
         override fun themeJson(): String? = currentTheme
 
         override fun setTitle(title: String?) {
             main.post {
-                val engine = engines[appId] ?: return@post
+                val engine = current() ?: return@post
                 engine.title = title
                 engine.listener?.engineTitleChanged(title)
             }
@@ -480,8 +582,9 @@ object AppEngineManager {
 
         override fun setRoute(route: String) {
             main.post {
+                val engine = current() ?: return@post
                 ledger().setRoute(route, appId)
-                engines[appId]?.listener?.engineRouteChanged(route)
+                engine.listener?.engineRouteChanged(route)
             }
         }
 
@@ -496,7 +599,7 @@ object AppEngineManager {
         }
 
         override fun deploymentStale() {
-            main.post { refreshDeployments(appId) }
+            main.post { if (current() != null) refreshDeployments(appId) }
         }
     }
 }

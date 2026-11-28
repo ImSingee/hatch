@@ -167,3 +167,64 @@ final class RunLedgerTests: XCTestCase {
         XCTAssertEqual(ledger.stopWaiting(now: start + 115).stopped, ["a"])
     }
 }
+
+
+/// Takes only a newer, validly signed list, as NSH does.
+final class FakeTrustStore: TrustStore {
+    struct Refused: Error {}
+    var sequence: Int
+    var roots: [String] = []
+
+    init(sequence: Int = 0) { self.sequence = sequence }
+
+    func addRoot(_ publicKey: String) throws { roots.append(publicKey) }
+
+    func updateRevocations(_ json: String) throws {
+        let parts = json.split(separator: ":")
+        guard parts[0] == "signed", let number = Int(parts[1]), number > sequence else { throw Refused() }
+        sequence = number
+    }
+}
+
+final class TrustRefreshTests: XCTestCase {
+    private func material(_ sequence: Int, _ list: String? = nil) -> RuntimeTrust {
+        RuntimeTrust(
+            initialized: true, roots: ["root"], revocations: list ?? "signed:\(sequence)", revocationSequence: sequence)
+    }
+
+    private func marker() -> URL {
+        FileManager.default.temporaryDirectory.appendingPathComponent("trust-\(UUID().uuidString)/sequence")
+    }
+
+    func testAListTheStoreAlreadyHasIsNotAFailure() throws {
+        let marker = marker()
+        try FileManager.default.createDirectory(at: marker.deletingLastPathComponent(), withIntermediateDirectories: true)
+        // The store took list 8 but the marker still says 7 (its write failed).
+        try "7".write(to: marker, atomically: true, encoding: .utf8)
+        let store = FakeTrustStore(sequence: 8)
+        try TrustRefresh(marker: marker).refresh(store, material: material(8)) { FakeTrustStore() }
+        XCTAssertEqual(try String(contentsOf: marker, encoding: .utf8), "8")
+        // Newer lists still apply.
+        try TrustRefresh(marker: marker).refresh(store, material: material(9)) { FakeTrustStore() }
+        XCTAssertEqual(store.sequence, 9)
+    }
+
+    func testAnInvalidNewerListStopsEverything() throws {
+        let marker = marker()
+        try FileManager.default.createDirectory(at: marker.deletingLastPathComponent(), withIntermediateDirectories: true)
+        try "7".write(to: marker, atomically: true, encoding: .utf8)
+        XCTAssertThrowsError(
+            try TrustRefresh(marker: marker).refresh(FakeTrustStore(sequence: 7), material: material(8, "forged:8")) {
+                FakeTrustStore()
+            })
+        XCTAssertEqual(try String(contentsOf: marker, encoding: .utf8), "7")
+    }
+
+    func testRootsAreAddedOncePerStore() throws {
+        let refresh = TrustRefresh(marker: marker())
+        let store = FakeTrustStore()
+        try refresh.refresh(store, material: material(1)) { FakeTrustStore() }
+        try refresh.refresh(store, material: material(1)) { FakeTrustStore() }
+        XCTAssertEqual(store.roots, ["root"])
+    }
+}

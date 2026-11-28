@@ -17,7 +17,8 @@ async function attempt(run: () => Promise<unknown>): Promise<string> {
 
 async function probe() {
   const results = {
-    fetch: await attempt(() => fetch('https://example.com/')),
+    // A local port nothing listens on: the grant decides, never the network.
+    fetch: await attempt(() => fetch('http://127.0.0.1:9/')),
     clipboard: await attempt(() => Clipboard.writeText('grant-probe')),
     openUrl: await attempt(() => openUrl('hatch-grant-probe://x')),
     host: await attempt(() => host.call('probe.reach', {})),

@@ -9,13 +9,24 @@ import { NATIVE_HOST_CALLS } from './nsh-config';
 
 const native = new URL('../../../../mobile/native/', import.meta.url);
 
-/** The quoted `hatch.*` names from `start` to the first `end` after it. */
+/**
+ * Every item of the list from `start` to the first `end` after it, which
+ * must all be plain string literals: anything else would go unnoticed.
+ */
 function namesIn(file: string, start: string, end: string): string[] {
   const source = readFileSync(new URL(file, native), 'utf8');
   const from = source.indexOf(start);
   expect(from, `${file} lists the host calls`).toBeGreaterThan(-1);
-  const list = source.slice(from, source.indexOf(end, from + start.length));
-  return [...list.matchAll(/"(hatch\.[\w.]+)"/g)].map((match) => match[1]);
+  const list = source.slice(
+    from + start.length,
+    source.indexOf(end, from + start.length),
+  );
+  const literal = /"([^"\\]*)"/g;
+  expect(
+    list.replace(literal, '').replace(/[\s,]/g, ''),
+    `${file} lists only string literals`,
+  ).toBe('');
+  return [...list.matchAll(literal)].map((match) => match[1]);
 }
 
 describe('phone runtime host calls', () => {

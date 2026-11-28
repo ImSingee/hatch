@@ -96,7 +96,10 @@ class HatchAppViewModule : Module() {
                 }
         }
 
-        AsyncFunction("configure") { origin: String?, token: String? -> AppEngineManager.configure(origin, token) }.runOnQueue(Queues.MAIN)
+        AsyncFunction("configure") { origin: String?, token: String? ->
+            val context = appContext.reactContext ?: throw IllegalStateException("No React context.")
+            AppEngineManager.configure(context, origin, token)
+        }.runOnQueue(Queues.MAIN)
         AsyncFunction("setBackgroundMinutes") { minutes: Int -> AppEngineManager.setBackgroundMinutes(minutes) }
             .runOnQueue(Queues.MAIN)
         AsyncFunction("setTheme") { json: String? -> AppEngineManager.setTheme(json) }
