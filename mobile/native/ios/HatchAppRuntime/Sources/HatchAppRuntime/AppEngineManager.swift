@@ -64,9 +64,16 @@ final class EngineSession {
         }
     }
 
-    init(origin: URL, token: String?, directory: URL) {
+    /// The signed-in account, whose Apps keep their storage in `accountDirectory`.
+    let account: String
+    let accountDirectory: URL
+
+    init(origin: URL, token: String?, directory: URL, account: String) {
         self.origin = origin
         self.directory = directory
+        self.account = account
+        let key = SHA256.hash(data: Data(account.utf8)).map { String(format: "%02x", $0) }.joined()
+        accountDirectory = AppStorage.accountDirectory(directory, accountKey: key)
         tokenBox = TokenBox(token)
         trustDirectory = TrustDirectories.of(directory)
     }
@@ -222,8 +229,8 @@ public final class AppEngineManager {
 
     /// The signed-in instance and its session credential. Another instance,
     /// or none, stops every App.
-    public func configure(origin: URL?, token: String?) {
-        if let session, session.origin == origin, token != nil {
+    public func configure(origin: URL?, token: String?, account: String?) {
+        if let session, session.origin == origin, session.account == account, token != nil {
             // The same instance with a renewed credential: its work goes on.
             session.token = token
             return
@@ -234,9 +241,8 @@ public final class AppEngineManager {
         ledger.reset()
         session?.retire()
         session = nil
-        // Storage a sign-out could not delete yet is never handed to the next session.
-        if let origin, let token, AppStorage.ready(Self.directory(of: origin)) {
-            session = EngineSession(origin: origin, token: token, directory: Self.directory(of: origin))
+        if let origin, let token, let account {
+            session = EngineSession(origin: origin, token: token, directory: Self.directory(of: origin), account: account)
         }
     }
 
@@ -245,9 +251,10 @@ public final class AppEngineManager {
             .appendingPathComponent("hatch-apps/\(InstanceKey.of(origin))", isDirectory: true)
     }
 
-    /// Deletes what Apps saved on this phone for `origin` (their storage),
-    /// when its account signs out: the next account must not find it. The
-    /// instance's engines stop first (`configure`).
+    /// Deletes what Apps saved on this phone for `origin` when its account
+    /// signs out. Each account has its own storage, so another account never
+    /// finds it even if this fails. The instance's engines stop first
+    /// (`configure`).
     public func forgetStorage(origin: URL) throws {
         guard session?.origin != origin else { return }
         guard AppStorage.forget(Self.directory(of: origin)) else {
@@ -301,7 +308,7 @@ public final class AppEngineManager {
         engines[appId] = engine
         let cacheRoot = cacheRoot(session.origin)
         engine.task = Task { [weak self] in
-            await self?.load(engine, route: start, instanceDirectory: session.directory, cacheRoot: cacheRoot)
+            await self?.load(engine, route: start, accountDirectory: session.accountDirectory, cacheRoot: cacheRoot)
         }
         updateVisibility()
         return engine.state
@@ -326,7 +333,7 @@ public final class AppEngineManager {
         }
     }
 
-    private func load(_ engine: AppEngine, route: String, instanceDirectory: URL, cacheRoot: URL) async {
+    private func load(_ engine: AppEngine, route: String, accountDirectory: URL, cacheRoot: URL) async {
         let client = engine.session.client(transport)
         do {
             var app = try await client.describeApp(engine.appId)
@@ -394,7 +401,7 @@ public final class AppEngineManager {
                 appId: engine.appId, deploymentId: deploymentId, rpcMethods: app.rpcMethods, hasData: app.hasData)!
             let setup = EngineSetup(
                 platform: "ios", route: route, packageBuild: build, appId: engine.appId,
-                instanceDirectory: instanceDirectory, cacheRoot: cacheRoot)
+                accountDirectory: accountDirectory, cacheRoot: cacheRoot)
             try apply(setup, to: engine)
             engine.build = build
             engine.view.run(package)

@@ -920,6 +920,17 @@ export class HatchApiClient {
     ).attachment;
   }
   /** Sign a fresh WebView in with this session. It names no App or Dashboard. */
+  /** The signed-in account's id; null for a credential that is not a user's session. */
+  async accountId(signal?: AbortSignal): Promise<string | null> {
+    const status = await this.rpcRequest(
+      (signal) => this.authRpc.getStatus({}, { signal }),
+      signal,
+    );
+    return status.credential.case === 'session'
+      ? (status.credential.value.user?.id ?? null)
+      : null;
+  }
+
   async createHandoff(signal?: AbortSignal): Promise<SessionHandoff> {
     const result = await this.rpcRequest(
       (signal) => this.authRpc.createHandoff({}, { signal }),

@@ -103,9 +103,9 @@ class HatchAppViewModule : Module() {
                 }
         }
 
-        AsyncFunction("configure") { origin: String?, token: String? ->
+        AsyncFunction("configure") { origin: String?, token: String?, account: String? ->
             val context = appContext.reactContext ?: throw IllegalStateException("No React context.")
-            AppEngineManager.configure(context, origin, token)
+            AppEngineManager.configure(context, origin, token, account)
         }.runOnQueue(Queues.MAIN)
         AsyncFunction("forgetStorage") { origin: String ->
             val context = appContext.reactContext ?: throw IllegalStateException("No React context.")

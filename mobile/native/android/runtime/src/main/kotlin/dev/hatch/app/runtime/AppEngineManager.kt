@@ -136,7 +136,14 @@ object AppEngineManager {
      * another session's: a session that ends answers no more credentials, and
      * its trust store closes once the last verification using it is done.
      */
-    private class Session(val origin: String, @Volatile var token: String?, val directory: File) {
+    private class Session(
+        val origin: String,
+        @Volatile var token: String?,
+        val directory: File,
+        /** The signed-in account, whose Apps keep their storage in `accountDirectory`. */
+        val account: String,
+        val accountDirectory: File,
+    ) {
         @Volatile var active = true
             private set
 
@@ -291,10 +298,10 @@ object AppEngineManager {
     private fun cacheRoot(context: Context, origin: String): File = File(context.cacheDir, "hatch-apps/${InstanceKey.of(origin)}")
 
     /** The signed-in instance and its session credential. Another instance, or none, stops every App. */
-    fun configure(context: Context, origin: String?, token: String?) {
+    fun configure(context: Context, origin: String?, token: String?, account: String?) {
         val next = origin?.trimEnd('/')
         val current = session
-        if (current != null && current.origin == next && token != null) {
+        if (current != null && current.origin == next && current.account == account && token != null) {
             // The same instance with a renewed credential: its work goes on.
             current.token = token
             return
@@ -305,18 +312,19 @@ object AppEngineManager {
         ledger().reset()
         current?.retire()
         session =
-            if (next != null && token != null) {
-                // Storage a sign-out could not delete yet is never handed to the next session.
-                instanceDirectory(context, next).takeIf { AppStorage.ready(it) }?.let { Session(next, token, it) }
+            if (next != null && token != null && account != null) {
+                val directory = instanceDirectory(context, next)
+                Session(next, token, directory, account, AppStorage.accountDirectory(directory, AppStorage.accountKey(account)))
             } else {
                 null
             }
     }
 
     /**
-     * Deletes what Apps saved on this phone for `origin` (their storage),
-     * when its account signs out: the next account must not find it. The
-     * instance's engines stop first (`configure`).
+     * Deletes what Apps saved on this phone for `origin` when its account
+     * signs out. Each account has its own storage, so another account never
+     * finds it even if this fails. The instance's engines stop first
+     * (`configure`).
      */
     fun forgetStorage(context: Context, origin: String) {
         val key = origin.trimEnd('/')
@@ -378,12 +386,12 @@ object AppEngineManager {
         engine.listener = listener
         engines[appId] = engine
         val cacheRoot = cacheRoot(context, session.origin)
-        loads.execute { load(engine, start, session.directory, cacheRoot) }
+        loads.execute { load(engine, start, session.accountDirectory, cacheRoot) }
         updateVisibility()
         return engine.state
     }
 
-    private fun load(engine: Engine, route: String, instanceDirectory: File, cacheRoot: File) {
+    private fun load(engine: Engine, route: String, accountDirectory: File, cacheRoot: File) {
         try {
             val session = engine.session
             val client = session.client()
@@ -444,7 +452,7 @@ object AppEngineManager {
                 }
                 try {
                     engine.bridge.scope = scope
-                    val setup = EngineSetup.of("android", route, build, engine.appId, instanceDirectory, cacheRoot)
+                    val setup = EngineSetup.of("android", route, build, engine.appId, accountDirectory, cacheRoot)
                     install(engine, setup)
                     engine.build = build
                     engine.view.runPackage(pkg)

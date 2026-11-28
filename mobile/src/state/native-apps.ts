@@ -36,13 +36,17 @@ export function useNativeAppRuntime() {
     queryKey: [origin, 'native-app-runtime', epoch],
     queryFn: async ({ signal }) => {
       const token = await vault.get(origin!);
+      // Apps keep their storage per account: another account on this
+      // instance never opens what this one saved.
+      const account = await api!.accountId(signal);
       // Signing out or switching instances cancels this query: a credential
       // read for the session that ended configures nothing.
       if (signal.aborted) throw new Error('The session changed.');
-      await appRuntime.configure(origin, token);
+      if (!account) throw new Error('This sign-in has no account.');
+      await appRuntime.configure(origin, token, account);
       return true;
     },
-    enabled: Boolean(origin && appRuntime.available),
+    enabled: Boolean(api && origin && appRuntime.available),
     staleTime: Infinity,
     gcTime: 0,
     retry: 1,
