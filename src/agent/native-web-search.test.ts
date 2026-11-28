@@ -169,6 +169,47 @@ describe('provider-native web search', () => {
     ]);
   });
 
+  it('omits oversized source and page-open URLs without rewriting usable addresses', () => {
+    const collector = createNativeWebSearchCollector('openai-responses', {
+      onSearchStart: vi.fn<(search: NativeWebSearch) => void>(),
+      onSearchEnd: vi.fn<(search: NativeWebSearch) => void>(),
+    });
+    const prefix = 'https://example.test/?token=';
+    const atLimit = prefix + 'a'.repeat(2048 - prefix.length);
+    const oversized = `${atLimit}&required=1`;
+    const actions = [
+      {
+        type: 'search',
+        sources: [{ url: oversized }, { url: atLimit }],
+      },
+      { type: 'open_page', url: oversized },
+      { type: 'open_page', url: atLimit },
+    ];
+    actions.forEach((action, output_index) => {
+      collector.observe({
+        type: 'response.output_item.done',
+        output_index,
+        item: {
+          type: 'web_search_call',
+          id: `ws_${output_index}`,
+          status: 'completed',
+          action,
+        },
+      });
+    });
+    const { searches } = collector.finish();
+    expect(searches).toMatchObject([
+      { sources: [{ url: atLimit }] },
+      { name: 'web_fetch', args: {}, sources: [] },
+      {
+        name: 'web_fetch',
+        args: { url: atLimit },
+        sources: [{ url: atLimit }],
+      },
+    ]);
+    expect(searches[1]?.args).not.toHaveProperty('url');
+  });
+
   it('collects OpenAI searches and page opens, including the neighboring replay id', () => {
     const onSearchStart = vi.fn<(search: NativeWebSearch) => void>();
     const onSearchEnd = vi.fn<(search: NativeWebSearch) => void>();

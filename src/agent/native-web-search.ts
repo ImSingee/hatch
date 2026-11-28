@@ -55,6 +55,12 @@ function boundedText(value: unknown, max: number): string | undefined {
   return last >= 0xd800 && last <= 0xdbff ? text.slice(0, -1) : text;
 }
 
+function boundedUrl(value: unknown): string | undefined {
+  return typeof value === 'string' && value.length > 0 && value.length <= 2048
+    ? value
+    : undefined;
+}
+
 function parseInput(value: string): RecordValue | undefined {
   try {
     return record(JSON.parse(value));
@@ -68,7 +74,7 @@ function sources(value: unknown): NativeWebSearch['sources'] {
     .slice(0, 10)
     .flatMap((source) => {
       const entry = record(source);
-      const url = boundedText(entry?.url, 2048);
+      const url = boundedUrl(entry?.url);
       const title = boundedText(entry?.title, 240);
       return url ? [{ url, ...(title ? { title } : {}) }] : [];
     });
@@ -318,7 +324,7 @@ export function createNativeWebSearchCollector(
       action?.query ?? list(action?.queries)[0] ?? action?.pattern,
       2000,
     );
-    const url = boundedText(action?.url, 2048);
+    const url = boundedUrl(action?.url);
     if (action?.type === 'open_page') search.name = 'web_fetch';
     if (query || url) {
       search.args = { ...(query ? { query } : {}), ...(url ? { url } : {}) };
