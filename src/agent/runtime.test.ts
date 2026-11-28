@@ -137,17 +137,21 @@ async function runWithResponses(
 
 describe('runAgentTurn terminal outcomes', () => {
   it.each([
-    [true, 'pause_turn'],
-    [true, 'tool_use'],
-    [undefined, undefined],
+    [true, 'pause_turn', false],
+    [true, 'tool_use', false],
+    [true, 'tool_use', true],
+    [undefined, undefined, false],
   ] as const)(
-    'uses the right web tools and persists hosted search steps (native: %s, stop: %s)',
-    async (enabled, stop) => {
+    'uses the right web tools and persists hosted search steps (native: %s, stop: %s, compacts: %s)',
+    async (enabled, stop, compacts) => {
       const models = createModels();
       const model = {
         ...fauxProvider({ provider: 'native-test' }).getModel(),
         api: 'anthropic-messages' as const,
       };
+      const compact = vi
+        .spyOn(models, 'completeSimple')
+        .mockResolvedValue(fauxAssistantMessage('Compacted research'));
       const startBlock = (index: number, content_block: unknown) => ({
         type: 'content_block_start',
         index,
@@ -178,11 +182,15 @@ describe('runAgentTurn terminal outcomes', () => {
             );
             const startingSearch = enabled && requests.length === 1;
             const receivingSearch = enabled && requests.length === 2;
+            const forcesCompaction = compacts && receivingSearch;
             const clientCall = {
               type: 'tool_use',
               name: 'write_file',
               id: requests.length === 1 ? 'toolu_write' : 'toolu_write_after',
-              input: { path: 'search.txt', content: 'Searching' },
+              input: {
+                path: 'search.txt',
+                content: forcesCompaction ? 'x'.repeat(84_000) : 'Searching',
+              },
             };
             const usesClientTool =
               stop === 'tool_use' && (startingSearch || receivingSearch);
@@ -254,11 +262,11 @@ describe('runAgentTurn terminal outcomes', () => {
                 ? { rawStopReason: stop }
                 : {}),
               usage: {
-                input: 0,
+                input: forcesCompaction ? model.contextWindow : 0,
                 output: 0,
                 cacheRead: 0,
                 cacheWrite: 0,
-                totalTokens: 0,
+                totalTokens: forcesCompaction ? model.contextWindow : 0,
                 cost: {
                   input: 0,
                   output: 0,
@@ -288,7 +296,7 @@ describe('runAgentTurn terminal outcomes', () => {
       const result = await runAgentTurn({
         appUrl: 'https://hatch.example.test',
         priorMessages: [],
-        sessionId: `native-test-${enabled}-${stop}`,
+        sessionId: `native-test-${enabled}-${stop}-${compacts}`,
         userText: 'Look up Hatch',
         models,
         picked,
@@ -297,6 +305,7 @@ describe('runAgentTurn terminal outcomes', () => {
         emit: (event) => events.push(event),
       });
       expect(result.error).toBeUndefined();
+      expect(compact).toHaveBeenCalledTimes(compacts ? 1 : 0);
       expect(requests[0]).toMatchObject({
         tools: expect.arrayContaining([
           expect.objectContaining({ name: 'web_fetch', type: 'function' }),
@@ -370,11 +379,24 @@ describe('runAgentTurn terminal outcomes', () => {
         ],
       };
       expect(requests.slice(1)).toMatchObject(
-        stop === 'tool_use'
-          ? [replayed, replayedResult]
-          : enabled
-            ? [replayed]
-            : [],
+        compacts
+          ? [
+              replayed,
+              {
+                messages: [
+                  {
+                    role: 'assistant',
+                    content: [{ type: 'tool_use', id: 'toolu_write_after' }],
+                  },
+                ],
+                clientResults: [replayedResult.clientResults[1]],
+              },
+            ]
+          : stop === 'tool_use'
+            ? [replayed, replayedResult]
+            : enabled
+              ? [replayed]
+              : [],
       );
       const nativeEvents = [
         { type: 'tool_start', name: 'web_search', args: { query: 'Hatch' } },
@@ -424,6 +446,7 @@ describe('runAgentTurn terminal outcomes', () => {
       expect(result.messages).toMatchObject([
         { role: 'user' },
         ...pausedMessages,
+        ...(compacts ? [{ role: 'compactionSummary', firstKeptIndex: 3 }] : []),
         {
           role: 'assistant',
           content: [{ type: 'text', text: 'Search complete' }],

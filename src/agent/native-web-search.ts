@@ -379,10 +379,21 @@ function prepareAnthropicReplay(
   replies: WeakMap<AssistantMessage, RecordValue[]>,
 ) {
   const replacements = new Map<string, RecordValue[]>();
+  const searchCalls = new Set<unknown>();
   const prepared = messages.map((message) => {
     if (message.role !== 'assistant') return message;
-    const content = replies.get(message);
-    if (!content) return message;
+    const reply = replies.get(message);
+    if (!reply) return message;
+    // Compaction can keep a deferred result after removing its call.
+    const content = reply.filter((block) => {
+      if (block.type === 'server_tool_use' && block.name === 'web_search')
+        searchCalls.add(block.id);
+      return (
+        block.type !== 'web_search_tool_result' ||
+        searchCalls.has(block.tool_use_id)
+      );
+    });
+    if (!content.length) return message;
     // A reply made entirely of provider-side blocks has no content in pi.
     // Give pi a placeholder to locate that exact reply after serialization.
     const marker = randomUUID();
