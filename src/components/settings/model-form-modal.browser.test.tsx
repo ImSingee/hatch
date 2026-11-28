@@ -74,6 +74,25 @@ const provider = {
   models: [model],
 } as unknown as ProviderWithModels;
 
+test('explains that OpenAI Responses still uses Tavily at Minimal thinking effort', async () => {
+  const screen = await render(
+    <QueryClientProvider client={new QueryClient()}>
+      <MantineProvider>
+        <ModelFormModal
+          opened
+          onClose={vi.fn<() => void>()}
+          provider={{ ...provider, apiType: 'openai-responses' }}
+          model={model}
+        />
+      </MantineProvider>
+    </QueryClientProvider>,
+  );
+
+  await expect
+    .element(screen.getByRole('combobox', { name: 'Built-in web search' }))
+    .toHaveAccessibleDescription(/Minimal thinking effort.*uses Tavily/);
+});
+
 test('blank fields describe the catalog entry chosen in the form', async () => {
   const screen = await render(
     <QueryClientProvider client={new QueryClient()}>

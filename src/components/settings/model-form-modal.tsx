@@ -353,7 +353,11 @@ export function ModelFormModal({
               {nativeWebSearchSupported && (
                 <Select
                   label={t('providers.model.nativeWebSearch')}
-                  description={t('providers.model.nativeWebSearchDescription')}
+                  description={t(
+                    provider.apiType === 'openai-responses'
+                      ? 'providers.model.nativeWebSearchOpenAiDescription'
+                      : 'providers.model.nativeWebSearchDescription',
+                  )}
                   allowDeselect={false}
                   data={[
                     {

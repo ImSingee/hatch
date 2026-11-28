@@ -2104,6 +2104,7 @@ export type TranslationResource = {
   'providers.model.reasoningFieldDescription': 'Reasoning models offer thinking levels in the model picker';
   'providers.model.nativeWebSearch': 'Built-in web search';
   'providers.model.nativeWebSearchDescription': 'Use the model provider’s web search instead of Tavily.';
+  'providers.model.nativeWebSearchOpenAiDescription': 'Use the model provider’s web search. At Minimal thinking effort, search still uses Tavily.';
   'providers.model.followCatalogOn': 'Follow catalog (on)';
   'providers.model.followCatalogOff': 'Follow catalog (off)';
   'providers.model.on': 'On';

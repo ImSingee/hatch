@@ -2102,6 +2102,7 @@
   "providers.model.reasoningFieldDescription": "推理模型可在模型选择器中选择思考强度",
   "providers.model.nativeWebSearch": "内置联网搜索",
   "providers.model.nativeWebSearchDescription": "使用模型供应商的联网搜索代替 Tavily。",
+  "providers.model.nativeWebSearchOpenAiDescription": "使用模型供应商的联网搜索。思考强度为「极低」时，仍使用 Tavily 搜索。",
   "providers.model.followCatalogOn": "跟随目录（开启）",
   "providers.model.followCatalogOff": "跟随目录（关闭）",
   "providers.model.on": "开启",
