@@ -13,6 +13,7 @@
  * what is allowed there.
  */
 import {
+  MAX_MARKUP_DEPTH,
   parseMarkup,
   MarkupSyntaxError,
   type MarkupElement,
@@ -151,8 +152,25 @@ export type JsonNode = {
   children?: (string | JsonNode)[] | null;
 };
 
-function fromJson(node: JsonNode, path: string): InputNode {
+/**
+ * Whether the element children of a tree node at `depth` are read. A tree
+ * is read down to the first nodes nested past `MAX_CONTENT_DEPTH`, which the
+ * walk reports, with their text but no elements: however deep it nests,
+ * reading it cannot exhaust the stack.
+ */
+const readsBelow = (depth: number) => depth <= MAX_CONTENT_DEPTH;
+
+function fromJson(node: JsonNode, path: string, depth: number): InputNode {
   const prefix = path ? `${path}.` : '';
+  const children: InputChild[] = [];
+  for (const [index, child] of (node.children ?? []).entries()) {
+    const where = { path: `${prefix}children.${index}` };
+    if (typeof child === 'string') {
+      children.push({ kind: 'text', text: child, where, raw: true });
+    } else if (readsBelow(depth)) {
+      children.push(fromJson(child, where.path, depth + 1));
+    }
+  }
   return {
     kind: 'node',
     type: node.type,
@@ -161,19 +179,48 @@ function fromJson(node: JsonNode, path: string): InputNode {
       value,
       where: { path: `${prefix}props.${name}` },
     })),
-    children: (node.children ?? []).map((child, index) =>
-      typeof child === 'string'
-        ? {
-            kind: 'text' as const,
-            text: child,
-            where: { path: `${prefix}children.${index}` },
-            raw: true,
-          }
-        : fromJson(child, `${prefix}children.${index}`),
-    ),
+    children,
     where: { path: path || 'card' },
     markup: false,
   };
+}
+
+/**
+ * The problem with a JSON tree, its shape not yet checked, that nests more
+ * than `MAX_MARKUP_DEPTH` levels (as deep as the markup parser reads): its
+ * depth, at the first node of that chain past `MAX_CONTENT_DEPTH`, where the
+ * walk would report it. Null for any other tree. It reads at most that deep,
+ * so it can run before shape checks that read a tree recursively; trees it
+ * lets through are shallow enough for them to report every problem.
+ */
+export function cardTreeTooDeep(tree: unknown): ContentIssue | null {
+  const childrenOf = (node: unknown): unknown[] => {
+    const children =
+      typeof node === 'object' && node !== null
+        ? (node as { children?: unknown }).children
+        : undefined;
+    return Array.isArray(children) ? children : [];
+  };
+  const nestsPast = (node: unknown, depth: number): boolean =>
+    depth > MAX_MARKUP_DEPTH ||
+    childrenOf(node).some(
+      (child) =>
+        typeof child === 'object' &&
+        child !== null &&
+        nestsPast(child, depth + 1),
+    );
+  const find = (node: unknown, depth: number, path: string): string | null => {
+    if (depth > MAX_CONTENT_DEPTH) return nestsPast(node, depth) ? path : null;
+    const prefix = path ? `${path}.` : '';
+    for (const [index, child] of childrenOf(node).entries()) {
+      if (typeof child !== 'object' || child === null) continue;
+      const found = find(child, depth + 1, `${prefix}children.${index}`);
+      if (found !== null) return found;
+    }
+    return null;
+  };
+  const path = find(tree, 0, '');
+  return path === null ? null : { message: tooDeepMessage, path };
 }
 
 // -------------------------------------------------------------- prop values
@@ -261,14 +308,16 @@ function coerceProp(spec: PropSpec, value: unknown): Coerced {
     case 'numbers': {
       let numbers: number[];
       if (Array.isArray(value)) {
-        if (
-          !value.every(
-            (item) => typeof item === 'number' && Number.isFinite(item),
-          )
-        ) {
-          return { error: INVALID };
+        // A copy, checked slot by slot: `every` would skip the holes of a
+        // sparse array.
+        numbers = [];
+        for (let index = 0; index < value.length; index++) {
+          const item: unknown = value[index];
+          if (typeof item !== 'number' || !Number.isFinite(item)) {
+            return { error: INVALID };
+          }
+          numbers.push(item);
         }
-        numbers = value as number[];
       } else if (typeof value === 'string') {
         const parts = value.split(',').map((part) => part.trim());
         if (parts.some((part) => !NUMBER_RE.test(part))) {
@@ -356,6 +405,8 @@ type State = {
 
 const tag = (type: string) => `<${type}>`;
 
+const tooDeepMessage = `content is nested more than ${MAX_CONTENT_DEPTH} levels deep`;
+
 function fits(child: ComponentSpec, parent: ComponentSpec): boolean {
   if (Array.isArray(parent.content)) return parent.content.includes(child.name);
   if (Array.isArray(child.placement) || child.placement === 'root') {
@@ -415,6 +466,24 @@ function rawText(input: InputNode): string {
   return dedentRaw(texts.map((child) => child.text).join(''));
 }
 
+/**
+ * Children with each run of adjacent text (split by CDATA in markup, or
+ * given as several strings) joined into one, so whitespace is collapsed
+ * across the run as it would be in one piece of text.
+ */
+function mergeText(children: readonly InputChild[]): InputChild[] {
+  const out: InputChild[] = [];
+  for (const child of children) {
+    const last = out.at(-1);
+    if (child.kind === 'text' && last?.kind === 'text') {
+      out[out.length - 1] = { ...last, text: last.text + child.text };
+    } else {
+      out.push(child);
+    }
+  }
+  return out;
+}
+
 /** Text as inline content, by where it came from. */
 function inlineFromText(text: InputText, markup: boolean): ContentChild[] {
   if (markup) return [text.text.replace(COLLAPSE, ' ')];
@@ -448,7 +517,7 @@ function walk(
     );
     return null;
   }
-  if (parent ? !fits(spec, parent) : spec.placement !== 'root') {
+  if (parent ? !fits(spec, parent) : spec.name !== CARD_ROOT) {
     issue(
       parent
         ? `${tag(spec.name)} cannot go inside ${tag(parent.name)}; ${allowedInside(parent, state.mode)}`
@@ -458,7 +527,7 @@ function walk(
   }
   if (depth > MAX_CONTENT_DEPTH && !state.tooDeep) {
     state.tooDeep = true;
-    issue(`content is nested more than ${MAX_CONTENT_DEPTH} levels deep`);
+    issue(tooDeepMessage);
   }
   state.nodes += 1;
   if (state.nodes > MAX_CONTENT_NODES && !state.tooMany) {
@@ -468,7 +537,7 @@ function walk(
 
   // Props
   const props: Record<string, ContentPropValue> = {};
-  const given = new Set<string>();
+  const invalid = new Set<string>();
   for (const prop of input.props) {
     // A stored tree keeps a Markdown element's source as a prop (handled
     // below); markup writes it as the element's text.
@@ -491,14 +560,16 @@ function walk(
     if (prop.value === null || prop.value === undefined || prop.value === '') {
       continue;
     }
-    // Reported once: an invalid value is not also missing.
-    given.add(prop.name);
     const parsed = coerceProp(propSpec, prop.value);
     if ('error' in parsed) {
+      // Reported once: an invalid value is not also missing.
+      invalid.add(prop.name);
       issue(`${tag(spec.name)} ${prop.name} ${parsed.error}`, prop.where);
       continue;
     }
     const value = parsed.value;
+    // Left out, and so missing if required: text that was only whitespace,
+    // like an empty value, and `false`.
     if (
       value === '' ||
       (value === false && !(propSpec.type === 'bool' && propSpec.keepFalse))
@@ -509,7 +580,11 @@ function walk(
     props[prop.name] = value;
   }
   for (const [name, propSpec] of Object.entries(spec.props)) {
-    if (propSpec.required && !Object.hasOwn(props, name) && !given.has(name)) {
+    if (
+      propSpec.required &&
+      !Object.hasOwn(props, name) &&
+      !invalid.has(name)
+    ) {
       issue(`${tag(spec.name)} needs ${name}`);
     }
   }
@@ -550,7 +625,7 @@ function walk(
     const nested: State = { ...state, mode: 'document' };
     for (const block of compiled) {
       const walked = walk(
-        fromJsonTree(block, input.where),
+        fromJsonTree(block, input.where, depth + 1),
         documentSpec,
         depth + 1,
         nested,
@@ -564,7 +639,8 @@ function walk(
     return node;
   }
 
-  for (const child of input.children) {
+  const inline = content === 'inline' || content === 'flow';
+  for (const child of inline ? mergeText(input.children) : input.children) {
     if (child.kind === 'text') {
       if (content === 'raw') continue; // read whole by rawText below
       if (textOnly) {
@@ -572,7 +648,7 @@ function walk(
         continue;
       }
       const isWhitespace = !/[^ \t\r\n\f]/.test(child.text);
-      if (content === 'inline' || content === 'flow') {
+      if (inline) {
         kids.push(...inlineFromText(child, input.markup));
         continue;
       }
@@ -657,8 +733,23 @@ function walk(
   return node;
 }
 
-/** A tree node already built (Markdown output) as walk input. */
-function fromJsonTree(node: ContentNode, where: Where): InputNode {
+/**
+ * A tree node already built (Markdown output) at `depth` as walk input, read
+ * as far as `fromJson` reads a tree.
+ */
+function fromJsonTree(
+  node: ContentNode,
+  where: Where,
+  depth: number,
+): InputNode {
+  const children: InputChild[] = [];
+  for (const child of node.children ?? []) {
+    if (typeof child === 'string') {
+      children.push({ kind: 'text', text: child, where, raw: true });
+    } else if (readsBelow(depth)) {
+      children.push(fromJsonTree(child, where, depth + 1));
+    }
+  }
   return {
     kind: 'node',
     type: node.type,
@@ -667,11 +758,7 @@ function fromJsonTree(node: ContentNode, where: Where): InputNode {
       value,
       where,
     })),
-    children: (node.children ?? []).map((child) =>
-      typeof child === 'string'
-        ? { kind: 'text' as const, text: child, where, raw: true }
-        : fromJsonTree(child, where),
-    ),
+    children,
     where,
     markup: false,
   };
@@ -693,6 +780,11 @@ function compileInlineForm(
   const fields: ReplyFieldInput[] = [];
   const origins: FieldOrigin[] = [];
   const submits: ContentNode[] = [];
+  const report = (node: ContentNode, message: string) => {
+    if (state.issues.length < MAX_CONTENT_ISSUES) {
+      state.issues.push({ message, ...at(state.origins.get(node)!) });
+    }
+  };
   for (const { node } of walkContent(content)) {
     const text = (child: ContentNode) => inlineText(nodeChildren(child));
     const options = nodeChildren(node).filter(isNode);
@@ -725,10 +817,7 @@ function compileInlineForm(
               : defaults[0],
         });
         if (!multiple && (propNumber(node, 'min') ?? propNumber(node, 'max'))) {
-          state.issues.push({
-            message: `${tag('Choice')} min and max need multiple`,
-            ...at(state.origins.get(node)!),
-          });
+          report(node, `${tag('Choice')} min and max need multiple`);
         }
         origins.push({ node, options });
         break;
@@ -767,11 +856,6 @@ function compileInlineForm(
         break;
     }
   }
-  const report = (node: ContentNode, message: string) => {
-    if (state.issues.length < MAX_CONTENT_ISSUES) {
-      state.issues.push({ message, ...at(state.origins.get(node)!) });
-    }
-  };
   if (submits.length > 1) {
     report(submits[1]!, `a card has at most one ${tag('Submit')}`);
   }
@@ -889,7 +973,7 @@ export function compileCardJsonWith(
   tree: JsonNode,
   options: CompileOptions,
 ): CompiledCard {
-  return finishCard(fromJson(tree, ''), options);
+  return finishCard(fromJson(tree, '', 0), options);
 }
 
 /** Markdown source to its tree; throws `ContentError`. */
@@ -906,12 +990,14 @@ export function compileMarkdownWith(
     throw new ContentError([{ message: 'markdown must not be empty' }]);
   }
   const state = newState('document', options);
+  // The root counts against the element limit, as a card's does.
+  state.nodes = 1;
   const documentSpec = componentSpec(DOCUMENT_ROOT)!;
   const root: ContentNode = { type: DOCUMENT_ROOT };
   const children: ContentNode[] = [];
   for (const [index, block] of options.markdownToBlocks(source).entries()) {
     const walked = walk(
-      fromJsonTree(block, { path: `markdown block ${index + 1}` }),
+      fromJsonTree(block, { path: `markdown block ${index + 1}` }, 1),
       documentSpec,
       1,
       state,

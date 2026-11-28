@@ -45,6 +45,9 @@ export class MarkupSyntaxError extends Error {
   }
 }
 
+/** Elements nested below the root that the parser reads before it fails. */
+export const MAX_MARKUP_DEPTH = 64;
+
 const NAME_START = /[A-Za-z_]/;
 const NAME_CHAR = /[A-Za-z0-9_.-]/;
 const WHITESPACE = /[ \t\r\n]/;
@@ -182,7 +185,7 @@ export function parseMarkup(source: string): MarkupElement {
 
   const readElement = (depth: number): MarkupElement => {
     const at = here();
-    if (depth > 64) fail('elements are nested too deeply', at);
+    if (depth > MAX_MARKUP_DEPTH) fail('elements are nested too deeply', at);
     advance(); // <
     const name = readName('an element name');
     const attributes: MarkupAttribute[] = [];
