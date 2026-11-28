@@ -392,4 +392,34 @@ final class TrustDirectoryTests: XCTestCase {
         XCTAssertEqual(order, ["first done", "second"])
         XCTAssertEqual(FakeTrustStore.opened(state).sequence, 2)
     }
+
+    func testASessionRetiredWhileVerifyingFinishesBeforeTheNextOneStarts() async throws {
+        let trust = directory()
+        var oldActive = true
+        var order: [String] = []
+        var release: CheckedContinuation<Void, Never>?
+        let old = Task {
+            try await trust.use(material: material(1), active: { oldActive }) { _ in
+                await withCheckedContinuation { release = $0 }
+                order.append("old verified")
+            }
+        }
+        while release == nil { await Task.yield() }
+        // Signed out and in again while the old session was verifying.
+        oldActive = false
+        let next = Task { try await trust.use(material: material(2), active: { true }) { _ in order.append("next") } }
+        for _ in 0..<20 { await Task.yield() }
+        XCTAssertEqual(order, [])
+        release?.resume()
+        try await old.value
+        try await next.value
+        XCTAssertEqual(order, ["old verified", "next"])
+        // The retired session can no longer start any trust work.
+        do {
+            try await trust.use(material: material(2), active: { oldActive }) { _ in order.append("old again") }
+            XCTFail("a retired session must not use the store")
+        } catch {}
+        XCTAssertEqual(opened.count, 1)
+        XCTAssertEqual(FakeTrustStore.opened(state).sequence, 2)
+    }
 }

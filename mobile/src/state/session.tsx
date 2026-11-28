@@ -73,7 +73,13 @@ export function SessionProvider({ children }: PropsWithChildren) {
       // Native Apps hold the session's credential: they stop with it, and what
       // they saved here goes with the account, before anything signs in again.
       await appRuntime.configure(null, null);
-      await appRuntime.forgetStorage(expectedOrigin);
+      try {
+        await appRuntime.forgetStorage(expectedOrigin);
+      } catch {
+        setAuthError(
+          'Some data Apps saved on this phone could not be deleted yet. Apps on this instance stay closed until it is.',
+        );
+      }
       endConversationLifetimes();
       queryClient.clear();
       await SecureStore.deleteItemAsync(ACTIVE_KEY);
