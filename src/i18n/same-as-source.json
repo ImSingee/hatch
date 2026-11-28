@@ -25,6 +25,8 @@
     "backends.column.app",
     "agent.model.withLevel",
     "notifications.format.markdown",
+    "appManage.section.ai",
+    "ops.ai.title",
     "ops.appAccess.kind.rpc",
     "ops.appAccess.kind.webhook"
   ]

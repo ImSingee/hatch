@@ -1,4 +1,7 @@
-/** Read the external docs an App published with its current deployment. */
+/**
+ * Read the external docs an App published with its current deployment, and
+ * the reference generated from its RPC proto.
+ */
 import type { AppDocView } from './client';
 import {
   invalid,
@@ -15,7 +18,8 @@ const DOC_ID_RE = /^[a-z0-9][a-z0-9-]{0,63}$/;
 
 export type DocsCommand =
   | { kind: 'list'; app: string; page: Page }
-  | { kind: 'get'; app: string; docId: string };
+  | { kind: 'get'; app: string; docId: string }
+  | { kind: 'rpc'; app: string };
 
 /** Map argv to one command; rejects anything unusable before any RPC. */
 export function parseDocsCommand(
@@ -48,7 +52,15 @@ export function parseDocsCommand(
       );
     return { command: { kind: 'get', app: positionals[0], docId }, flags };
   }
-  throw invalid('Use hatch app docs list or hatch app docs get.');
+  if (operation === 'rpc') {
+    const { flags, positionals } = parseCommandArgs(args, offset, 3, {});
+    if (positionals.length !== 1 || !positionals[0])
+      throw invalid('Supply exactly one App ID or slug to docs rpc.');
+    return { command: { kind: 'rpc', app: positionals[0] }, flags };
+  }
+  throw invalid(
+    'Use hatch app docs list, hatch app docs get or hatch app docs rpc.',
+  );
 }
 
 /** One line per doc with the id `docs get` needs. */
@@ -85,6 +97,14 @@ export async function runDocs(
       ...(page.nextCursor === null ? [] : [`next cursor: ${page.nextCursor}`]),
     ];
     process.stdout.write(`${lines.join('\n')}\n`);
+    return;
+  }
+  if (command.kind === 'rpc') {
+    const reference = await docs.rpc({ id: command.app });
+    // Text mode prints the Markdown reference so it can be redirected.
+    process.stdout.write(
+      flags.json ? `${JSON.stringify(reference)}\n` : reference.markdown,
+    );
     return;
   }
   const result = await docs.get({ id: command.app, docId: command.docId });

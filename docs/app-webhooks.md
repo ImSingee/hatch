@@ -6,7 +6,8 @@ Management lookup remains Connect RPC at `/api/rpc`; there is no webhook invocat
 RPC or alternate REST endpoint. Backend invocation remains `hatch app invoke backend` using Connect unary JSON; webhook invocation sends raw HTTP bytes.
 An App whose webhook other services call can publish its request contract as
 external docs, which callers read with `hatch app docs list|get` (see the CLI
-README).
+README). Unlike RPC methods (`hatch app docs rpc`), a webhook has no generated
+reference, so these docs are its only description.
 
 ## Authentication and headers
 

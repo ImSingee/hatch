@@ -40,7 +40,7 @@ The capabilities below never had an Agent Tool.
 
 | Capability       | CLI                                                                                                 | Public API / shared behavior                                                                                                                                                                                                                    |
 | ---------------- | --------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| App docs         | app docs list / get                                                                                 | AppService/ListAppDocs, GetAppDoc; current deployment's external docs, webhook/RPC endpoints, raw Markdown                                                                                                                                      |
+| App docs         | app docs list / get / rpc                                                                           | AppService/ListAppDocs, GetAppDoc, GetAppRpcReference; current deployment's external docs, webhook/RPC endpoints, raw Markdown, and the RPC reference generated from its proto (the API section of the manage page)                             |
 | App icon         | app icon get / set / clear                                                                          | AppService/GetAppIcon, SetAppIcon (file bytes or candidate id), ClearAppIcon; validated and re-encoded                                                                                                                                          |
 | Image models     | image-model list / add / update / remove                                                            | ImageService/ListImageModels, CreateImageModel, UpdateImageModel, DeleteImageModel; provider keys never exposed                                                                                                                                 |
 | Providers        | provider list / get / catalog / add / update / remove / test / fetch-models                         | ProviderService, CatalogService/ListCatalogProviders; presets, write-only API keys (`hasApiKey`), test prompt                                                                                                                                   |
@@ -389,6 +389,14 @@ Sessions, API keys and Run JWTs have the same authority, and no operation is
 bound to a device or browser. `app get` also lists the doc index under
 `manifest.docs`. No Agent Tool is added.
 
+`hatch app docs rpc` calls `AppService/GetAppRpcReference`
+(`src/server/apps/rpc-reference.ts`). It covers what the API section of the
+App manage page shows from the deployment manifest: services, methods, their
+proto comments, `deprecated` and `idempotency_level`, the types they use and
+the proto source, plus the same reference as Markdown. It is read-only and
+has the same credential rules as `docs list|get`; an App without an RPC
+service fails with `NOT_FOUND`.
+
 ## Native App packages and runtime trust: CLI only, no Agent Tool
 
 `hatch app package <app> --out <path>` calls `AppService/GetAppPackage` and
@@ -473,6 +481,21 @@ runs and cancel. `run --wait` additionally waits for the result. The App's
 shared webhook secret, which the Web UI shows on the task page, is printed only
 by `rotate-webhook-secret`, which mints a new one (it also replaces the App
 webhook's secret). No Agent Tool is added.
+
+## App AI settings: CLI only, no Agent Tool
+
+`hatch app ai show|set-model|usage|defaults` calls `AppService/GetAppAi`,
+`SetAppAiRoleModel`, `ListAppAiUsage`, `GetAppAiDefaults` and
+`SetAppAiDefaults`, which use the same `src/server/apps/ai/settings.ts`
+service as the AI section of the App manage page and the "Default models for
+Apps" card in Settings → AI Providers. Sessions, API keys and Run JWTs have the same authority, and no
+operation is bound to a device or browser. The CLI covers every Web UI read
+and action: the declared roles with the effective model, picking or clearing
+a role's model, setting or clearing the default chat and image models for
+Apps, this month's totals, and the call history (the CLI pages through all of it with
+`--cursor`; the UI shows the latest calls). The App's own AI calls go through
+the signed App runtime endpoints `/api/app/<id>/ai/chat` and `/ai/image`
+(`@hatch/app/ai`), not the public API. No Agent Tool is added.
 
 ## Known gaps
 

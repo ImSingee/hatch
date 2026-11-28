@@ -83,6 +83,7 @@ import {
   kvUrl,
   taskEnqueueUrl,
   appAccessUrl,
+  aiUrl,
 } from './manifest';
 import {
   type BackendRuntimeSnapshot,
@@ -1208,6 +1209,11 @@ async function spawnBackendProcess(
   const appAccessEnv = signingSecret
     ? backendAppAccessEnv(id, backendArtifact)
     : {};
+  // AI calls run in the platform process with the provider key; the backend
+  // only ever sees this signed endpoint.
+  const aiBaseUrl = appRow.capabilities?.ai
+    ? internalPlatformUrl(aiUrl(id))
+    : null;
   const automaticNetworkDestinations = [
     `127.0.0.1:${port}`,
     ...(appAccessEnv.HATCH_APP_ACCESS_URL
@@ -1222,6 +1228,7 @@ async function spawnBackendProcess(
       ? [networkDestinationFromUrl(notificationsBaseUrl)]
       : []),
     ...(tasksEnqueueUrl ? [networkDestinationFromUrl(tasksEnqueueUrl)] : []),
+    ...(aiBaseUrl ? [networkDestinationFromUrl(aiBaseUrl)] : []),
   ];
 
   // Bundles may read only their fixed asset directory and, when enabled, the
@@ -1271,6 +1278,7 @@ async function spawnBackendProcess(
         : {}),
       ...(tasksEnqueueUrl ? { HATCH_TASKS_URL: tasksEnqueueUrl } : {}),
       ...appAccessEnv,
+      ...(aiBaseUrl ? { HATCH_AI_URL: aiBaseUrl } : {}),
       HATCH_DEPLOYMENT_ID: backendDeploymentId,
       ...extraEnv,
     }),

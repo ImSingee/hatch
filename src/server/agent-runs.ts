@@ -33,7 +33,7 @@ import type {
   JsonObject,
   JsonValue,
 } from '~/db/schema';
-import { effectiveThinkingLevel, resolveModelSpec } from '~server/model-spec';
+import { resolveChatModelConfig } from '~server/model-resolution';
 import type { StopReason } from '@earendil-works/pi-ai';
 import type {
   AgentRunStreamEvent,
@@ -60,7 +60,6 @@ import {
   RUN_LEASE_TTL_MS,
   envEntriesSchema,
   type EnvEntry,
-  type RunModelConfig,
   type SendImage,
 } from '~agent/protocol';
 import {
@@ -825,63 +824,6 @@ export function subscribeToAgentRun(
   };
 }
 
-/** ================== model resolution ================== */
-
-/**
- * Resolve the model for a run into the self-contained config the runner
- * needs (including the provider API key, scoped to just this provider).
- *
- * `thinkingLevel` is a level carried over from earlier (the chat, a failed
- * run, a waiting message); one the model no longer offers falls back to the
- * model default. A level the user just chose is checked first by
- * `assertAgentModelAvailable`, so it is never silently replaced.
- */
-async function resolveRunModelConfig(
-  providerId: string,
-  modelId: string,
-  thinkingLevel: AgentThinkingLevel | null | undefined,
-): Promise<RunModelConfig> {
-  const provider = await db.query.agentProviders.findFirst({
-    where: { id: providerId, enabled: true },
-  });
-  if (!provider) {
-    throw new AppError('The selected Agent model is unavailable.', 409, {
-      code: 'agent.modelUnavailable',
-    });
-  }
-
-  const model = await db.query.agentModels.findFirst({
-    where: { providerId, modelId, kind: 'chat', enabled: true },
-  });
-  if (!model) {
-    throw new AppError('The selected Agent model is unavailable.', 409, {
-      code: 'agent.modelUnavailable',
-    });
-  }
-  const spec = resolveModelSpec(model, provider.apiType);
-
-  return {
-    providerId: provider.id,
-    providerName: provider.name,
-    apiType: provider.apiType,
-    baseUrl: provider.baseUrl,
-    apiKey: provider.apiKey,
-    thinkingLevel: effectiveThinkingLevel(spec, thinkingLevel),
-    model: {
-      id: model.modelId,
-      name: model.name,
-      reasoning: spec.reasoning,
-      // Keep the wire field for existing Runners; it is not configurable.
-      input: ['text', 'image'],
-      contextWindow: spec.contextWindow,
-      maxTokens: spec.maxTokens,
-      thinkingLevelMap: spec.thinkingLevelMap,
-      compat: spec.compat,
-      cost: spec.cost,
-    },
-  };
-}
-
 /** ================== start / dispatch ================== */
 
 /**
@@ -893,7 +835,7 @@ export async function assertAgentModelAvailable(
   modelId: string,
   thinkingLevel?: AgentThinkingLevel | null,
 ): Promise<void> {
-  const config = await resolveRunModelConfig(
+  const config = await resolveChatModelConfig(
     providerId,
     modelId,
     thinkingLevel,
@@ -1068,7 +1010,7 @@ export async function startAgentRun(
       input.thinkingLevel,
     );
   // Unset reuses the chat's level while the chat stays on the same model.
-  const model = await resolveRunModelConfig(
+  const model = await resolveChatModelConfig(
     input.providerId,
     input.modelId,
     input.thinkingLevel ??

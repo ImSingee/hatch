@@ -10,6 +10,7 @@ import {
   type WebhookAuth,
   type BackendRuntime,
   type NotificationsConfig,
+  type AiConfig,
 } from '../../../packages/hatch-manifest/src/app-schema.js';
 import type { JsonObject } from '~/db/schema';
 import {
@@ -68,13 +69,82 @@ export type RpcMethodApi = {
   outputType: string;
   clientStreaming: boolean;
   serverStreaming: boolean;
+  /** Markdown from the method's proto comment. */
+  description?: string;
+  /** `option deprecated = true`. */
+  deprecated?: true;
+  /** `option idempotency_level`; absent when unset. */
+  idempotency?: RpcIdempotency;
 };
+
+/**
+ * `NO_SIDE_EFFECTS` and `IDEMPOTENT` from protobuf's `idempotency_level`
+ * method option: whether a caller may retry the method after a timeout.
+ */
+export type RpcIdempotency = 'no_side_effects' | 'idempotent';
 
 /** A service (and its methods) defined in the app's proto. */
 export type RpcServiceApi = {
   /** Fully-qualified service name, e.g. `app.v1.CounterService`. */
   name: string;
+  /** Markdown from the service's proto comment. */
+  description?: string;
   methods: RpcMethodApi[];
+};
+
+/** One field of a documented message, in protobuf JSON terms. */
+export type ApiField = {
+  /** Proto field name. */
+  name: string;
+  /** Name in the JSON request/response body. */
+  jsonName: string;
+  /** What `type` names: a scalar, an enum or a message. */
+  kind: 'scalar' | 'enum' | 'message';
+  /**
+   * Scalar name (`string`, `int64`, ...) or fully-qualified enum/message
+   * name. For a map field this is the value type.
+   */
+  type: string;
+  /** `optional` is proto3 explicit presence. */
+  label: 'single' | 'optional' | 'repeated' | 'map';
+  /** Scalar key type of a map field. */
+  mapKey?: string;
+  /** Oneof group the field belongs to. */
+  oneof?: string;
+  description?: string;
+  deprecated?: true;
+};
+
+/** A message used by the App's RPC methods. */
+export type ApiMessage = {
+  /** Fully-qualified name. */
+  name: string;
+  description?: string;
+  deprecated?: true;
+  fields: ApiField[];
+};
+
+/** An enum used by the App's RPC methods. */
+export type ApiEnum = {
+  /** Fully-qualified name. */
+  name: string;
+  description?: string;
+  deprecated?: true;
+  values: {
+    name: string;
+    number: number;
+    description?: string;
+    deprecated?: true;
+  }[];
+};
+
+/**
+ * The App messages and enums reachable from its services' methods.
+ * Well-known types (`google.protobuf.*`) are referenced by name only.
+ */
+export type ApiTypes = {
+  messages: ApiMessage[];
+  enums: ApiEnum[];
 };
 
 /** A raw proto source file uploaded to the platform on deploy. */
@@ -92,6 +162,12 @@ export type ProtoFile = {
  */
 export type AppApi = {
   services: RpcServiceApi[];
+  /**
+   * Types the methods use, with their proto comments. Absent on deployments
+   * built before the API reference existed; their comments survive only in
+   * `protoFiles`.
+   */
+  types?: ApiTypes;
   protoFiles: ProtoFile[];
 };
 
@@ -216,6 +292,11 @@ export type NormalizedManifest = {
     destination?: NotificationsConfig['destination'];
   };
   /**
+   * Declared AI model roles plus the base URL the backend calls, when the ai
+   * capability is enabled. Absent on historical deployments.
+   */
+  ai?: { url: string; roles: AiConfig['roles'] };
+  /**
    * The app's declared RPC API, captured from its proto at build time. Absent
    * for apps without an RPC service. Lets the platform (and the manage UI) know
    * exactly which services + methods an app exposes.
@@ -284,6 +365,7 @@ export function projectAppManifestUrls(
           },
         }
       : {}),
+    ...(manifest.ai ? { ai: { ...manifest.ai, url: aiUrl(appId) } } : {}),
     ...(manifest.capabilities?.webhook || manifest.webhook
       ? {
           webhook: {
@@ -316,6 +398,11 @@ export function dataTableUrl(id: string): string {
 /** Per-app notification push endpoint, called by the backend with HMAC. */
 export function notificationsUrl(id: string): string {
   return `${appBasePath(id)}/notifications`;
+}
+
+/** Per-app AI endpoint base, called by the backend with HMAC. */
+export function aiUrl(id: string): string {
+  return `${appBasePath(id)}/ai`;
 }
 
 /** Public inbound webhook URL (token appended at call time as `?secret=`). */
@@ -455,6 +542,24 @@ export function normalizeManifest(src: SourceManifest): NormalizedManifest {
       ...(src.notifications.destination
         ? { destination: src.notifications.destination }
         : {}),
+    };
+  }
+  // AI calls are signed with the backend's signing secret, so roles are
+  // meaningful only when a backend is staged.
+  if (
+    src.capabilities.ai &&
+    src.capabilities.backend &&
+    src.backend &&
+    src.ai
+  ) {
+    out.ai = {
+      url: aiUrl(src.id),
+      roles: src.ai.roles.map((role) => ({
+        name: role.name,
+        kind: role.kind,
+        description: role.description,
+        ...(role.needs?.length ? { needs: role.needs } : {}),
+      })),
     };
   }
   // Tasks run the backend's own RPC methods, so they need a staged backend

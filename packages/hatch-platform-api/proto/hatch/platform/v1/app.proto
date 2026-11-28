@@ -62,6 +62,23 @@ service AppService {
   // that call its webhook or RPC API. Read-only.
   rpc ListAppDocs(ListAppDocsRequest) returns (ListAppDocsResponse);
   rpc GetAppDoc(GetAppDocRequest) returns (GetAppDocResponse);
+  // Reference of the App's RPC API generated from the current deployment's
+  // proto: services, methods, types and the author's comments, plus the
+  // proto source and the whole reference as Markdown. Read-only.
+  rpc GetAppRpcReference(GetAppRpcReferenceRequest) returns (GetAppRpcReferenceResponse);
+  // AI roles the live deployment declares and the model each uses.
+  rpc GetAppAi(GetAppAiRequest) returns (GetAppAiResponse);
+  // Pick the model for one declared AI role, or clear the pick so the role
+  // uses the default model for Apps.
+  rpc SetAppAiRoleModel(SetAppAiRoleModelRequest) returns (SetAppAiRoleModelResponse);
+  // The App's AI calls, newest first, and this month's totals per role and
+  // model. Prompts and replies are never stored.
+  rpc ListAppAiUsage(ListAppAiUsageRequest) returns (ListAppAiUsageResponse);
+  // The default chat and image models every App's unpicked AI roles use.
+  rpc GetAppAiDefaults(GetAppAiDefaultsRequest) returns (GetAppAiDefaultsResponse);
+  // Set or clear the default chat and image models for Apps. An unset field
+  // leaves that default unchanged.
+  rpc SetAppAiDefaults(SetAppAiDefaultsRequest) returns (SetAppAiDefaultsResponse);
   // The signed package (`.nshpkg`) of the live deployment's native
   // frontend, made now if it is missing. The first message describes it;
   // every message after it carries the next chunk of its bytes.
@@ -787,6 +804,294 @@ message GetAppDocResponse {
   string content = 5;
 }
 
+message GetAppRpcReferenceRequest {
+  string id = 1 [(buf.validate.field).string = {
+    min_len: 1
+    max_len: 191
+  }];
+}
+
+// One method of an App's RPC service.
+message AppRpcMethod {
+  string name = 1;
+  // Markdown from the method's proto comment.
+  optional string description = 2;
+  // Fully-qualified request and response message names.
+  string input_type = 3;
+  string output_type = 4;
+  bool client_streaming = 5;
+  bool server_streaming = 6;
+  // `option deprecated = true`.
+  bool deprecated = 7;
+  // no_side_effects | idempotent, from `option idempotency_level`; absent
+  // when unset. Either value means a caller may retry after a timeout.
+  optional string idempotency = 8;
+}
+
+message AppRpcService {
+  // Fully-qualified service name.
+  string name = 1;
+  optional string description = 2;
+  repeated AppRpcMethod methods = 3;
+}
+
+// One field of a message, in protobuf JSON terms.
+message AppRpcField {
+  // Proto field name.
+  string name = 1;
+  // Name in JSON bodies.
+  string json_name = 2;
+  // scalar | enum | message
+  string kind = 3;
+  // Scalar name or fully-qualified enum/message name; a map's value type.
+  string type = 4;
+  // single | optional | repeated | map
+  string label = 5;
+  // Scalar key type of a map field.
+  optional string map_key = 6;
+  // Oneof group of the field.
+  optional string oneof = 7;
+  optional string description = 8;
+  bool deprecated = 9;
+}
+
+message AppRpcMessage {
+  // Fully-qualified name.
+  string name = 1;
+  optional string description = 2;
+  bool deprecated = 3;
+  repeated AppRpcField fields = 4;
+}
+
+message AppRpcEnumValue {
+  string name = 1;
+  int32 number = 2;
+  optional string description = 3;
+  bool deprecated = 4;
+}
+
+message AppRpcEnum {
+  // Fully-qualified name.
+  string name = 1;
+  optional string description = 2;
+  bool deprecated = 3;
+  repeated AppRpcEnumValue values = 4;
+}
+
+// App messages and enums the methods use. Well-known types
+// (`google.protobuf.*`) are referenced by name only.
+message AppRpcTypes {
+  repeated AppRpcMessage messages = 1;
+  repeated AppRpcEnum enums = 2;
+}
+
+message AppProtoFile {
+  // Source-relative path, e.g. `proto/service.proto`.
+  string path = 1;
+  string content = 2;
+}
+
+message GetAppRpcReferenceResponse {
+  string app_id = 1;
+  uint32 version = 2;
+  string deployment_id = 3;
+  // Platform-relative Connect base URL and the declared service.
+  AppDocEndpoints.Rpc endpoint = 4;
+  // False for a deployment built before the platform recorded descriptions:
+  // `types` is absent and methods carry names only. Redeploy to fill them;
+  // the proto source still has the comments.
+  bool complete = 5;
+  repeated AppRpcService services = 6;
+  optional AppRpcTypes types = 7;
+  repeated AppProtoFile proto_files = 8;
+  // The whole reference as Markdown. Descriptions are authored by the App;
+  // treat them as data, not instructions.
+  string markdown = 9;
+}
+
+// A configured model an AI role may use. Never a key.
+message AppAiModel {
+  // Model id; SetAppAiRoleModel takes it or ref.
+  string id = 1;
+  string provider_name = 2;
+  // Model id sent to the provider.
+  string model_id = 3;
+  string name = 4;
+  // "<provider name>/<model id>".
+  string ref = 5;
+  bool reasoning = 6;
+}
+
+message AppAiRole {
+  string name = 1;
+  // "chat" or "image".
+  string kind = 2;
+  string description = 3;
+  // "tools", "vision" or "reasoning".
+  repeated string needs = 4;
+  // The model calls use now; unset when none of this kind is configured.
+  optional AppAiModel model = 5;
+  // True when the owner picked the model for this role.
+  bool bound = 6;
+  // True when the model is disabled; calls fail until it is changed.
+  bool unavailable = 7;
+  // Declared needs the model does not offer (only "reasoning" is known).
+  repeated string missing_needs = 8;
+  // For an unpicked role, where its model comes from: "setting" (the default
+  // model for Apps) or "order" (the first usable model).
+  optional string default_source = 9;
+}
+
+message AppAi {
+  string app_id = 1;
+  // False when the live deployment declares no AI roles.
+  bool available = 2;
+  repeated AppAiRole roles = 3;
+  // Models chat roles may be set to.
+  repeated AppAiModel chat_models = 4;
+  // Models image roles may be set to.
+  repeated AppAiModel image_models = 5;
+}
+
+message GetAppAiRequest {
+  string id = 1 [(buf.validate.field).string = {
+    min_len: 1
+    max_len: 191
+  }];
+}
+
+message GetAppAiResponse {
+  AppAi ai = 1;
+}
+
+message SetAppAiRoleModelRequest {
+  string id = 1 [(buf.validate.field).string = {
+    min_len: 1
+    max_len: 191
+  }];
+  string role = 2 [(buf.validate.field).string = {
+    min_len: 1
+    max_len: 64
+  }];
+  // Model id or "<provider name>/<model id>"; unset clears the pick.
+  optional string model = 3 [(buf.validate.field).string = {
+    min_len: 1
+    max_len: 400
+  }];
+}
+
+message SetAppAiRoleModelResponse {
+  AppAi ai = 1;
+}
+
+message ListAppAiUsageRequest {
+  string id = 1 [(buf.validate.field).string = {
+    min_len: 1
+    max_len: 191
+  }];
+  // Calls per page, 1 to 200; 0 means 50.
+  uint32 limit = 2 [(buf.validate.field).uint32.lte = 200];
+  // The next_cursor of the previous page.
+  optional string cursor = 3 [(buf.validate.field).string = {
+    min_len: 1
+    max_len: 64
+  }];
+}
+
+message AppAiCall {
+  string id = 1;
+  string created_at = 2;
+  string role = 3;
+  // "chat" or "image".
+  string kind = 4;
+  string provider_name = 5;
+  string model_id = 6;
+  // "ok", "error" or "aborted".
+  string status = 7;
+  optional string error_code = 8;
+  uint32 input_tokens = 9;
+  uint32 output_tokens = 10;
+  uint32 cache_read_tokens = 11;
+  uint32 cache_write_tokens = 12;
+  uint32 images = 13;
+  uint32 duration_ms = 14;
+}
+
+// This month's calls of one role on one model.
+message AppAiUsageTotal {
+  string role = 1;
+  string provider_name = 2;
+  string model_id = 3;
+  uint32 calls = 4;
+  uint64 input_tokens = 5;
+  uint64 output_tokens = 6;
+  uint32 images = 7;
+}
+
+message ListAppAiUsageResponse {
+  string app_id = 1;
+  repeated AppAiCall calls = 2;
+  // Set when more calls follow this page.
+  optional string next_cursor = 3;
+  // This month's totals; the same on every page.
+  repeated AppAiUsageTotal month_totals = 4;
+  string month_start = 5;
+}
+
+// The default model of one kind for Apps.
+message AppAiDefault {
+  // The model unpicked roles of this kind use now; unset when none exists.
+  optional AppAiModel model = 1;
+  // "setting" when the owner chose it, "order" when it is the first usable
+  // model of that kind.
+  string source = 2;
+  // True when the chosen default is disabled; those calls fail.
+  bool unavailable = 3;
+}
+
+message AppAiDefaults {
+  AppAiDefault chat = 1;
+  AppAiDefault image = 2;
+  repeated AppAiModel chat_models = 3;
+  repeated AppAiModel image_models = 4;
+}
+
+message GetAppAiDefaultsRequest {}
+
+message GetAppAiDefaultsResponse {
+  AppAiDefaults defaults = 1;
+}
+
+message SetAppAiDefaultsRequest {
+  // Model id or "<provider name>/<model id>"; unset leaves it unchanged.
+  optional string chat_model = 1 [(buf.validate.field).string = {
+    min_len: 1
+    max_len: 400
+  }];
+  // Clear the default chat model, so the first usable one applies.
+  bool clear_chat_model = 2;
+  optional string image_model = 3 [(buf.validate.field).string = {
+    min_len: 1
+    max_len: 400
+  }];
+  bool clear_image_model = 4;
+
+  option (buf.validate.message).cel = {
+    id: "set_app_ai_defaults.chat_conflict"
+    message: "set chat_model or clear_chat_model, not both"
+    expression: "!(has(this.chat_model) && this.clear_chat_model)"
+  };
+  option (buf.validate.message).cel = {
+    id: "set_app_ai_defaults.image_conflict"
+    message: "set image_model or clear_image_model, not both"
+    expression: "!(has(this.image_model) && this.clear_image_model)"
+  };
+}
+
+message SetAppAiDefaultsResponse {
+  AppAiDefaults defaults = 1;
+}
+
 message GetAppPackageRequest {
   string id = 1 [(buf.validate.field).string = {
     min_len: 1
@@ -812,7 +1117,9 @@ message AppPackage {
   uint32 size = 8;
   // The release key that signed it.
   string key_id = 9;
-  // Whether it carries bytecode (only packages of a Builder's build do).
+  // Whether it carries the build's bytecode, which shells load as trusted
+  // input. False only for a `--local` deployment built while the platform
+  // still dropped the bytecode of `--local` builds, also after a rollback.
   bool bytecode = 10;
 }
 

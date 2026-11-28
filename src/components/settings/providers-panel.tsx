@@ -67,6 +67,7 @@ import { ModelFormModal } from './model-form-modal';
 import { ModelSearchInput } from './model-search-input';
 import { ProviderFormModal } from './provider-form-modal';
 import { formatTokenCount } from './token-count';
+import { AppAiDefaults } from './app-ai-defaults';
 import classes from './providers-panel.module.css';
 
 export { ProviderFormModal };
@@ -79,6 +80,9 @@ function useInvalidateProviders() {
       qc.invalidateQueries({
         queryKey: agentModelChoicesQueryOptions.queryKey,
       }),
+      // App AI defaults and role models follow model changes.
+      qc.invalidateQueries({ queryKey: ['app-ai-defaults'] }),
+      qc.invalidateQueries({ queryKey: ['app-ai'] }),
     ]);
 }
 
@@ -758,6 +762,7 @@ export function ProvidersPanel({
   return (
     <Stack gap="md">
       <CatalogStatus />
+      {providers.length > 0 ? <AppAiDefaults /> : null}
       {providers.length === 0 ? (
         <Stack align="center" gap="xs" py={64} px="md">
           <ThemeIcon size={52} radius="xl" variant="light" color="primary">

@@ -189,8 +189,10 @@ or third-party authentication. Use a dedicated nonreserved header such as
 Removed values are not copied to another header.
 
 When other services call this webhook, describe its request contract in an
-external doc (see External docs in the `building-apps` Skill). Skip the doc when
-the webhook only serves the App itself, as in the media case below.
+external doc (see External docs in the `building-apps` Skill). The webhook has
+no proto, so unlike RPC methods it gets no generated reference; the doc is its
+only description. Skip the doc when the webhook only serves the App itself, as
+in the media case below.
 
 ## Serving media from a webhook
 

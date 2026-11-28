@@ -16,12 +16,12 @@ import {
   type DescEnum,
   type DescExtension,
   type DescField,
-  type DescFile,
   type DescMessage,
   type FileRegistry,
 } from '@bufbuild/protobuf';
 import type { FileDescriptorSet } from '@bufbuild/protobuf/wkt';
 import { APP_TASK_OPTIONS_PROTO_NAME } from '~agent/app-codegen';
+import { protoComment } from '../../../app-build/proto-comments';
 import { validateSchemaInput } from '../../json-schema-input';
 import type { TaskInputSchema } from '../manifest';
 
@@ -74,38 +74,14 @@ function platformOptions(registry: FileRegistry): Options {
   };
 }
 
-/** Source-code-info path of a message inside its file. */
-function messagePath(message: DescMessage): number[] {
-  if (message.parent) {
-    return [
-      ...messagePath(message.parent),
-      3,
-      message.parent.proto.nestedType.indexOf(message.proto),
-    ];
-  }
-  return [4, message.file.proto.messageType.indexOf(message.proto)];
-}
-
-function commentFor(file: DescFile, path: number[]): string | undefined {
-  const key = path.join(',');
-  const location = file.proto.sourceCodeInfo?.location.find(
-    (entry) => entry.path.join(',') === key,
-  );
-  const text = (location?.leadingComments || location?.trailingComments || '')
-    .split('\n')
+/** A field comment as one line, for a form description. */
+function fieldComment(field: DescField): string | undefined {
+  const text = protoComment(field)
+    ?.split('\n')
     .map((line) => line.trim())
     .filter(Boolean)
     .join(' ');
   return text || undefined;
-}
-
-function fieldComment(field: DescField): string | undefined {
-  const message = field.parent;
-  return commentFor(message.file, [
-    ...messagePath(message),
-    2,
-    message.proto.field.indexOf(field.proto),
-  ]);
 }
 
 function fieldOptions(

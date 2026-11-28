@@ -9,6 +9,21 @@ import {
   startTaskRun,
 } from '~server/apps/tasks/service';
 import { runMessage, runSummaryMessage, tasksMessage } from './app-tasks';
+import {
+  appAiCallMessage,
+  appAiDefaultsMessage,
+  appAiMessage,
+  appAiTotalMessage,
+} from './app-ai';
+import {
+  getAppAiDefaults,
+  getAppAiSettings,
+  listAppAiUsage,
+  setAppAiDefaults,
+  setAppAiRoleModel,
+  summarizeAppAiUsage,
+} from '~server/apps/ai/settings';
+import { monthStart } from '~server/apps/ai/usage';
 import { fromJson, toJson, type JsonValue } from '@bufbuild/protobuf';
 import { ValueSchema } from '@bufbuild/protobuf/wkt';
 import { EmptyFilter } from 'drizzle-orm/relations';
@@ -53,6 +68,7 @@ import { createApp } from '~server/apps/scaffold';
 import { authenticatePublicApi } from './auth';
 import { listAppsForAgent, getAppDetailForAgent } from '~server/apps/inspect';
 import { listAppDocs, readAppDoc } from '~server/apps/docs';
+import { rpcReference } from '~server/apps/rpc-reference';
 import type { PublishedAppDoc } from '~server/apps/manifest';
 import { appSummarySchema, appDetailSchema } from '~/platform-api/views';
 import {
@@ -776,6 +792,78 @@ export function registerPlatformApi(
   router.rpc(AppService.method.getAppDoc, async (input) => {
     const doc = await readAppDoc((await find(input.id)).id, input.docId);
     return { ...doc, doc: appDocMessage(doc.doc) };
+  });
+  router.rpc(AppService.method.getAppRpcReference, async (input) =>
+    rpcReference((await find(input.id)).id),
+  );
+  router.rpc(AppService.method.getAppAi, async (input) => {
+    try {
+      return {
+        ai: appAiMessage(await getAppAiSettings((await find(input.id)).id)),
+      };
+    } catch (error) {
+      throw publicError(error);
+    }
+  });
+  router.rpc(AppService.method.setAppAiRoleModel, async (input) => {
+    try {
+      const { id } = await find(input.id);
+      return {
+        ai: appAiMessage(
+          await setAppAiRoleModel(id, input.role, input.model ?? null),
+        ),
+      };
+    } catch (error) {
+      throw publicError(error);
+    }
+  });
+  router.rpc(AppService.method.getAppAiDefaults, async () => {
+    try {
+      return { defaults: appAiDefaultsMessage(await getAppAiDefaults()) };
+    } catch (error) {
+      throw publicError(error);
+    }
+  });
+  router.rpc(AppService.method.setAppAiDefaults, async (input) => {
+    try {
+      for (const [kind, value, clear] of [
+        ['chat', input.chatModel, input.clearChatModel],
+        ['image', input.imageModel, input.clearImageModel],
+      ] as const)
+        if (value !== undefined && clear)
+          throw new AppError(
+            `Set the ${kind} model or clear it, not both.`,
+            400,
+          );
+      return {
+        defaults: appAiDefaultsMessage(
+          await setAppAiDefaults({
+            chat: input.clearChatModel ? null : input.chatModel,
+            image: input.clearImageModel ? null : input.imageModel,
+          }),
+        ),
+      };
+    } catch (error) {
+      throw publicError(error);
+    }
+  });
+  router.rpc(AppService.method.listAppAiUsage, async (input) => {
+    try {
+      const { id } = await find(input.id);
+      const [page, totals] = await Promise.all([
+        listAppAiUsage(id, { limit: input.limit, cursor: input.cursor }),
+        summarizeAppAiUsage(id),
+      ]);
+      return {
+        appId: id,
+        calls: page.calls.map(appAiCallMessage),
+        nextCursor: page.nextCursor ?? undefined,
+        monthTotals: totals.map(appAiTotalMessage),
+        monthStart: monthStart().toISOString(),
+      };
+    } catch (error) {
+      throw publicError(error);
+    }
   });
   router.service(PreferenceService, {
     getAgentPreferences: async (_input, context) => ({
