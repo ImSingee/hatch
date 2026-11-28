@@ -68,16 +68,21 @@ export default function AppScreen() {
     useCallback(() => {
       if (!native || Platform.OS !== 'android') return;
       const appId = native.id;
+      // The App answers later: by then this screen may have gone.
+      let focused = true;
       const subscription = BackHandler.addEventListener(
         'hardwareBackPress',
         () => {
           void appRuntime.handleBack(appId).then((handled) => {
-            if (!handled && router.canGoBack()) router.back();
+            if (focused && !handled && router.canGoBack()) router.back();
           });
           return true;
         },
       );
-      return () => subscription.remove();
+      return () => {
+        focused = false;
+        subscription.remove();
+      };
     }, [native]),
   );
   let destination: BrowserDestination | null = null;
@@ -92,8 +97,8 @@ export default function AppScreen() {
   const handoff = useQuery({
     queryKey: [origin, 'browser-handoff', 'app', id, screen, epoch, attempt],
     queryFn: ({ signal }) => api!.createHandoff(signal),
-    // Started with the App's details, as before; a `native` App ignores it.
-    enabled: Boolean(api && destination && !native),
+    // Only for a `web` App: a `native` one runs without the browser.
+    enabled: Boolean(api && destination && app.data && !native),
     retry: false,
     staleTime: Infinity,
     gcTime: 0,
@@ -150,14 +155,17 @@ export default function AppScreen() {
       <VerticalBarProbe onChange={(edge) => setVerticalBar(edge !== 'none')} />
       {invalid ||
       linked.error ||
-      handoff.error ||
+      (handoff.error && !native) ||
       (app.error && !destination) ? (
         <View style={{ flex: 1, padding: 16, backgroundColor: c.ground }}>
           <Notice
             tone="danger"
             title="Couldn’t open this app"
             detail={errorText(
-              invalid ?? linked.error ?? handoff.error ?? app.error,
+              invalid ??
+                linked.error ??
+                (native ? null : handoff.error) ??
+                app.error,
             )}
             action={{ label: 'Try again', onPress: retry }}
           />

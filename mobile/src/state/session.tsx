@@ -100,6 +100,17 @@ export function SessionProvider({ children }: PropsWithChildren) {
     [origin, epoch],
   );
 
+  // A native App's request was refused for its credential. The App's own
+  // backend can refuse too, so ask the instance itself: the client above
+  // clears the session when the instance refuses as well.
+  useEffect(() => {
+    if (!api) return;
+    const subscription = appRuntime.addListener('onUnauthorized', () => {
+      void api.config().catch(() => undefined);
+    });
+    return () => subscription.remove();
+  }, [api]);
+
   useEffect(() => {
     let alive = true;
     void (async () => {

@@ -28,6 +28,8 @@ public struct AppDescription: Sendable, Equatable {
     public let deploymentId: String?
     public let rpcMethods: [String: Set<String>]
     public let hasData: Bool
+    /// Archived Apps keep their deployment but no longer open.
+    public var archived = false
 }
 
 /// `AppPackage`, the first message of `GetAppPackage`.
@@ -128,7 +130,8 @@ public final class PlatformClient: @unchecked Sendable {
             runtime: frontend?["runtime"] as? String,
             packageBuild: (frontend?["packageBuild"] as? NSNumber)?.intValue,
             deploymentId: view["currentDeploymentId"] as? String, rpcMethods: methods,
-            hasData: (view["capabilities"] as? [String] ?? []).contains("dataTable"))
+            hasData: (view["capabilities"] as? [String] ?? []).contains("dataTable"),
+            archived: view["status"] as? String == "archived")
     }
 
     public func runtimeTrust() async throws -> RuntimeTrust {

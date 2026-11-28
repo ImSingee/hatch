@@ -2,9 +2,13 @@ package dev.hatch.app.core
 
 import java.io.ByteArrayOutputStream
 import java.io.File
+import java.io.IOException
 import java.net.HttpURLConnection
 import java.net.URL
 import java.util.Base64
+import java.util.concurrent.Executors
+import java.util.concurrent.TimeUnit
+import java.util.concurrent.atomic.AtomicBoolean
 
 /** One HTTP request the runtime makes to the Hatch instance. */
 data class HttpRequest(
@@ -23,10 +27,17 @@ interface HttpTransport {
 
     /**
      * Sends `request` and hands each line of the body to `line` until it
-     * returns false or the body ends. A status other than 2xx returns the
-     * body whole instead.
+     * returns false, the body ends or `deadlineMillis` passes; at the deadline
+     * the connection is closed and the lines read so far stand. A status other
+     * than 2xx returns the body whole instead. A line longer than
+     * [MAX_LINE] fails the read.
      */
-    fun lines(request: HttpRequest, line: (String) -> Boolean): HttpResponse
+    fun lines(request: HttpRequest, deadlineMillis: Long, line: (String) -> Boolean): HttpResponse
+
+    companion object {
+        /** The longest line a streamed body may send (64 KiB). */
+        const val MAX_LINE = 64 * 1024
+    }
 }
 
 /** The instance over HttpURLConnection: no cookies, no cache, no redirects. */
@@ -41,7 +52,12 @@ class UrlConnectionTransport : HttpTransport {
         for ((name, value) in request.headers) connection.setRequestProperty(name, value)
         request.body?.let { body ->
             connection.doOutput = true
-            connection.outputStream.use { it.write(body) }
+            try {
+                connection.outputStream.use { it.write(body) }
+            } catch (error: IOException) {
+                connection.disconnect()
+                throw error
+            }
         }
         return connection
     }
@@ -63,24 +79,56 @@ class UrlConnectionTransport : HttpTransport {
         }
     }
 
-    override fun lines(request: HttpRequest, line: (String) -> Boolean): HttpResponse {
+    override fun lines(request: HttpRequest, deadlineMillis: Long, line: (String) -> Boolean): HttpResponse {
         val connection = open(request)
+        // A blocked read checks no interruption: closing the connection at the
+        // deadline is what ends it (the server's heartbeats keep it alive).
+        val expired = AtomicBoolean(false)
+        val deadline =
+            watchdog.schedule(
+                {
+                    expired.set(true)
+                    connection.disconnect()
+                },
+                deadlineMillis,
+                TimeUnit.MILLISECONDS,
+            )
         try {
             val status = connection.responseCode
             if (status !in 200..299) {
                 val body = connection.errorStream?.use { it.readBytes() } ?: ByteArray(0)
                 return HttpResponse(status, headers(connection), body)
             }
+            val headers = headers(connection)
             connection.inputStream.bufferedReader().use { reader ->
+                val current = StringBuilder()
                 while (true) {
-                    val text = reader.readLine() ?: break
-                    if (!line(text)) break
+                    val char = reader.read()
+                    if (char < 0) break
+                    if (char == '\n'.code) {
+                        if (current.endsWith('\r')) current.setLength(current.length - 1)
+                        val text = current.toString()
+                        current.setLength(0)
+                        if (!line(text)) break
+                    } else {
+                        if (current.length >= HttpTransport.MAX_LINE) throw IOException("A streamed line is too long.")
+                        current.append(char.toChar())
+                    }
                 }
             }
-            return HttpResponse(status, headers(connection))
+            return HttpResponse(status, headers)
+        } catch (error: IOException) {
+            if (expired.get()) return HttpResponse(200)
+            throw error
         } finally {
+            deadline.cancel(false)
             connection.disconnect()
         }
+    }
+
+    private companion object {
+        val watchdog =
+            Executors.newSingleThreadScheduledExecutor { Thread(it, "hatch-stream-deadline").apply { isDaemon = true } }
     }
 }
 
@@ -98,6 +146,8 @@ data class AppDescription(
     val deploymentId: String?,
     val rpcMethods: Map<String, Set<String>>,
     val hasData: Boolean,
+    /** Archived Apps keep their deployment but no longer open. */
+    val archived: Boolean = false,
 )
 
 /** `AppPackage`, the first message of `GetAppPackage`. */
@@ -165,7 +215,8 @@ class PlatformClient(
                         (body[index + 3].toInt() and 0xff shl 8) or
                         (body[index + 4].toInt() and 0xff)
                 val start = index + 5
-                if (length < 0 || start + length > body.size) {
+                // Compared without adding, which could overflow.
+                if (length < 0 || length > body.size - start) {
                     throw PlatformException("internal", message = "The package stream ended inside a frame.")
                 }
                 out.add(Frame(body[index].toInt() and 0xff, body.copyOfRange(start, start + length)))
@@ -207,7 +258,8 @@ class PlatformClient(
             for (frame in frames(body)) {
                 val message = runCatching { Json.parse(String(frame.payload)) as? Map<*, *> }.getOrNull()
                 if (frame.isEnd) {
-                    message?.get("error")?.let { throw error(mapOf("error" to it), 200) }
+                    if (message == null) throw PlatformException("internal", message = "The package stream ended wrongly.")
+                    message["error"]?.let { throw error(mapOf("error" to it), 200) }
                     ended = true
                     break
                 }
@@ -285,6 +337,7 @@ class PlatformClient(
             deploymentId = view["currentDeploymentId"] as? String,
             rpcMethods = methods,
             hasData = (view["capabilities"] as? List<*>)?.contains("dataTable") == true,
+            archived = view["status"] == "archived",
         )
     }
 
@@ -321,7 +374,12 @@ class PlatformClient(
         if (info.appId != appId) throw PlatformException("internal", message = "The instance sent another App's package.")
         file.parentFile?.mkdirs()
         val partial = File(file.parentFile, "${file.name}.partial")
-        partial.writeBytes(bytes)
+        try {
+            partial.writeBytes(bytes)
+        } catch (error: IOException) {
+            partial.delete()
+            throw error
+        }
         if (!partial.renameTo(file)) {
             partial.delete()
             throw PlatformException("internal", message = "Could not keep the package.")

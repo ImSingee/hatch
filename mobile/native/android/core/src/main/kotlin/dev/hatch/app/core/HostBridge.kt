@@ -1,11 +1,6 @@
 package dev.hatch.app.core
 
 import java.net.URLEncoder
-import java.util.concurrent.Callable
-import java.util.concurrent.ExecutionException
-import java.util.concurrent.Executors
-import java.util.concurrent.TimeUnit
-import java.util.concurrent.TimeoutException
 import org.json.JSONArray
 import org.json.JSONObject
 
@@ -121,7 +116,6 @@ class HostBridge(
         private val SERVICE = Regex("^[A-Za-z_]\\w*(?:\\.[A-Za-z_]\\w*)*$")
         private val METHOD = Regex("^[A-Za-z_]\\w*$")
         private val SLUG = Regex("^[a-z0-9][a-z0-9-]{0,63}$")
-        private val events = Executors.newCachedThreadPool { Thread(it, "hatch-data-events").apply { isDaemon = true } }
 
         fun refuse(code: String, message: String): Map<String, Any?> =
             mapOf("ok" to false, "code" to code, "message" to message)
@@ -303,42 +297,46 @@ class HostBridge(
                 timeoutMillis = eventsWaitMillis + 5_000,
             )
         val found = mutableListOf<Map<String, Any?>>()
-        val block = mutableListOf<String>()
-        val read =
-            events.submit(
-                Callable {
-                    transport.lines(request) { line ->
-                        synchronized(found) {
-                            if (line.isNotEmpty()) {
-                                block.add(line)
-                                return@lines true
-                            }
-                            val type = block.firstOrNull { it.startsWith("event:") }?.substring(6)?.trim()
-                            val id = block.firstOrNull { it.startsWith("id:") }?.substring(3)?.trim()?.toLongOrNull()
-                            block.clear()
-                            if (type == null) return@lines true
-                            val event = mutableMapOf<String, Any?>("reset" to (type == "reset"))
-                            if (id != null && id >= 0) event["revision"] = id
-                            found.add(event)
+        // An SSE block's fields until its blank line: only the two this uses.
+        var type: String? = null
+        var id: String? = null
+        val response =
+            try {
+                transport.lines(request, eventsWaitMillis) { line ->
+                    when {
+                        line.isEmpty() -> {
+                            val event = type
+                            val revision = id?.toLongOrNull()
+                            type = null
+                            id = null
+                            if (event == null) return@lines true
+                            found.add(mutableMapOf<String, Any?>("reset" to (event == "reset")).also {
+                                if (revision != null && revision >= 0) it["revision"] = revision
+                            })
                             false
                         }
+                        line.startsWith("event:") -> {
+                            if (type == null) type = line.substring(6).trim()
+                            true
+                        }
+                        line.startsWith("id:") -> {
+                            if (id == null) id = line.substring(3).trim()
+                            true
+                        }
+                        else -> true
                     }
                 }
-            )
-        try {
-            val response = read.get(eventsWaitMillis, TimeUnit.MILLISECONDS)
-            if (response.status !in 200..299) {
-                if (response.status == 401) shell?.unauthorized()
-                val text = String(response.body)
-                return refuse(codeForStatus(response.status), text.ifEmpty { "HTTP ${response.status}" })
+            } catch (error: Exception) {
+                return if (found.isEmpty()) refuse("unavailable", error.toString()) else mapOf("ok" to true, "events" to found.toList())
             }
-        } catch (_: TimeoutException) {
-            // Waited long enough: answer with what arrived (usually nothing).
-            read.cancel(true)
-        } catch (error: ExecutionException) {
-            if (synchronized(found) { found.isEmpty() }) return refuse("unavailable", error.cause.toString())
+        if (response.status !in 200..299) {
+            if (response.status == 401) shell?.unauthorized()
+            if (response.status == 409) shell?.deploymentStale()
+            val text = String(response.body)
+            return refuse(codeForStatus(response.status), text.ifEmpty { "HTTP ${response.status}" })
         }
-        return mapOf("ok" to true, "events" to synchronized(found) { found.toList() })
+        // At the deadline: what arrived (usually nothing).
+        return mapOf("ok" to true, "events" to found.toList())
     }
 }
 
@@ -357,8 +355,22 @@ object Json {
     fun stringify(value: Any?): String =
         when (value) {
             null -> "null"
-            is Map<*, *>, is List<*> -> JSONObject.wrap(value).toString()
+            is Map<*, *>, is List<*> -> toJson(value).toString()
             is String -> JSONObject.quote(value)
             else -> JSONObject.wrap(value)?.toString() ?: "null"
+        }
+
+    /**
+     * Maps and lists as org.json values, an explicit null kept as
+     * `JSONObject.NULL`: `JSONObject.wrap` drops null entries on the JVM's
+     * org.json but keeps them on Android's, and an App's `{ note: null }`
+     * must reach its backend the same way everywhere.
+     */
+    private fun toJson(value: Any?): Any =
+        when (value) {
+            null -> JSONObject.NULL
+            is Map<*, *> -> JSONObject().also { json -> for ((key, item) in value) json.put(key.toString(), toJson(item)) }
+            is List<*> -> JSONArray().also { json -> for (item in value) json.put(toJson(item)) }
+            else -> JSONObject.wrap(value) ?: JSONObject.NULL
         }
 }

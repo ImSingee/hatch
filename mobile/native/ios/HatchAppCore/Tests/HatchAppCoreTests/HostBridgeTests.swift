@@ -177,6 +177,9 @@ final class HostBridgeTests: XCTestCase {
         transport.answer = { _ in HTTPResponse(status: 409, body: Data("inactive deployment".utf8)) }
         refused(await bridge.call("hatch.data.query", ["body": [:]]), "already_exists")
         XCTAssertEqual(shell.staleCount, 1)
+        // An App that only watches for changes learns of it too.
+        refused(await bridge.call("hatch.data.events", ["table": "counters", "since": 0]), "already_exists")
+        XCTAssertEqual(shell.staleCount, 2)
     }
 
     func testEventsReadTheFirstChangeBlock() async throws {
@@ -197,7 +200,7 @@ final class HostBridgeTests: XCTestCase {
     func testEventsArgumentsAreChecked() async {
         for args: [String: Any] in [
             ["table": "", "since": 0], ["table": "t", "since": -1], ["table": "t", "since": 1.5],
-            ["table": "t", "since": "1"], ["table": "t"], ["since": 1],
+            ["table": "t", "since": "1"], ["table": "t"], ["since": 1], ["table": "t", "since": true],
         ] {
             refused(await bridge.call("hatch.data.events", args), "invalid_argument")
         }

@@ -1,5 +1,6 @@
 package dev.hatch.app.core
 
+import java.io.File
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
@@ -18,7 +19,7 @@ class FakeTransport : HttpTransport {
         return answer(request)
     }
 
-    override fun lines(request: HttpRequest, line: (String) -> Boolean): HttpResponse {
+    override fun lines(request: HttpRequest, deadlineMillis: Long, line: (String) -> Boolean): HttpResponse {
         synchronized(requests) { requests.add(request) }
         val response = answer(request)
         if (response.status !in 200..299) return response
@@ -160,10 +161,21 @@ class HostBridgeTest {
     }
 
     @Test
+    fun anExplicitNullReachesTheBackend() {
+        bridge.call("hatch.data.mutate", mapOf("body" to mapOf("note" to null, "tags" to listOf(null, "a"))))
+        val body = JSONObject(String(transport.requests.last().body!!))
+        assertTrue(body.has("note") && body.isNull("note"), "the key stays, with null")
+        assertTrue(body.getJSONArray("tags").isNull(0))
+    }
+
+    @Test
     fun staleDeploymentIsReported() {
         transport.answer = { HttpResponse(409, body = "inactive deployment".toByteArray()) }
         refused(bridge.call("hatch.data.query", mapOf("body" to emptyMap<String, Any>())), "already_exists")
         assertEquals(1, shell.staleCount)
+        // An App that only watches for changes learns of it too.
+        refused(bridge.call("hatch.data.events", mapOf("table" to "counters", "since" to 0)), "already_exists")
+        assertEquals(2, shell.staleCount)
     }
 
     @Test
@@ -419,5 +431,59 @@ class RunLedgerTest {
         assertEquals(96, setup.heapMegabytes)
         assertEquals(mapOf<String, Any>("platform" to "android", "route" to "", "packageBuild" to 3), setup.params)
         assertEquals("/data/i/storage/app1", setup.storageDirectory.path)
+    }
+}
+
+class TrustRefreshTest {
+    /** Takes only a newer, validly signed list, as NSH does. */
+    class FakeStore(var sequence: Int = 0) : TrustStore {
+        val roots = mutableListOf<String>()
+
+        override fun addRoot(publicKey: String) = roots.add(publicKey)
+
+        override fun updateRevocations(json: String): Boolean {
+            val (signed, number) = json.split(":")
+            if (signed != "signed" || number.toInt() <= sequence) return false
+            sequence = number.toInt()
+            return true
+        }
+    }
+
+    private fun material(sequence: Int, list: String? = "signed:$sequence") =
+        RuntimeTrust(initialized = true, roots = listOf("root"), revocations = list, revocationSequence = sequence)
+
+    @Test
+    fun aListTheStoreAlreadyHasIsNotAFailure() {
+        val dir = kotlin.io.path.createTempDirectory().toFile()
+        val marker = File(dir, "sequence")
+        // The store took list 8 but the marker still says 7 (its write failed).
+        val store = FakeStore(sequence = 8)
+        marker.writeText("7")
+        TrustRefresh(marker).refresh(store, material(8)) { FakeStore() }
+        assertEquals("8", marker.readText())
+        // Newer lists still apply.
+        TrustRefresh(marker).refresh(store, material(9)) { FakeStore() }
+        assertEquals(9, store.sequence)
+    }
+
+    @Test
+    fun anInvalidNewerListStopsEverything() {
+        val dir = kotlin.io.path.createTempDirectory().toFile()
+        val marker = File(dir, "sequence")
+        marker.writeText("7")
+        assertFailsWith<IllegalStateException> {
+            TrustRefresh(marker).refresh(FakeStore(sequence = 7), material(8, "forged:8")) { FakeStore() }
+        }
+        assertEquals("7", marker.readText())
+    }
+
+    @Test
+    fun rootsAreAddedOncePerStore() {
+        val dir = kotlin.io.path.createTempDirectory().toFile()
+        val refresh = TrustRefresh(File(dir, "sequence"))
+        val store = FakeStore()
+        refresh.refresh(store, material(1)) { FakeStore() }
+        refresh.refresh(store, material(1)) { FakeStore() }
+        assertEquals(listOf("root"), store.roots)
     }
 }
