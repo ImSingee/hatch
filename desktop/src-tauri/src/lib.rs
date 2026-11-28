@@ -95,9 +95,10 @@ struct Shared {
     flow: AtomicU64,
     /// The page's zoom factor (View → Zoom In / Out).
     zoom: Mutex<f64>,
-    /// The session the window was signed in with (instance origin, token),
-    /// for native Apps: read once from the Keychain, not on every App.
-    session: Mutex<Option<(String, String)>>,
+    /// The session the window was signed in with (instance origin, token,
+    /// user id), for native Apps: read once from the Keychain, not on every
+    /// App.
+    session: Mutex<Option<(String, String, String)>>,
 }
 
 /// One session action: launch or retry, connect, browser sign-in, cancel,
@@ -263,16 +264,17 @@ async fn restore(app: AppHandle, origin: String, token: String, flow: Flow) {
         origin: &origin,
     };
     let result = async {
-        instance.status(&token).await?;
-        instance.handoff(&token).await
+        let signed_in = instance.status(&token).await?;
+        Ok::<_, ApiError>((signed_in, instance.handoff(&token).await?))
     }
     .await;
     if !flow.current(&app) {
         return;
     }
     match result {
-        Ok(handoff) => {
-            *shared(&app).session.lock().unwrap() = Some((origin.clone(), token.clone()));
+        Ok((signed_in, handoff)) => {
+            *shared(&app).session.lock().unwrap() =
+                Some((origin.clone(), token.clone(), signed_in.user_id));
             tauri::async_runtime::spawn(refresh_accent(app.clone(), origin.clone(), token));
             let path = shared(&app)
                 .pending_path
@@ -428,6 +430,16 @@ async fn sign_out(app: AppHandle) {
     if let Some(window) = main_window(&app) {
         let _ = window.clear_all_browsing_data();
     }
+    // Native Apps keep this account's data apart, like the window's browsing
+    // data: it goes too, after `set_screen` below stops the engines (both
+    // run on the main thread, in order).
+    let account = shared(&app)
+        .session
+        .lock()
+        .unwrap()
+        .clone()
+        .filter(|(signed_in, _, _)| *signed_in == origin)
+        .and_then(|(_, _, user)| native::session::account_dir(&app, &origin, &user));
     set_screen(
         &app,
         Screen::SignIn {
@@ -435,6 +447,11 @@ async fn sign_out(app: AppHandle) {
             error: None,
         },
     );
+    if let Some(dir) = account {
+        let _ = app.run_on_main_thread(move || {
+            let _ = std::fs::remove_dir_all(dir);
+        });
+    }
     if let Some(token) = token {
         let http = shared(&app).http.clone();
         if let Err(error) = (Instance {
@@ -640,11 +657,11 @@ fn native_instance(app: &AppHandle) -> Option<native::session::Instance> {
     if !matches!(*shared(app).screen.lock().unwrap(), Screen::Instance) {
         return None;
     }
-    let (origin, token) = shared(app).session.lock().unwrap().clone()?;
+    let (origin, token, user) = shared(app).session.lock().unwrap().clone()?;
     if instance_origin(app).as_deref() != Some(origin.as_str()) {
         return None;
     }
-    native::session::Instance::new(app, &origin, &token, &user_agent(app))
+    native::session::Instance::new(app, &origin, &token, &user, &user_agent(app))
 }
 
 #[tauri::command]

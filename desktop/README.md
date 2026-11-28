@@ -74,8 +74,11 @@ web view (`src-tauri/src/native/`):
   `nsh-package` (release key certified by the instance's root, signature,
   hashes, revocation list, never an older build than one accepted), checks it
   is this App's (`dev.hatch.app.<id>`), and loads the verified bundle. The
-  trust store, the App's assets and its NSH data live per instance under
-  `~/Library/Application Support/app.hatch.desktop/native/<instance hash>/`.
+  trust store and the App's assets live per instance under
+  `~/Library/Application Support/app.hatch.desktop/native/<instance hash>/`;
+  what an App keeps (its NSH data) lives per account below it
+  (`users/<user hash>/`), so two accounts on one Mac never share it, and
+  **Sign Out** removes it with the window's browsing data.
 - **Grant.** Exactly the host calls of the bridge (`NATIVE_HOST_CALLS`), and
   nothing else: no network, clipboard, files or URLs, whatever the package
   declares. NSH would otherwise give an App what it declared.

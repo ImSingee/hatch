@@ -52,9 +52,26 @@ pub struct OpenRequest {
 #[derive(Debug, Clone, Deserialize)]
 #[serde(tag = "type", rename_all = "kebab-case")]
 pub enum SurfaceMessage {
-    Navigate { route: String },
+    Navigate {
+        route: String,
+    },
     Theme,
     UpdateAvailable,
+    /// The platform shortcuts the App no longer reserves changed (a new
+    /// deployment's `keyboard.reserve`): the key monitor follows at once.
+    Shortcuts {
+        shortcuts: Vec<String>,
+    },
+}
+
+/// A page's shortcut list, bounded as it came.
+fn bounded_shortcuts(shortcuts: &[String]) -> Vec<String> {
+    shortcuts
+        .iter()
+        .filter(|chord| chord.len() <= 32)
+        .take(16)
+        .cloned()
+        .collect()
 }
 
 /// What the page hears about a surface (`hatch:native-app` events).
@@ -101,21 +118,50 @@ pub struct Instance {
     pub origin: String,
     pub token: Arc<str>,
     pub http: reqwest::Client,
-    /// `<app data>/native/<instance hash>/`.
+    /// `<app data>/native/<instance hash>/`: the trust store and the Apps'
+    /// assets, which every account of the instance shares.
     pub dir: PathBuf,
+    /// `<dir>/users/<user hash>/`: what the Apps keep for the signed-in
+    /// account, never shown to another.
+    pub account: PathBuf,
+}
+
+/// The first 8 bytes of SHA-256, in hex: a short, path-safe name.
+fn short_hash(value: &str) -> String {
+    use sha2::Digest;
+    sha2::Sha256::digest(value.as_bytes())
+        .iter()
+        .take(8)
+        .map(|b| format!("{b:02x}"))
+        .collect()
+}
+
+/// `<base>/native/<instance hash>/`.
+fn instance_dir(base: &std::path::Path, origin: &str) -> PathBuf {
+    base.join("native").join(short_hash(origin))
+}
+
+/// `<instance dir>/users/<user hash>/`.
+fn user_dir(base: &std::path::Path, origin: &str, user: &str) -> PathBuf {
+    instance_dir(base, origin)
+        .join("users")
+        .join(short_hash(user))
+}
+
+/// Where native Apps keep `user`'s data on `origin`; sign-out removes it.
+pub fn account_dir(app: &AppHandle, origin: &str, user: &str) -> Option<PathBuf> {
+    Some(user_dir(&app.path().app_data_dir().ok()?, origin, user))
 }
 
 impl Instance {
-    pub fn new(app: &AppHandle, origin: &str, token: &str, user_agent: &str) -> Option<Self> {
+    pub fn new(
+        app: &AppHandle,
+        origin: &str,
+        token: &str,
+        user: &str,
+        user_agent: &str,
+    ) -> Option<Self> {
         let base = app.path().app_data_dir().ok()?;
-        let hash: String = {
-            use sha2::Digest;
-            sha2::Sha256::digest(origin.as_bytes())
-                .iter()
-                .take(8)
-                .map(|b| format!("{b:02x}"))
-                .collect()
-        };
         Some(Self {
             origin: origin.to_owned(),
             token: token.into(),
@@ -124,7 +170,8 @@ impl Instance {
                 .redirect(reqwest::redirect::Policy::none())
                 .build()
                 .ok()?,
-            dir: base.join("native").join(hash),
+            dir: instance_dir(&base, origin),
+            account: user_dir(&base, origin, user),
         })
     }
 }
@@ -408,7 +455,7 @@ fn start(app: &AppHandle, instance: Instance, request: OpenRequest, prepared: Pr
                 memory_bytes: HEAP_BYTES,
                 ..Limits::default()
             },
-            data_dir: Some(instance.dir.join("data").join(&nsh_id)),
+            data_dir: Some(instance.account.join("data").join(&nsh_id)),
             host: channel.clone(),
             ..AppOptions::default()
         },
@@ -431,13 +478,7 @@ fn start(app: &AppHandle, instance: Instance, request: OpenRequest, prepared: Pr
                 visible: false,
                 covered: false,
                 theme,
-                shortcuts: request
-                    .shortcuts
-                    .iter()
-                    .filter(|chord| chord.len() <= 32)
-                    .take(16)
-                    .cloned()
-                    .collect(),
+                shortcuts: bounded_shortcuts(&request.shortcuts),
             },
         )
     });
@@ -625,6 +666,17 @@ pub async fn message(
     key: String,
     message: SurfaceMessage,
 ) {
+    if let SurfaceMessage::Shortcuts { shortcuts } = message {
+        let shortcuts = bounded_shortcuts(&shortcuts);
+        let _ = app.run_on_main_thread(move || {
+            SESSIONS.with(|sessions| {
+                if let Some(session) = sessions.borrow_mut().get_mut(&key) {
+                    session.shortcuts = shortcuts;
+                }
+            });
+        });
+        return;
+    }
     let channel_and_theme = {
         let (tx, rx) = tokio::sync::oneshot::channel();
         let key = key.clone();
@@ -650,6 +702,7 @@ pub async fn message(
         SurfaceMessage::UpdateAvailable => {
             let _ = channel.send("hatch.update", json!({}));
         }
+        SurfaceMessage::Shortcuts { .. } => {}
         SurfaceMessage::Theme => {
             let Some(instance) = instance else { return };
             if let Some((theme_key, value, _)) = fetch_theme(&instance).await {
@@ -779,6 +832,9 @@ pub fn install_shortcut_monitor(app: &AppHandle) {
 mod tests {
     use super::*;
 
+    /// Tests that reserve keys share `OPEN` and `CLOSED`: one at a time.
+    static KEYS: std::sync::Mutex<()> = std::sync::Mutex::new(());
+
     #[test]
     fn chords_match_the_page() {
         assert_eq!(
@@ -804,12 +860,14 @@ mod tests {
 
     #[test]
     fn a_surface_closed_before_it_opened_never_opens() {
+        let _keys = KEYS.lock().unwrap_or_else(|e| e.into_inner());
         close("closed-first");
         assert_eq!(reserve("closed-first"), Err("cancelled"));
     }
 
     #[test]
     fn a_close_racing_the_open_never_leaves_the_key_open() {
+        let _keys = KEYS.lock().unwrap_or_else(|e| e.into_inner());
         // Whichever of the two runs first, once both have run the key is not
         // open: no engine starts for a surface that is gone.
         for n in 0..2000 {
@@ -831,7 +889,28 @@ mod tests {
     }
 
     #[test]
+    fn each_account_keeps_its_own_app_data() {
+        let base = std::path::Path::new("/data");
+        let origin = "https://hatch.example.com";
+        let avery = user_dir(base, origin, "user-avery");
+        let blake = user_dir(base, origin, "user-blake");
+        // Two accounts of one instance never share App data, and one
+        // account's directory stays the same from one sign-in to the next.
+        assert_ne!(avery, blake);
+        assert_eq!(avery, user_dir(base, origin, "user-avery"));
+        // Under the instance, beside its shared trust store and assets.
+        assert!(avery.starts_with(instance_dir(base, origin)));
+        assert_ne!(avery, instance_dir(base, origin));
+        // Another instance's account of the same id is another directory.
+        assert_ne!(
+            avery,
+            user_dir(base, "https://other.example.com", "user-avery")
+        );
+    }
+
+    #[test]
     fn at_most_twelve_run() {
+        let _keys = KEYS.lock().unwrap_or_else(|e| e.into_inner());
         let keys: Vec<String> = (0..MAX_RUNNING)
             .map(|n| format!("limit-test-{n}"))
             .collect();
