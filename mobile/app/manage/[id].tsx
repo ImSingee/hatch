@@ -3,10 +3,13 @@ import { router, useIsFocused, useLocalSearchParams } from 'expo-router';
 import * as WebBrowser from 'expo-web-browser';
 import { useState } from 'react';
 import { RefreshControl, ScrollView, View } from 'react-native';
+import type { AppSummary } from '../../src/core';
 import { useSession } from '../../src/state/session';
 import { useLinkedId } from '../../src/state/use-linked-id';
 import { usePullToRefresh } from '../../src/state/use-pull-to-refresh';
+import { AppSwitcher } from '../../src/ui/app-switcher';
 import { Button } from '../../src/ui/button';
+import { ListDetail } from '../../src/ui/columns';
 import { Busy, Notice, errorText } from '../../src/ui/primitives';
 import { Facts, ResourceHeader, when } from '../../src/ui/resource';
 import { GlyphTile, Group, ListRow } from '../../src/ui/rows';
@@ -26,6 +29,18 @@ import { useAccent, usePalette, useStatus } from '../../src/ui/theme-context';
  */
 export default function ManageAppScreen() {
   const { id, slug } = useLocalSearchParams<{ id: string; slug?: string }>();
+  // Where the window has room, every App sits beside this page and a row
+  // shows another App's page here, in place.
+  const show = (app: AppSummary) =>
+    router.setParams({ id: app.id, slug: app.slug });
+  return (
+    <ListDetail list={<AppSwitcher current={id} onSelect={show} undeployed />}>
+      <ManageApp key={id} id={id} slug={slug} />
+    </ListDetail>
+  );
+}
+
+function ManageApp({ id, slug }: { id: string; slug?: string }) {
   const { api, origin } = useSession();
   const accent = useAccent();
   const c = usePalette();

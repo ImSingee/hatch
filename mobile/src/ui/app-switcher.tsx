@@ -11,16 +11,21 @@ import { useAccent, usePalette, useTheme } from './theme-context';
 /**
  * The instance's Apps beside the one on screen, where the window has room
  * for both (`ListDetail`). A row shows its App in place of the current one;
- * the one it replaces keeps running, as when leaving its page. Apps that have
- * nothing deployed yet are left out: they have nothing to show.
+ * a running App it replaces keeps running, as when leaving its page.
  */
 export function AppSwitcher({
   current,
   onSelect,
+  undeployed = false,
 }: {
   /** The App on screen. */
   current: string | undefined;
   onSelect: (app: AppSummary) => void;
+  /**
+   * Also list Apps with nothing deployed yet. Running Apps leave them out:
+   * they have nothing to show.
+   */
+  undeployed?: boolean;
 }) {
   const { api, origin } = useSession();
   const c = usePalette();
@@ -33,7 +38,7 @@ export function AppSwitcher({
     enabled: Boolean(api),
   });
   const items = (apps.data ?? [])
-    .filter((item) => item.live && item.status !== 'archived')
+    .filter((item) => (undeployed || item.live) && item.status !== 'archived')
     .sort((a, b) => a.name.localeCompare(b.name));
   return (
     <ScrollView
