@@ -2,7 +2,8 @@
  * Notification reply forms: the questions a notification asks and the answers
  * a person gives. Types and answer rules shared by the platform, the CLI and
  * the mobile app, with no dependencies so the web and phone bundles stay
- * small. The sender-side schema lives in `notification-reply-schema` (it
+ * small. The form's own rules live in `notification-reply-form` (also
+ * dependency-free), the sender-side schema in `notification-reply-schema` (it
  * needs zod, which the mobile app does not bundle) and the protobuf mapping in
  * `notification-reply-proto`.
  *

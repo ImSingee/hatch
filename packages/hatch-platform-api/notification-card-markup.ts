@@ -6,7 +6,7 @@
  * anything. Attributes may be written bare (`mono`), meaning true.
  *
  * The parser only builds the element tree with positions; whitespace rules
- * and the component catalog are applied by `notification-content-schema`.
+ * and the component catalog are applied by `notification-content-compile`.
  */
 
 export type MarkupPosition = { line: number; column: number };
