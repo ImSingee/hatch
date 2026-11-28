@@ -175,7 +175,8 @@ export function buildAppTheme(
         'neutral-fill': neutral[2],
         'neutral-fill-hover': neutral[3],
 
-        // Status colours: red, amber, green and blue (DESIGN.md "Hues").
+        // Status colours: red, amber, green, blue and orange (DESIGN.md
+        // "Hues").
         // The theme's own destructive colour, so a danger fill keeps the
         // `destructive-foreground` derived (and contrast-checked) for it.
         ...toneRoles(
@@ -186,6 +187,9 @@ export function buildAppTheme(
         ...toneRoles('warning', theme.ramps.amber, c['on-fill']),
         ...toneRoles('success', theme.ramps.green, c['on-fill']),
         ...toneRoles('info', theme.ramps.blue, c['on-fill']),
+        // Work in progress (a card's "Fixing" status): orange, as the Desk
+        // and Mobile draw it.
+        ...toneRoles('working', theme.ramps.orange, c['on-fill']),
 
         // Monogram tile fills; each carries white text at 4.5:1.
         ...Object.fromEntries(

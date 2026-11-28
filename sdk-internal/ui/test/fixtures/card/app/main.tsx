@@ -1,0 +1,206 @@
+import { Page, Stack, mount, signal } from '@hatch/ui';
+import * as Card from '@hatch/ui/card';
+import type { ReplyAnswers } from '@hatch/ui/card';
+import { View, host } from 'nsh';
+import cases from './cases.json';
+
+/** What the App's `onSubmit` received, shown for the test to read. */
+const submitted = signal<string>('none');
+
+/** The same card as the `deploy` example, written in TSX. */
+function DeployCard() {
+  return (
+    <Card.Card icon="app" status="已上线" tone="success">
+      <Card.Title>v12 已部署到生产</Card.Title>
+      <Card.Text>
+        这次部署包含 2 个改动，数据迁移已完成，旧版本的实例已经停掉。
+      </Card.Text>
+      <Card.Fields>
+        <Card.Field label="版本">v12</Card.Field>
+        <Card.Field label="耗时">48 秒</Card.Field>
+        <Card.Field label="实例">2 个运行中</Card.Field>
+      </Card.Fields>
+    </Card.Card>
+  );
+}
+
+/** A card answered in the App: a choice, a text answer, a row of buttons. */
+function FormCard(props: { fail?: boolean; repeatable?: boolean }) {
+  return (
+    <Card.Card
+      status="Waiting"
+      flag="Urgent"
+      repeatable={props.repeatable}
+      onSubmit={(answers: ReplyAnswers) => {
+        if (props.fail)
+          return Promise.reject(new Error('The valve did not answer.'));
+        submitted.set(JSON.stringify(answers));
+      }}
+    >
+      <Card.Title>Water the beds</Card.Title>
+      <Card.Choice id="slot" label="When" required>
+        <Card.Option id="dawn" thenStatus="At dawn" thenTone="success">
+          Dawn
+        </Card.Option>
+        <Card.Option id="dusk">Dusk</Card.Option>
+      </Card.Choice>
+      <Card.Input id="note" label="Note" />
+      <Card.Buttons id="go">
+        <Card.Button id="now" primary>
+          Water now
+        </Card.Button>
+        <Card.Button id="later">Later</Card.Button>
+      </Card.Buttons>
+    </Card.Card>
+  );
+}
+
+/** A note the App takes away after it was typed in. */
+function RemovableCard() {
+  const asking = signal(true);
+  return (
+    <Card.Card
+      onSubmit={(answers: ReplyAnswers) => {
+        submitted.set(JSON.stringify(answers));
+      }}
+    >
+      <Card.Input id="note" label="Note" />
+      {asking() ? null : <Card.Text>No note needed</Card.Text>}
+      <Card.Button onPress={() => asking.set(false)}>Skip the note</Card.Button>
+      {asking() ? <Card.Input id="extra" label="Extra" /> : null}
+      <Card.Submit>Send</Card.Submit>
+    </Card.Card>
+  );
+}
+
+/** A card whose App takes its time: the submit stays pending. */
+function PendingCard() {
+  return (
+    <Card.Card onSubmit={() => new Promise<void>(() => {})}>
+      <Card.Buttons id="first">
+        <Card.Button id="a">Option A</Card.Button>
+        <Card.Button id="b">Option B</Card.Button>
+      </Card.Buttons>
+      <Card.Input id="note" label="Note" />
+      <Card.Submit>Send</Card.Submit>
+    </Card.Card>
+  );
+}
+
+/** Columns of any block, and a link button whose address changes. */
+function LayoutCard() {
+  const page = signal('one');
+  return (
+    <Card.Card onLinkPress={(href) => submitted.set(`link ${href}`)}>
+      <Card.Grid columns={2}>
+        <Card.Column>
+          <Card.Text>Cell one</Card.Text>
+        </Card.Column>
+        <Card.Text>Cell two</Card.Text>
+        <Card.Caption>Cell three</Card.Caption>
+      </Card.Grid>
+      <Card.Button onPress={() => page.set('two')}>Next page</Card.Button>
+      <Card.Button href={`hatch://app/notes#/${page()}`}>Open page</Card.Button>
+    </Card.Card>
+  );
+}
+
+/** Rows inside rows, and a log line longer than the card. */
+function RowsCard() {
+  return (
+    <Card.Card>
+      <Card.Row justify="between">
+        <Card.Row>
+          <Card.Text>Left side</Card.Text>
+        </Card.Row>
+        <Card.Badge>Right side</Card.Badge>
+      </Card.Row>
+      <Card.Code>{`short line\n${'a long log line that is wider than any phone '.repeat(3)}`}</Card.Code>
+    </Card.Card>
+  );
+}
+
+/** The App swaps the questions while a submit is pending. */
+function SwapCard() {
+  const second = signal(false);
+  return (
+    <Card.Card
+      onSubmit={() => {
+        second.set(true);
+        return Promise.resolve();
+      }}
+    >
+      {second() ? (
+        <Card.Input id="second" label="Second question" />
+      ) : (
+        <Card.Input id="first" label="First question" />
+      )}
+      <Card.Submit>Send</Card.Submit>
+    </Card.Card>
+  );
+}
+
+/** A note taken away and brought back. */
+function ComebackCard() {
+  const shown = signal(true);
+  return (
+    <Card.Card
+      onSubmit={(answers: ReplyAnswers) =>
+        submitted.set(JSON.stringify(answers))
+      }
+    >
+      {shown() ? <Card.Input id="note" label="Note" /> : null}
+      <Card.Button onPress={() => shown.set(!shown())}>
+        Toggle the note
+      </Card.Button>
+      <Card.Submit>Send</Card.Submit>
+    </Card.Card>
+  );
+}
+
+function App() {
+  const params = host.available() ? host.params : {};
+  const id = typeof params.example === 'string' ? params.example : '';
+  const example = (cases as { id: string; markup: string }[]).find(
+    (entry) => entry.id === id,
+  );
+  return (
+    <Page title="Card">
+      <Stack>
+        <View testID="card">
+          {id === 'tsx-deploy' ? <DeployCard /> : null}
+          {id === 'form' ? <FormCard /> : null}
+          {id === 'form-failing' ? <FormCard fail /> : null}
+          {id === 'form-repeatable' ? <FormCard repeatable /> : null}
+          {id === 'form-removable' ? <RemovableCard /> : null}
+          {id === 'form-pending' ? <PendingCard /> : null}
+          {id === 'layout' ? <LayoutCard /> : null}
+          {id === 'rows' ? <RowsCard /> : null}
+          {id === 'swap' ? <SwapCard /> : null}
+          {id === 'comeback' ? <ComebackCard /> : null}
+          {id === 'markup-label' ? (
+            <Card.CardMarkup
+              source='<Card><Input id="name" label="Name" /></Card>'
+              submitLabel="Save"
+              onSubmit={() => {}}
+            />
+          ) : null}
+          {example ? (
+            <Card.CardMarkup
+              source={example.markup}
+              answers={
+                typeof params.answers === 'string'
+                  ? (JSON.parse(params.answers) as ReplyAnswers)
+                  : undefined
+              }
+              onLinkPress={(href) => submitted.set(`link ${href}`)}
+            />
+          ) : null}
+        </View>
+        <Card.Text>{`submitted: ${submitted()}`}</Card.Text>
+      </Stack>
+    </Page>
+  );
+}
+
+mount(App);

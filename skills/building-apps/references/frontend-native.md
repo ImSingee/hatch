@@ -9,8 +9,9 @@ A native frontend is TypeScript JSX for Hatch's native runtime (NSH). Its whole
 UI comes from `@hatch/ui`, a closed component catalogue that looks like the
 Hatch platform and adapts to phones, tablets, desktops and the web by itself.
 The same source runs in the Web Desk and in Hatch's apps, and it follows the
-viewer's theme and accent without a redeploy. Widgets stay React: see
-[Web frontend and widgets](frontend-web.md#widgets).
+viewer's theme and accent without a redeploy. The cards notifications show
+come from `@hatch/ui/card` (see [Design system](design-system.md#cards)).
+Widgets stay React: see [Web frontend and widgets](frontend-web.md#widgets).
 
 ## Files
 

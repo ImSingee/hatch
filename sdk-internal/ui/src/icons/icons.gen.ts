@@ -286,6 +286,22 @@ export const IconSparkles: IconData = {
   name: 'sparkles',
   d: 'M16 18a2 2 0 0 1 2 2a2 2 0 0 1 2 -2a2 2 0 0 1 -2 -2a2 2 0 0 1 -2 2m0 -12a2 2 0 0 1 2 2a2 2 0 0 1 2 -2a2 2 0 0 1 -2 -2a2 2 0 0 1 -2 2m-7 12a6 6 0 0 1 6 -6a6 6 0 0 1 -6 -6a6 6 0 0 1 -6 6a6 6 0 0 1 6 6',
 };
+export const IconCircle: IconData = {
+  name: 'circle',
+  d: 'M3 12a9 9 0 1 0 18 0a9 9 0 1 0 -18 0',
+};
+export const IconLoader2: IconData = {
+  name: 'loader-2',
+  d: 'M12 3a9 9 0 1 0 9 9',
+};
+export const IconActivity: IconData = {
+  name: 'activity',
+  d: 'M3 12h4l3 8l4 -16l3 8h4',
+};
+export const IconBug: IconData = {
+  name: 'bug',
+  d: 'M9 9v-1a3 3 0 0 1 6 0v1 M8 9h8a6 6 0 0 1 1 3v3a5 5 0 0 1 -10 0v-3a6 6 0 0 1 1 -3 M3 13l4 0 M17 13l4 0 M12 20l0 -6 M4 19l3.35 -2 M20 19l-3.35 -2 M4 7l3.75 2.4 M20 7l-3.75 2.4',
+};
 export const IconUser: IconData = {
   name: 'user',
   d: 'M8 7a4 4 0 1 0 8 0a4 4 0 0 0 -8 0 M6 21v-2a4 4 0 0 1 4 -4h4a4 4 0 0 1 4 4v2',
@@ -462,6 +478,18 @@ export const IconDeviceDesktop: IconData = {
   name: 'device-desktop',
   d: 'M3 5a1 1 0 0 1 1 -1h16a1 1 0 0 1 1 1v10a1 1 0 0 1 -1 1h-16a1 1 0 0 1 -1 -1v-10 M7 20h10 M9 16v4 M15 16v4',
 };
+export const IconApps: IconData = {
+  name: 'apps',
+  d: 'M4 5a1 1 0 0 1 1 -1h4a1 1 0 0 1 1 1v4a1 1 0 0 1 -1 1h-4a1 1 0 0 1 -1 -1l0 -4 M4 15a1 1 0 0 1 1 -1h4a1 1 0 0 1 1 1v4a1 1 0 0 1 -1 1h-4a1 1 0 0 1 -1 -1l0 -4 M14 15a1 1 0 0 1 1 -1h4a1 1 0 0 1 1 1v4a1 1 0 0 1 -1 1h-4a1 1 0 0 1 -1 -1l0 -4 M14 7l6 0 M17 4l0 6',
+};
+export const IconRocket: IconData = {
+  name: 'rocket',
+  d: 'M4 13a8 8 0 0 1 7 7a6 6 0 0 0 3 -5a9 9 0 0 0 6 -8a3 3 0 0 0 -3 -3a9 9 0 0 0 -8 6a6 6 0 0 0 -5 3 M7 14a6 6 0 0 0 -3 6a6 6 0 0 0 6 -3 M14 9a1 1 0 1 0 2 0a1 1 0 1 0 -2 0',
+};
+export const IconGitPullRequest: IconData = {
+  name: 'git-pull-request',
+  d: 'M4 18a2 2 0 1 0 4 0a2 2 0 1 0 -4 0 M4 6a2 2 0 1 0 4 0a2 2 0 1 0 -4 0 M16 18a2 2 0 1 0 4 0a2 2 0 1 0 -4 0 M6 8l0 8 M11 6h5a2 2 0 0 1 2 2v8 M14 9l-3 -3l3 -3',
+};
 export const IconCode: IconData = {
   name: 'code',
   d: 'M7 8l-4 4l4 4 M17 8l4 4l-4 4 M14 4l-4 16',
@@ -557,6 +585,10 @@ export const IconGift: IconData = {
 export const IconCurrencyDollar: IconData = {
   name: 'currency-dollar',
   d: 'M16.7 8a3 3 0 0 0 -2.7 -2h-4a3 3 0 0 0 0 6h4a3 3 0 0 1 0 6h-4a3 3 0 0 1 -2.7 -2 M12 3v3m0 12v3',
+};
+export const IconCoin: IconData = {
+  name: 'coin',
+  d: 'M3 12a9 9 0 1 0 18 0a9 9 0 1 0 -18 0 M14.8 9a2 2 0 0 0 -1.8 -1h-2a2 2 0 1 0 0 4h2a2 2 0 1 1 0 4h-2a2 2 0 0 1 -1.8 -1 M12 7v10',
 };
 export const IconCash: IconData = {
   name: 'cash',

@@ -35,9 +35,23 @@ so existing and imported Apps keep their runtime.
 `@hatch/ui` (`sdk-internal/ui`) is a source-form SDK (`form: 'source'` on
 `UI_SDK` in `sdk-internal/definitions.ts`): `pnpm hatch-sdk:build` copies
 `src/` to `dist/` byte for byte, because NSH compiles the library with the
-App, and its entry is `runtime: 'native'`, so it is in `nsh.json` and never in
-the web/Deno import map or `.hatch/tsconfig.json`. Its `nsh` field supplies
-the theme (`buildAppTheme`) and the Tailwind extension every native App gets.
+App, and its entries are `runtime: 'native'`, so they are in `nsh.json` and
+never in the web/Deno import map or `.hatch/tsconfig.json`. Its `nsh` field
+supplies the theme (`buildAppTheme`) and the Tailwind extension every native
+App gets.
+
+Its second entry, `@hatch/ui/card` (`src/card/`), draws the notification
+card render tree: one component per catalog type, and `CardMarkup` /
+`CardTree`, which compile markup or a tree and hand each node to those
+components. The compiler is the platform's own
+(`packages/hatch-platform-api/notification-content-compile.ts` and the
+dependency-free modules it imports), copied into `src/card/content/*.gen.ts`
+by `sdk-internal/ui/scripts/generate.ts` because a source-form SDK ships
+only its `src/`; `<Markdown>` inside a card is read with NSH's
+`TextView.parse` and mapped to the blocks the platform's remark reader makes.
+The `card` fixture of `sdk-internal/ui/test/nsh.test.ts` holds every
+notification example to the outline the platform derives
+(`notification-content-outline.ts`) on every look.
 
 The library keeps the App's address and title in the shell itself
 (`src/core/shell.ts`): `AppShell`'s selected section is the first segment of

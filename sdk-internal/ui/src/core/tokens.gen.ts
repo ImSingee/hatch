@@ -94,4 +94,10 @@ export type ThemeColor =
   | 'warning-strong'
   | 'warning-tint'
   | 'warning-tint-foreground'
-  | 'warning-tint-hover';
+  | 'warning-tint-hover'
+  | 'working'
+  | 'working-pressed'
+  | 'working-strong'
+  | 'working-tint'
+  | 'working-tint-foreground'
+  | 'working-tint-hover';

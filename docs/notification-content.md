@@ -159,6 +159,15 @@ Card markup is not stored. `contentToMarkup` writes the stored tree back as
 canonical markup (see [Canonical markup](#canonical-markup)), which the CLI and
 the delivery log show.
 
+The same tree has a third renderer: native Apps draw cards with
+`@hatch/ui/card` (`sdk-internal/ui/src/card`), which compiles markup with a
+generated copy of the platform's dependency-free compiler
+(`notification-content-compile.ts`). The three renderers stay separate
+until the platform UI moves to NSH; `contentOutline`
+(`notification-content-outline.ts`) states what each must show for a tree
+(its controls and landmarks in order, and its texts), and parity tests hold
+the web renderer, the phone's renderer model and `@hatch/ui` to it.
+
 ## Markdown
 
 Markdown is GitHub-flavoured and compiles into the same components a card
