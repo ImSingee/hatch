@@ -1,5 +1,5 @@
 import { useQuery } from '@tanstack/react-query';
-import { useEffect, useState } from 'react';
+import { useEffect } from 'react';
 import { appRuntime } from '../native/app-runtime';
 import { openSurfaceLink } from './deep-links';
 import { useSession, vault } from './session';
@@ -10,9 +10,10 @@ let subscribed = false;
 function subscribe() {
   if (subscribed || !appRuntime.available) return;
   subscribed = true;
-  appRuntime.addListener('onOpenApp', ({ slug, route }) =>
+  appRuntime.addListener('onOpenApp', ({ slug, route, origin }) =>
     openSurfaceLink({
-      instance: null,
+      // The App's own instance: the inbox handles another one as any link.
+      instance: origin,
       target: { kind: 'app', slug, hash: route || undefined },
     }),
   );
@@ -24,29 +25,26 @@ function subscribe() {
  * follow. Used by the App screen; signing out or switching instances stops
  * every App (`SessionProvider`).
  *
- * Returns whether the runtime has this session's credential yet: a view
- * mounted before that would find no session and fail.
+ * `ready` tells whether the runtime has this session's credential yet: a
+ * view mounted before that would find no session. `error` is a credential
+ * that could not be read; `retry` reads it again.
  */
-export function useNativeAppRuntime(): boolean {
+export function useNativeAppRuntime() {
   const { api, origin, epoch } = useSession();
-  const session = origin ? `${epoch}:${origin}` : null;
-  const [configured, setConfigured] = useState<string | null>(null);
-  useEffect(() => {
-    subscribe();
-    if (!origin) return;
-    let alive = true;
-    void vault
-      .get(origin)
-      .then(async (token) => {
-        if (!alive) return;
-        await appRuntime.configure(origin, token);
-        if (alive) setConfigured(`${epoch}:${origin}`);
-      })
-      .catch(() => undefined);
-    return () => {
-      alive = false;
-    };
-  }, [origin, epoch]);
+  useEffect(subscribe, []);
+  const configured = useQuery({
+    queryKey: [origin, 'native-app-runtime', epoch],
+    queryFn: async () => {
+      await appRuntime.configure(origin, await vault.get(origin!));
+      return true;
+    },
+    enabled: Boolean(origin && appRuntime.available),
+    staleTime: Infinity,
+    gcTime: 0,
+    retry: 1,
+    refetchOnWindowFocus: false,
+    refetchOnReconnect: false,
+  });
   const minutes = useQuery({
     queryKey: [origin, 'desk-preferences', 'background-minutes'],
     queryFn: ({ signal }) => api!.backgroundAppMinutes(signal),
@@ -65,5 +63,9 @@ export function useNativeAppRuntime(): boolean {
   useEffect(() => {
     if (theme.data) appRuntime.setTheme(theme.data);
   }, [theme.data]);
-  return session !== null && configured === session;
+  return {
+    ready: configured.data === true,
+    error: configured.error,
+    retry: () => void configured.refetch(),
+  };
 }

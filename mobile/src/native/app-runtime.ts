@@ -10,8 +10,11 @@ import type { ResolvedTheme } from '../../../packages/hatch-design-tokens/src';
 import { buildAppTheme } from '../../../sdk-internal/ui/theme/build';
 
 type Events = {
-  /** A running App asked to open another App (`hatch.nav.open`). */
-  onOpenApp: (event: { slug: string; route: string }) => void;
+  /**
+   * A running App asked to open another App (`hatch.nav.open`), on the
+   * instance it runs for.
+   */
+  onOpenApp: (event: { slug: string; route: string; origin: string }) => void;
   /** The instance refused the session's credential to an App's request. */
   onUnauthorized: () => void;
 };
@@ -20,6 +23,7 @@ type Subscription = { remove(): void };
 
 type RuntimeModule = {
   configure(origin: string | null, token: string | null): Promise<void>;
+  forgetStorage(origin: string): Promise<void>;
   setBackgroundMinutes(minutes: number): Promise<void>;
   setTheme(json: string | null): Promise<void>;
   navigate(appId: string, route: string): Promise<void>;
@@ -50,6 +54,13 @@ export const appRuntime = {
    */
   async configure(origin: string | null, token: string | null) {
     await runtime?.configure(origin, token).catch(ignore);
+  },
+  /**
+   * Deletes what Apps saved on this phone for `origin` once its account has
+   * signed out, so the next account there finds none of it.
+   */
+  async forgetStorage(origin: string) {
+    await runtime?.forgetStorage(origin).catch(ignore);
   },
   setBackgroundMinutes(minutes: number) {
     void runtime?.setBackgroundMinutes(minutes).catch(ignore);

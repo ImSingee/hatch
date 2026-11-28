@@ -211,7 +211,10 @@ public final class PlatformClient: @unchecked Sendable {
         for frame in try frames(body) {
             let object = try? JSONSerialization.jsonObject(with: frame.payload) as? [String: Any]
             if frame.isEnd {
-                if let failure = object?["error"] { throw Self.error(from: ["error": failure], status: 200) }
+                guard let object else {
+                    throw PlatformError(code: "internal", message: "The package stream ended wrongly.")
+                }
+                if let failure = object["error"] { throw Self.error(from: ["error": failure], status: 200) }
                 ended = true
                 break
             }

@@ -66,8 +66,11 @@ export function SessionProvider({ children }: PropsWithChildren) {
         return;
       currentInstance = null;
       currentRevision++;
-      // Native Apps hold the session's credential: they stop with it.
-      void appRuntime.configure(null, null);
+      // Native Apps hold the session's credential: they stop with it, and
+      // what they saved here goes with the account.
+      void appRuntime
+        .configure(null, null)
+        .then(() => appRuntime.forgetStorage(expectedOrigin));
       setOrigin(null);
       setEpoch(currentRevision);
       await queryClient.cancelQueries();

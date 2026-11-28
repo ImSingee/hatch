@@ -24,8 +24,9 @@ public protocol AppEngineListener: AnyObject {
 /// What the host app hears from every engine.
 @MainActor
 public protocol AppEngineHostDelegate: AnyObject {
-    /// An App asked to open another App (`hatch.nav.open`).
-    func engineManager(openApp slug: String, route: String) -> Bool
+    /// An App asked to open another App (`hatch.nav.open`) on the instance
+    /// it runs for (`origin`).
+    func engineManager(openApp slug: String, route: String, origin: String) -> Bool
     /// The instance refused the session's credential.
     func engineManagerUnauthorized()
 }
@@ -67,7 +68,9 @@ final class EngineSession {
         self.origin = origin
         self.directory = directory
         tokenBox = TokenBox(token)
-        trustRefresh = TrustRefresh(marker: directory.appendingPathComponent("trust/revocations-sequence"))
+        trustRefresh = TrustRefresh(
+            marker: directory.appendingPathComponent("trust/revocations-sequence"),
+            state: directory.appendingPathComponent("trust/nsh-trust.json"))
     }
 
     var token: String? {
@@ -93,10 +96,13 @@ final class EngineSession {
         let material = try await client.runtimeTrust()
         guard active else { throw PlatformError(code: "unauthenticated", message: "Sign in to this instance again.") }
         let probes = directory
-        try trustRefresh.refresh(StoreOf(store), material: material) {
-            let dir = probes.appendingPathComponent("trust-probe-\(UUID().uuidString)", isDirectory: true)
-            return StoreOf(try NshTrust(stateDirectory: dir), removing: dir)
-        }
+        try trustRefresh.refresh(
+            StoreOf(store), material: material,
+            reopen: { StoreOf(try NshTrust(stateDirectory: probes.appendingPathComponent("trust"))) },
+            fresh: {
+                let dir = probes.appendingPathComponent("trust-probe-\(UUID().uuidString)", isDirectory: true)
+                return StoreOf(try NshTrust(stateDirectory: dir), removing: dir)
+            })
         return store
     }
 
@@ -214,10 +220,21 @@ public final class AppEngineManager {
         session?.retire()
         session = nil
         if let origin, let token {
-            let directory = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
-                .appendingPathComponent("hatch-apps/\(InstanceKey.of(origin))", isDirectory: true)
-            session = EngineSession(origin: origin, token: token, directory: directory)
+            session = EngineSession(origin: origin, token: token, directory: Self.directory(of: origin))
         }
+    }
+
+    private static func directory(of origin: URL) -> URL {
+        FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
+            .appendingPathComponent("hatch-apps/\(InstanceKey.of(origin))", isDirectory: true)
+    }
+
+    /// Deletes what Apps saved on this phone for `origin` (their storage),
+    /// when its account signs out: the next account must not find it. The
+    /// instance's engines stop first (`configure`).
+    public func forgetStorage(origin: URL) {
+        guard session?.origin != origin else { return }
+        try? FileManager.default.removeItem(at: Self.directory(of: origin).appendingPathComponent("storage"))
     }
 
     /// The user's background minutes (`GetDeskPreferences`).
@@ -494,7 +511,8 @@ public final class AppEngineManager {
         guard let nextDue else { return }
         // Re-check at least every minute: timers stall while the app is
         // suspended, and the clock may jump meanwhile.
-        let delay = min(max(0.5, nextDue.timeIntervalSinceNow), 60)
+        let wait = ContinuousClock.now.duration(to: nextDue).components
+        let delay = min(max(0.5, Double(wait.seconds) + Double(wait.attoseconds) / 1e18), 60)
         waitTimer = Timer.scheduledTimer(withTimeInterval: delay, repeats: false) { [weak self] _ in
             MainActor.assumeIsolated { self?.scheduleWait() }
         }
@@ -515,8 +533,9 @@ public final class AppEngineManager {
         engine.listener?.engineRouteChanged(route)
     }
 
-    fileprivate func engineOpen(slug: String, route: String) -> Bool {
-        delegate?.engineManager(openApp: slug, route: route) ?? false
+    fileprivate func engineOpen(_ engine: AppEngine, slug: String, route: String) -> Bool {
+        guard engines[engine.appId] === engine else { return false }
+        return delegate?.engineManager(openApp: slug, route: route, origin: engine.session.origin.absoluteString) ?? false
     }
 
     fileprivate func engineUnauthorized() {
@@ -572,7 +591,10 @@ private final class EngineShell: BridgeShell, @unchecked Sendable {
         await MainActor.run { if let engine { manager?.engineSetRoute(engine, route) } }
     }
     func openApp(slug: String, route: String) async -> Bool {
-        await MainActor.run { manager?.engineOpen(slug: slug, route: route) ?? false }
+        await MainActor.run {
+            guard let engine else { return false }
+            return manager?.engineOpen(engine, slug: slug, route: route) ?? false
+        }
     }
     func unauthorized() async { await MainActor.run { manager?.engineUnauthorized() } }
     func deploymentStale() async {

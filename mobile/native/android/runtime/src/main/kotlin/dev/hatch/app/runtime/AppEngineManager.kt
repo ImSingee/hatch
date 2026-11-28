@@ -33,7 +33,11 @@ import java.nio.file.Files
 import java.nio.file.StandardCopyOption
 import java.security.MessageDigest
 import java.util.UUID
+import java.util.concurrent.ArrayBlockingQueue
 import java.util.concurrent.Executors
+import java.util.concurrent.RejectedExecutionException
+import java.util.concurrent.ThreadPoolExecutor
+import java.util.concurrent.TimeUnit
 
 class Sha256Hasher : PackageHasher {
     private val digest = MessageDigest.getInstance("SHA-256")
@@ -54,8 +58,8 @@ interface AppEngineListener {
 
 /** What the host app hears from every engine (on the main thread). */
 interface AppEngineHostDelegate {
-    /** An App asked to open another App (`hatch.nav.open`). */
-    fun openApp(slug: String, route: String): Boolean
+    /** An App asked to open another App (`hatch.nav.open`) on the instance it runs for (`origin`). */
+    fun openApp(slug: String, route: String, origin: String): Boolean
 
     /** The instance refused the session's credential. */
     fun unauthorized()
@@ -93,7 +97,9 @@ fun NshView.apply(setup: EngineSetup) {
  * the route it was left on.
  *
  * An engine's views belong to the activity it started in; when that activity
- * goes away for good, its engines stop as if they had waited too long.
+ * goes away, its engines stop as if they had waited too long. That includes
+ * an activity recreated for a configuration change: the new one starts the
+ * App again at its route in views of its own, never the old activity's.
  *
  * Every engine runs its App's signed package from the instance
  * (`GetAppPackage`), verified against the instance's roots
@@ -133,7 +139,8 @@ object AppEngineManager {
 
         private var store: NshTrust? = null
         private var users = 0
-        private val trustRefresh = TrustRefresh(File(directory, "trust/revocations-sequence"))
+        /** Shared with every session for the same instance: they use the same trust directory. */
+        private val trustRefresh = trustRefreshOf(directory)
 
         fun credential(): String? = if (active) token else null
 
@@ -149,9 +156,19 @@ object AppEngineManager {
                 }
             try {
                 val material = client.runtimeTrust()
-                trustRefresh.refresh(StoreOf(store), material) {
-                    val dir = File(directory, "trust-probe-${UUID.randomUUID()}")
-                    StoreOf(NshTrust(dir), dir)
+                // One refresh at a time per trust directory, and none for a session
+                // that ended while the material was on its way.
+                synchronized(trustRefresh) {
+                    if (!active) throw PlatformException("unauthenticated", message = "Sign in to this instance again.")
+                    trustRefresh.refresh(
+                        StoreOf(store),
+                        material,
+                        reopen = { StoreOf(NshTrust(File(directory, "trust"))) },
+                        fresh = {
+                            val dir = File(directory, "trust-probe-${UUID.randomUUID()}")
+                            StoreOf(NshTrust(dir), dir)
+                        },
+                    )
                 }
                 if (!active) throw PlatformException("unauthenticated", message = "Sign in to this instance again.")
                 return block(store)
@@ -193,7 +210,20 @@ object AppEngineManager {
     /** Short host calls (RPC, data queries and changes). */
     private val calls = Executors.newFixedThreadPool(4) { Thread(it, "hatch-app-call").apply { isDaemon = true } }
     /** `hatch.data.events` long polls, which wait up to 25 s each: apart, so they never hold up the rest. */
-    private val polls = Executors.newFixedThreadPool(8) { Thread(it, "hatch-app-poll").apply { isDaemon = true } }
+    private val polls =
+        ThreadPoolExecutor(8, 8, 0, TimeUnit.MILLISECONDS, ArrayBlockingQueue(POLL_QUEUE)) {
+            Thread(it, "hatch-app-poll").apply { isDaemon = true }
+        }
+    /** Polls waiting for a worker; more are refused (`resource_exhausted`), so none waits unseen. */
+    private const val POLL_QUEUE = 8
+    private val trustRefreshes = mutableMapOf<String, TrustRefresh>()
+
+    private fun trustRefreshOf(directory: File): TrustRefresh =
+        synchronized(trustRefreshes) {
+            trustRefreshes.getOrPut(directory.path) {
+                TrustRefresh(File(directory, "trust/revocations-sequence"), File(directory, "trust/nsh-trust.json"))
+            }
+        }
     private val transport = UrlConnectionTransport()
     /** One package load per App at a time: they share its cache directory. */
     private val packageLocks = mutableMapOf<String, Any>()
@@ -214,8 +244,12 @@ object AppEngineManager {
 
     var delegate: AppEngineHostDelegate? = null
 
-    /** Once, with the application: follows the activities to tell foreground from background. */
-    fun install(application: Application) {
+    /**
+     * Once, with the application: follows the activities to tell foreground
+     * from background. `startedNow` tells whether an activity was already
+     * started before then: its start was not seen, so it is counted here.
+     */
+    fun install(application: Application, startedNow: () -> Boolean) {
         if (this.application != null) return
         this.application = application
         val tablet = application.resources.configuration.smallestScreenWidthDp >= 600
@@ -245,7 +279,6 @@ object AppEngineManager {
                 }
 
                 override fun onActivityDestroyed(activity: Activity) {
-                    if (activity.isChangingConfigurations) return
                     for (engine in engines.values.filter { it.activity === activity }) stop(engine.appId)
                 }
 
@@ -258,6 +291,13 @@ object AppEngineManager {
                 override fun onActivitySaveInstanceState(activity: Activity, state: Bundle) {}
             }
         )
+        // On the main thread, after the callbacks: a start seen there is not counted twice.
+        main.post {
+            if (started == 0 && startedNow()) {
+                started = 1
+                updateVisibility()
+            }
+        }
     }
 
     private fun ledger(): RunLedger = ledger ?: RunLedger(RunLedger.PHONE_LIMIT).also { ledger = it }
@@ -286,6 +326,17 @@ object AppEngineManager {
             } else {
                 null
             }
+    }
+
+    /**
+     * Deletes what Apps saved on this phone for `origin` (their storage),
+     * when its account signs out: the next account must not find it. The
+     * instance's engines stop first (`configure`).
+     */
+    fun forgetStorage(context: Context, origin: String) {
+        val key = origin.trimEnd('/')
+        if (session?.origin == key) return
+        File(context.applicationContext.filesDir, "hatch-apps/${InstanceKey.of(key)}/storage").deleteRecursively()
     }
 
     /** The user's background minutes (`GetDeskPreferences`). */
@@ -432,7 +483,19 @@ object AppEngineManager {
         val bridge = engine.bridge
         for (name in HostCalls.names) {
             val pool = if (name == "hatch.data.events") polls else calls
-            view.handle(name) { data, reply -> pool.execute { reply.resolve(bridge.call(name, data)) } }
+            view.handle(name) { data, reply ->
+                try {
+                    pool.execute {
+                        // A call queued before its session ended is not made.
+                        reply.resolve(
+                            if (engine.session.active) bridge.call(name, data)
+                            else HostBridge.refuse("unauthenticated", "Sign in to this instance again.")
+                        )
+                    }
+                } catch (_: RejectedExecutionException) {
+                    reply.resolve(HostBridge.refuse("resource_exhausted", "Too many requests are waiting."))
+                }
+            }
         }
     }
 
@@ -589,8 +652,10 @@ object AppEngineManager {
         }
 
         override fun openApp(slug: String, route: String): Boolean {
+            val engine = engine ?: return false
             if (delegate == null) return false
-            main.post { delegate?.openApp(slug, route) }
+            // Only a request from the engine still running reaches the host app.
+            main.post { if (current() === engine) delegate?.openApp(slug, route, engine.session.origin) }
             return true
         }
 

@@ -435,9 +435,14 @@ class RunLedgerTest {
 }
 
 class TrustRefreshTest {
-    /** Takes only a newer, validly signed list, as NSH does. */
-    class FakeStore(var sequence: Int = 0) : TrustStore {
+    /**
+     * Takes only a newer, validly signed list, as NSH does: in memory first,
+     * then saved to `state` (unless `failSave`).
+     */
+    class FakeStore(var sequence: Int = 0, private val state: File? = null, var failSave: Boolean = false) :
+        TrustStore {
         val roots = mutableListOf<String>()
+        var closed = false
 
         override fun addRoot(publicKey: String) = roots.add(publicKey)
 
@@ -445,45 +450,85 @@ class TrustRefreshTest {
             val (signed, number) = json.split(":")
             if (signed != "signed" || number.toInt() <= sequence) return false
             sequence = number.toInt()
+            if (state == null) return true
+            if (failSave) return false
+            state.writeText(Json.stringify(mapOf("revocations" to json)))
             return true
+        }
+
+        override fun close() {
+            closed = true
+        }
+
+        companion object {
+            /** A store opened from what `state` holds. */
+            fun opened(state: File): FakeStore {
+                val saved = runCatching { (Json.parse(state.readText()) as Map<*, *>)["revocations"] as String }
+                return FakeStore(saved.map { it.split(":")[1].toInt() }.getOrDefault(0), state)
+            }
         }
     }
 
     private fun material(sequence: Int, list: String? = "signed:$sequence") =
         RuntimeTrust(initialized = true, roots = listOf("root"), revocations = list, revocationSequence = sequence)
 
-    @Test
-    fun aListTheStoreAlreadyHasIsNotAFailure() {
+    private class Dir {
         val dir = kotlin.io.path.createTempDirectory().toFile()
         val marker = File(dir, "sequence")
-        // The store took list 8 but the marker still says 7 (its write failed).
-        val store = FakeStore(sequence = 8)
-        marker.writeText("7")
-        TrustRefresh(marker).refresh(store, material(8)) { FakeStore() }
-        assertEquals("8", marker.readText())
+        val state = File(dir, "nsh-trust.json")
+
+        fun refresh() = TrustRefresh(marker, state)
+    }
+
+    @Test
+    fun aListTheStoreAlreadySavedIsNotAFailure() {
+        val d = Dir()
+        val store = FakeStore(state = d.state)
+        d.refresh().refresh(store, material(8), { FakeStore.opened(d.state) }) { FakeStore() }
+        // The store saved list 8 but the marker still says 7 (its write was lost).
+        d.marker.writeText("7")
+        d.refresh().refresh(store, material(8), { error("not needed") }) { error("not needed") }
+        assertEquals("8", d.marker.readText())
         // Newer lists still apply.
-        TrustRefresh(marker).refresh(store, material(9)) { FakeStore() }
+        d.refresh().refresh(store, material(9), { FakeStore.opened(d.state) }) { FakeStore() }
         assertEquals(9, store.sequence)
     }
 
     @Test
-    fun anInvalidNewerListStopsEverything() {
-        val dir = kotlin.io.path.createTempDirectory().toFile()
-        val marker = File(dir, "sequence")
-        marker.writeText("7")
+    fun aListTakenButNotSavedIsSavedBeforeTheMarkerMoves() {
+        val d = Dir()
+        val store = FakeStore(state = d.state, failSave = true)
+        // NSH kept list 8 in memory but could not save it: nothing is recorded.
         assertFailsWith<IllegalStateException> {
-            TrustRefresh(marker).refresh(FakeStore(sequence = 7), material(8, "forged:8")) { FakeStore() }
+            d.refresh().refresh(store, material(8), { FakeStore.opened(d.state).also { it.failSave = true } }) {
+                FakeStore()
+            }
         }
-        assertEquals("7", marker.readText())
+        assertEquals(false, d.marker.exists())
+        // The next open saves it through a store opened from disk, then records it.
+        val reopened = mutableListOf<FakeStore>()
+        d.refresh().refresh(store, material(8), { FakeStore.opened(d.state).also { reopened += it } }) { FakeStore() }
+        assertEquals("8", d.marker.readText())
+        assertEquals(8, FakeStore.opened(d.state).sequence)
+        assertEquals(true, reopened.single().closed)
+    }
+
+    @Test
+    fun anInvalidNewerListStopsEverything() {
+        val d = Dir()
+        d.marker.writeText("7")
+        assertFailsWith<IllegalStateException> {
+            d.refresh().refresh(FakeStore(sequence = 7), material(8, "forged:8"), { FakeStore(7) }) { FakeStore() }
+        }
+        assertEquals("7", d.marker.readText())
     }
 
     @Test
     fun rootsAreAddedOncePerStore() {
-        val dir = kotlin.io.path.createTempDirectory().toFile()
-        val refresh = TrustRefresh(File(dir, "sequence"))
+        val refresh = Dir().refresh()
         val store = FakeStore()
-        refresh.refresh(store, material(1)) { FakeStore() }
-        refresh.refresh(store, material(1)) { FakeStore() }
+        refresh.refresh(store, material(1), { FakeStore() }) { FakeStore() }
+        refresh.refresh(store, material(1), { FakeStore() }) { FakeStore() }
         assertEquals(listOf("root"), store.roots)
     }
 }

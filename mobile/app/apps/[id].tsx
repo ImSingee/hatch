@@ -96,7 +96,7 @@ function AppView({ id, slug, entryHash, label }: AppParams) {
   const native =
     appRuntime.available && app.data?.runtime === 'native' ? app.data : null;
   const [nativeTitle, setNativeTitle] = useState<string | null>(null);
-  const runtimeReady = useNativeAppRuntime();
+  const runtime = useNativeAppRuntime();
   // Android's back gesture goes back in the App first, then leaves the screen.
   useFocusEffect(
     useCallback(() => {
@@ -142,6 +142,7 @@ function AppView({ id, slug, entryHash, label }: AppParams) {
   const retry = () => {
     linked.retry();
     void app.refetch();
+    if (runtime.error) runtime.retry();
     if (native) appRuntime.reload(native.id);
     setAttempt((value) => value + 1);
   };
@@ -187,7 +188,9 @@ function AppView({ id, slug, entryHash, label }: AppParams) {
       {invalid ||
       linked.error ||
       (handoff.error && !native) ||
-      (app.error && !destination) ? (
+      (native && runtime.error) ||
+      // Which runtime the App needs comes from its description.
+      (app.error && !app.data) ? (
         <View style={{ flex: 1, padding: 16, backgroundColor: c.ground }}>
           <Notice
             tone="danger"
@@ -195,13 +198,13 @@ function AppView({ id, slug, entryHash, label }: AppParams) {
             detail={errorText(
               invalid ??
                 linked.error ??
-                (native ? null : handoff.error) ??
+                (native ? runtime.error : handoff.error) ??
                 app.error,
             )}
             action={{ label: 'Try again', onPress: retry }}
           />
         </View>
-      ) : native && !runtimeReady ? (
+      ) : native && !runtime.ready ? (
         <Busy label={`Opening ${name}`} />
       ) : native ? (
         <NativeAppSurface

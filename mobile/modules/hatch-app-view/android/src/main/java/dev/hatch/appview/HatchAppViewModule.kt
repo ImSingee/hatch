@@ -2,6 +2,8 @@ package dev.hatch.appview
 
 import android.app.Application
 import android.content.Context
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleOwner
 import dev.hatch.app.runtime.AppEngineHostDelegate
 import dev.hatch.app.runtime.AppEngineListener
 import dev.hatch.app.runtime.AppEngineManager
@@ -81,12 +83,17 @@ class HatchAppViewModule : Module() {
         Events("onOpenApp", "onUnauthorized")
 
         OnCreate {
-            (appContext.reactContext?.applicationContext as? Application)?.let { AppEngineManager.install(it) }
+            (appContext.reactContext?.applicationContext as? Application)?.let {
+                AppEngineManager.install(it) {
+                    val activity = appContext.currentActivity as? LifecycleOwner
+                    activity?.lifecycle?.currentState?.isAtLeast(Lifecycle.State.STARTED) == true
+                }
+            }
             val module = this@HatchAppViewModule
             AppEngineManager.delegate =
                 object : AppEngineHostDelegate {
-                    override fun openApp(slug: String, route: String): Boolean {
-                        module.sendEvent("onOpenApp", mapOf("slug" to slug, "route" to route))
+                    override fun openApp(slug: String, route: String, origin: String): Boolean {
+                        module.sendEvent("onOpenApp", mapOf("slug" to slug, "route" to route, "origin" to origin))
                         return true
                     }
 
@@ -99,6 +106,10 @@ class HatchAppViewModule : Module() {
         AsyncFunction("configure") { origin: String?, token: String? ->
             val context = appContext.reactContext ?: throw IllegalStateException("No React context.")
             AppEngineManager.configure(context, origin, token)
+        }.runOnQueue(Queues.MAIN)
+        AsyncFunction("forgetStorage") { origin: String ->
+            val context = appContext.reactContext ?: throw IllegalStateException("No React context.")
+            AppEngineManager.forgetStorage(context, origin)
         }.runOnQueue(Queues.MAIN)
         AsyncFunction("setBackgroundMinutes") { minutes: Int -> AppEngineManager.setBackgroundMinutes(minutes) }
             .runOnQueue(Queues.MAIN)
