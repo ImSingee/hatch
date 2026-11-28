@@ -32,14 +32,20 @@ App's root in an implicit main window of its own (`nsh-js` `dom.rs`:
 `windowed = !inline_root && os.is_desktop()`). The App opens as a separate
 window and the embedded view stays empty. `nsh_engine::with_inline_root`
 marks the context so the root draws in the view, which is what an embedded
-view is for. `AppOptions` has no way to pass the context (0.7.2 neither).
+view is for. `AppOptions` has no way to pass the context, and 0.7.2 is the
+same.
+
+Upstream fixed this after 0.7.2 (issue longbridge/nsh#3514, pull request
+longbridge/nsh#3528, commit `a63b8670bc60864125c8992667ab5eef205d76b2`):
+`AppView::load` now gives every view but `run_app`'s standalone one the
+inline-root context. This copy gives it to every view, which is the same for
+Hatch: it only embeds `AppView`s and never calls `run_app`.
 
 ## Removing it
 
-When an NSH release lets an embedding host draw a JS root inline (an
-`AppOptions` context, or `AppView` doing it itself), and Hatch moves to that
-release (`src/server/apps/native/nsh-toolchain.ts` and every `=0.7.x` pin in
-`desktop/src-tauri/Cargo.toml`):
+When Hatch moves to the first NSH release that contains commit `a63b867` of
+longbridge/nsh#3528 (`src/server/apps/native/nsh-toolchain.ts` and every
+`=0.7.x` pin in `desktop/src-tauri/Cargo.toml`):
 
 1. Delete this directory and the `[patch.crates-io]` section of
    `desktop/src-tauri/Cargo.toml`.
