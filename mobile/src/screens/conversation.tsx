@@ -1200,7 +1200,12 @@ function ConversationBody({
                             glyph="open"
                             tone="card"
                             onPress={() =>
-                              setBeside({ id: app.id, slug: app.slug, name })
+                              setBeside({
+                                id: app.id,
+                                slug: app.slug,
+                                name,
+                                runtime: app.runtime,
+                              })
                             }
                           />
                         ) : null}

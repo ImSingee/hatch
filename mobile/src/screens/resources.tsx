@@ -164,6 +164,7 @@ export function ResourcesScreen({ nested = false }: { nested?: boolean }) {
                                   id: item.id,
                                   slug: item.slug,
                                   name: item.name,
+                                  runtime: item.runtime,
                                 }),
                             },
                           ]

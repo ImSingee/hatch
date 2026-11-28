@@ -4,7 +4,13 @@ import { useCallback, useEffect } from 'react';
 import { useSession } from './session';
 
 /** An App shown beside the screen in front. */
-export type BesideApp = { id: string; slug: string; name: string };
+export type BesideApp = {
+  id: string;
+  slug: string;
+  name: string;
+  /** How its frontend runs (`AppSummary.runtime`). */
+  runtime: 'native' | 'web' | null;
+};
 
 const besideKey = (origin: string | null) => [origin, 'beside-app'];
 const frontKey = (origin: string | null) => [origin, 'front-apps'];

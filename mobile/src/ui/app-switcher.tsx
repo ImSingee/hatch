@@ -126,6 +126,7 @@ export function AppSwitcher({
                         id: item.id,
                         slug: item.slug,
                         name: item.name,
+                        runtime: item.runtime,
                       })
                     }
                   />
