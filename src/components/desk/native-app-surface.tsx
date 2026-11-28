@@ -63,6 +63,8 @@ export function NativeAppSurface({
   };
   const [picture, setPicture] = useState<string | null>(null);
   const notified = useRef<string | null>(null);
+  // A navigation asked for while the App loads, sent once it is ready.
+  const pendingRoute = useRef<string | null>(null);
 
   const seedRoute = useEffectEvent(() => route);
   const currentShortcuts = useEffectEvent(() =>
@@ -85,19 +87,30 @@ export function NativeAppSurface({
   });
 
   // One engine per load, under a key of its own: a reload stops the App and
-  // starts it again, and a key the app saw closed never opens.
+  // starts it again, and a key the app saw closed never opens. As a frame
+  // loads afresh when its slug changes (a renamed App's next reload), so
+  // does the engine.
   useEffect(() => {
     const surfaceKey = `native-${PAGE}-${++surfaces}`;
     notified.current = null;
     const stop = onNativeAppEvent(surfaceKey, (event) => {
       switch (event.type) {
-        case 'ready':
+        case 'ready': {
           setStatus({
             state: 'ready',
             key: surfaceKey,
             deploymentId: event.deploymentId,
           });
+          const next = pendingRoute.current;
+          pendingRoute.current = null;
+          if (next !== null) {
+            void nativeApps.message(surfaceKey, {
+              type: 'navigate',
+              route: next,
+            });
+          }
           break;
+        }
         case 'failed':
           setStatus({
             state: 'failed',
@@ -128,7 +141,7 @@ export function NativeAppSurface({
       stop();
       void nativeApps.close(surfaceKey).catch(() => undefined);
     };
-  }, [app.id, generation]);
+  }, [app.id, app.slug, generation]);
 
   const ready = key !== '';
 
@@ -199,8 +212,11 @@ export function NativeAppSurface({
     () => ({
       reload: restart,
       navigate: (next) => {
-        if (key)
+        if (key) {
           void nativeApps.message(key, { type: 'navigate', route: next });
+        } else {
+          pendingRoute.current = next;
+        }
       },
     }),
     [key],

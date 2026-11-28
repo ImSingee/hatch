@@ -204,3 +204,47 @@ test('a web App keeps running in its frame inside the macOS app', async () => {
   expect(screen.container.querySelector('iframe')).not.toBeNull();
   expect(calls('native_app_open')).toHaveLength(0);
 });
+
+test('a navigation asked for while the App loads reaches it once it is ready', async () => {
+  const { handle, key } = await renderNative('/notes');
+
+  handle.current!.navigate('/notes/9');
+  expect(
+    calls('native_app_message').filter(
+      (args) => (args.message as { type: string }).type === 'navigate',
+    ),
+  ).toHaveLength(0);
+
+  emit({ type: 'ready', key, deploymentId: 'dep-1', build: 3 });
+  await vi.waitFor(() =>
+    expect(calls('native_app_message')).toContainEqual({
+      key,
+      message: { type: 'navigate', route: '/notes/9' },
+    }),
+  );
+});
+
+test('a renamed App starts again from its new slug, as a frame would', async () => {
+  const { screen, key } = await renderNative();
+  emit({ type: 'ready', key, deploymentId: 'dep-1', build: 3 });
+
+  // The same tree as `renderNative`, so only the slug changes.
+  await screen.rerender(
+    <MantineProvider>
+      <div style={{ display: 'flex', width: 600, height: 400 }}>
+        <AppSurface
+          app={{
+            slug: 'field-notes',
+            name: 'Notes',
+            id: 'app-notes',
+            runtime: 'native',
+          }}
+          route="/notes"
+          latestDeployment="dep-1"
+        />
+      </div>
+    </MantineProvider>,
+  );
+  await vi.waitFor(() => expect(calls('native_app_open')).toHaveLength(2));
+  expect(calls('native_app_close')).toEqual([{ key }]);
+});
