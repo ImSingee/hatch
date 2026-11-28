@@ -1,6 +1,5 @@
 import { createContext, useContext, type PropsWithChildren } from 'react';
-import { View } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
 import { appRuntime } from '../native/app-runtime';
 import { AppView } from '../screens/app-view';
 import { useBesideApp, useFrontApps } from '../state/beside';
@@ -38,8 +37,11 @@ export function BesideLayout({ children }: PropsWithChildren) {
         style={{ flex: 1, flexDirection: 'row', backgroundColor: c.ground }}
       >
         {/* Measured widths, never `flex: 1`: a view that drops a width for
-            flex kept the old width after a fold (see `ListDetail`). */}
-        <View
+            flex kept the old width after a fold (see `ListDetail`). Each
+            column is its own safe area: an edge's inset (the vertical bar,
+            the notch) belongs only to the column at that edge, and follows
+            it as the column narrows. */}
+        <SafeAreaProvider
           style={
             shown && split
               ? { width: split.leading }
@@ -49,30 +51,31 @@ export function BesideLayout({ children }: PropsWithChildren) {
           }
         >
           {children}
-        </View>
+        </SafeAreaProvider>
         {shown && split ? (
-          <SafeAreaView
-            edges={['top', 'right', 'bottom']}
+          <SafeAreaProvider
             style={{
               width: split.trailing,
               marginStart: split.gutter,
               backgroundColor: c.card,
             }}
           >
-            <AppView
-              key={shown.id}
-              id={shown.id}
-              slug={shown.slug}
-              label={shown.name}
-              beside={{
-                onHide: () => setBeside(null),
-                onClose: () => {
-                  setBeside(null);
-                  appRuntime.stop(shown.id);
-                },
-              }}
-            />
-          </SafeAreaView>
+            <SafeAreaView style={{ flex: 1 }}>
+              <AppView
+                key={shown.id}
+                id={shown.id}
+                slug={shown.slug}
+                label={shown.name}
+                beside={{
+                  onHide: () => setBeside(null),
+                  onClose: () => {
+                    setBeside(null);
+                    appRuntime.stop(shown.id);
+                  },
+                }}
+              />
+            </SafeAreaView>
+          </SafeAreaProvider>
         ) : null}
       </FoldContainer>
     </BesideRoom.Provider>
