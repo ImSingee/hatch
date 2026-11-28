@@ -10,6 +10,7 @@ import { BackHandler, Platform, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import {
   appDestination,
+  type AppSummary,
   type BrowserDestination,
   type DeepLink,
 } from '../../src/core';
@@ -22,6 +23,8 @@ import { useSession } from '../../src/state/session';
 import { VerticalBarProbe } from '../../src/ui/fold-probe';
 import { useLinkedId } from '../../src/state/use-linked-id';
 import { useWebHistoryBack } from '../../src/state/use-web-history-back';
+import { AppSwitcher } from '../../src/ui/app-switcher';
+import { ListDetail } from '../../src/ui/columns';
 import { glyphs } from '../../src/ui/glyph.types';
 import { Busy, Notice, errorText } from '../../src/ui/primitives';
 import { usePalette } from '../../src/ui/theme-context';
@@ -30,15 +33,44 @@ import { usePalette } from '../../src/ui/theme-context';
 const shellPlatform =
   Platform.OS === 'ios' || Platform.OS === 'android' ? Platform.OS : undefined;
 
+type AppParams = {
+  id: string;
+  slug?: string;
+  entryHash?: string;
+  label?: string;
+};
+
+/**
+ * An App, full screen. Where the window has room, the instance's Apps sit
+ * beside it (`ListDetail`) and a row shows another App here, in place, so
+ * back still leaves the screen rather than stepping through Apps.
+ */
 export default function AppScreen() {
   const c = usePalette();
   // Pins pass their own slug, label and hash; other entries resolve the slug.
-  const { id, slug, entryHash, label } = useLocalSearchParams<{
-    id: string;
-    slug?: string;
-    entryHash?: string;
-    label?: string;
-  }>();
+  const params = useLocalSearchParams<AppParams>();
+  const show = (app: AppSummary) =>
+    router.setParams({
+      id: app.id,
+      slug: app.slug,
+      label: app.name,
+      entryHash: undefined,
+    });
+  return (
+    <SafeAreaView
+      style={{ flex: 1, backgroundColor: c.ground }}
+      edges={['left', 'right']}
+    >
+      <ListDetail list={<AppSwitcher current={params.id} onSelect={show} />}>
+        {/* Another App starts over: its own title, attempts and history. */}
+        <AppView key={params.id} {...params} />
+      </ListDetail>
+    </SafeAreaView>
+  );
+}
+
+function AppView({ id, slug, entryHash, label }: AppParams) {
+  const c = usePalette();
   const { api, origin, epoch } = useSession();
   const [attempt, setAttempt] = useState(0);
   // Each screen signs in with its own one-use ticket, even for the same App.
@@ -123,10 +155,7 @@ export default function AppScreen() {
   const data = handoff.data;
   const name = nativeTitle || label || app.data?.name || 'App';
   return (
-    <SafeAreaView
-      style={{ flex: 1, backgroundColor: c.card }}
-      edges={['left', 'right']}
-    >
+    <View style={{ flex: 1, backgroundColor: c.card }}>
       <Stack.Screen
         options={{
           title: verticalBar ? '' : name,
@@ -184,6 +213,6 @@ export default function AppScreen() {
           onRoute={route}
         />
       )}
-    </SafeAreaView>
+    </View>
   );
 }

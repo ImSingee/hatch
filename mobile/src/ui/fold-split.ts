@@ -85,3 +85,64 @@ export function columnHalves<T>(items: readonly T[]): [T[], T[]] {
   const half = Math.ceil(items.length / 2);
   return [items.slice(0, half), items.slice(half)];
 }
+
+/** The hinge a display folds on: `none` where there is none or it is unknown. */
+export type Hinge = 'none' | 'closed' | 'partlyOpen' | 'open';
+
+export type ListDetailInput = {
+  /** Container width. */
+  width: number;
+  /** The fold crossing the container, if any. */
+  fold: Fold | null;
+  /** The state of the hinge the display folds on. */
+  hinge: Hinge;
+  /** Space between the list and the detail. */
+  gap: number;
+  /** Narrowest acceptable list. */
+  minList: number;
+  /** Widest list, however wide the container. */
+  maxList: number;
+  /** Narrowest acceptable detail on a flat display. */
+  minDetail: number;
+  /** The list's share of the width, where the display lies flat. */
+  share: number;
+  /** Right-to-left layout puts the list on the right. */
+  rtl?: boolean;
+};
+
+/**
+ * A list beside its detail. Flat, the list takes `share` of the width (about
+ * a third), within its limits; a display folded part way splits on its fold,
+ * one side each, as two pages of a book. `null` when either side would be too
+ * narrow: then the detail covers the list.
+ */
+export function listDetailSplit({
+  width,
+  fold,
+  hinge,
+  gap,
+  minList,
+  maxList,
+  minDetail,
+  share,
+  rtl = false,
+}: ListDetailInput): Split | null {
+  if (!(width > 0)) return null;
+  if (fold && hinge === 'partlyOpen') {
+    const gutter = Math.max(gap, fold.width);
+    const center = fold.x + fold.width / 2;
+    const left = center - gutter / 2;
+    const right = width - center - gutter / 2;
+    const [list, detail] = rtl ? [right, left] : [left, right];
+    // Each page of the book is narrower than a flat detail: both only need
+    // to be as wide as a list.
+    if (list < minList || detail < minList) return null;
+    return { leading: list, gutter, trailing: detail };
+  }
+  const list = Math.round(
+    Math.min(maxList, Math.max(minList, (width - gap) * share)),
+  );
+  const detail = width - gap - list;
+  if (detail < minDetail) return null;
+  return { leading: list, gutter: gap, trailing: detail };
+}

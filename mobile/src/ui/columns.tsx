@@ -18,7 +18,9 @@ import {
   columnHalves,
   crossingFold,
   foldSplit,
+  listDetailSplit,
   tilesPerRow,
+  type Hinge,
   type Split,
 } from './fold-split';
 
@@ -52,15 +54,58 @@ export function useFoldSplit({
   return { onLayout, onFolds: setFolds, width, split };
 }
 
+/**
+ * The geometry of a list beside its detail (`listDetailSplit`): a list such
+ * as Apps or conversations, about a third of the width, and what it opens.
+ */
+export const listDetail = {
+  gap: 16,
+  minList: 260,
+  maxList: 360,
+  minDetail: 400,
+  share: 1 / 3,
+} as const;
+
+/**
+ * Measures a container and splits it into a list and its detail (see
+ * `listDetailSplit`): by width where the display lies flat, on the fold
+ * where it is folded part way. Sizes come from the container, never the
+ * screen, so a window beside another app or a narrow pane gets one column.
+ */
+export function useListDetail(
+  options: Omit<
+    Parameters<typeof listDetailSplit>[0],
+    'width' | 'fold' | 'hinge' | 'rtl'
+  > = listDetail,
+) {
+  const [width, setWidth] = useState(0);
+  const [folds, setFolds] = useState<FoldRect[]>([]);
+  const [hinge, setHinge] = useState<Hinge>('none');
+  const onLayout = useCallback(
+    (event: LayoutChangeEvent) => setWidth(event.nativeEvent.layout.width),
+    [],
+  );
+  const split = listDetailSplit({
+    ...options,
+    width,
+    fold: crossingFold(folds, width),
+    hinge,
+    rtl: I18nManager.isRTL,
+  });
+  return { onLayout, onFolds: setFolds, onHinge: setHinge, width, split };
+}
+
 /** A container that measures itself and the fold across it. */
 export function FoldContainer({
   onLayout,
   onFolds,
+  onHinge,
   style,
   children,
 }: PropsWithChildren<{
   onLayout: (event: LayoutChangeEvent) => void;
   onFolds: (folds: FoldRect[]) => void;
+  onHinge?: (hinge: Hinge) => void;
   style?: StyleProp<ViewStyle>;
 }>) {
   return (
@@ -68,8 +113,47 @@ export function FoldContainer({
       {children}
       {/* Last: native tabs look for a page's scroll view along first children.
           It is transparent and never takes touches. */}
-      <FoldProbe onFolds={onFolds} />
+      <FoldProbe onFolds={onFolds} onHinge={onHinge} />
     </View>
+  );
+}
+
+/**
+ * A list beside its detail when both fit (`useListDetail`), otherwise the
+ * detail alone. The detail keeps its place as the list comes and goes, so
+ * folding, unfolding or resizing never reloads what it shows.
+ */
+export function ListDetail({
+  list,
+  children,
+}: PropsWithChildren<{
+  /** The list, shown only beside the detail. */
+  list: ReactNode;
+}>) {
+  const { onLayout, onFolds, onHinge, width, split } = useListDetail();
+  return (
+    <FoldContainer
+      onLayout={onLayout}
+      onFolds={onFolds}
+      onHinge={onHinge}
+      style={{ flex: 1, flexDirection: 'row' }}
+    >
+      {split ? <View style={{ width: split.leading }}>{list}</View> : null}
+      {/* Alone, the detail takes the measured width rather than `flex: 1`:
+          dropping the list's `width` and `marginStart` for `flex: 1` left a
+          native App at its two-column width after folding the display. */}
+      <View
+        style={
+          split
+            ? { width: split.trailing, marginStart: split.gutter }
+            : width
+              ? { width, marginStart: 0 }
+              : { flex: 1 }
+        }
+      >
+        {children}
+      </View>
+    </FoldContainer>
   );
 }
 

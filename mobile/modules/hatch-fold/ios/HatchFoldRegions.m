@@ -47,3 +47,35 @@ void HatchObserveVerticalBarEdge(UIView *view, void (^handler)(void)) {
   }
 #endif
 }
+
+void HatchObserveHinge(UIView *view, void (^handler)(NSInteger status)) {
+// Hinge state arrived in the iOS 27.1 SDK, with reserved regions.
+#if defined(__IPHONE_27_1) && __IPHONE_OS_VERSION_MAX_ALLOWED >= __IPHONE_27_1
+  if (@available(iOS 27.1, *)) {
+    UIHingeInteraction *interaction = [[UIHingeInteraction alloc]
+        initWithUpdateHandler:^(UIHingeInteraction *_interaction,
+                                UIHingeInteractionUpdate *update) {
+          UIHinge *hinge = update.hinge;
+          if (hinge == nil) {
+            handler(0);
+            return;
+          }
+          switch (hinge.status) {
+            case UIHingeStatusClosed:
+              handler(1);
+              break;
+            case UIHingeStatusPartiallyOpen:
+              handler(2);
+              break;
+            case UIHingeStatusFullyOpen:
+              handler(3);
+              break;
+            default:
+              handler(0);
+              break;
+          }
+        }];
+    [view addInteraction:interaction];
+  }
+#endif
+}

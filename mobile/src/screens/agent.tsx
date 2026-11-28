@@ -18,7 +18,7 @@ import {
 import { useConversationListRefresh } from '../state/use-conversation-list-refresh';
 import { useLifetimeSignal } from '../state/use-lifetime-signal';
 import { usePullToRefresh } from '../state/use-pull-to-refresh';
-import { FoldContainer, useFoldSplit } from '../ui/columns';
+import { FoldContainer, useListDetail } from '../ui/columns';
 import { Glyph } from '../ui/glyph';
 import { Busy, EmptyState, Notice, errorText } from '../ui/primitives';
 import { sectionsOf, stamp } from '../ui/session-dates';
@@ -44,7 +44,8 @@ export function AgentScreen({ nested = false }: { nested?: boolean }) {
   const signal = useLifetimeSignal();
   // With room for both, the open conversation sits beside the list, its
   // edge on the fold; otherwise it is pushed over the list.
-  const { onLayout, onFolds, split } = useFoldSplit(conversationSplit);
+  const { onLayout, onFolds, onHinge, split } =
+    useListDetail(conversationSplit);
   const [selected, select] = useAgentSelection();
   const onOwnScreen = useConversationScreens();
   const open = (id: string, push = !split) => {
@@ -121,6 +122,7 @@ export function AgentScreen({ nested = false }: { nested?: boolean }) {
       <FoldContainer
         onLayout={onLayout}
         onFolds={onFolds}
+        onHinge={onHinge}
         style={{ flex: 1, flexDirection: 'row' }}
       >
         <View style={split ? { width: split.leading } : { flex: 1 }}>

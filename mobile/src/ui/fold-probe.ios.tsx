@@ -1,5 +1,6 @@
 import { requireNativeView } from 'expo';
 import { StyleSheet } from 'react-native';
+import type { Hinge } from './fold-split';
 import type {
   FoldProbeProps,
   FoldRect,
@@ -11,6 +12,7 @@ const HatchFold = requireNativeView<{
   style: unknown;
   pointerEvents: 'none';
   onFoldChange?: (event: { nativeEvent: { folds: FoldRect[] } }) => void;
+  onHingeChange?: (event: { nativeEvent: { hinge: Hinge } }) => void;
   onVerticalBarChange?: (event: {
     nativeEvent: { edge: VerticalBarEdge };
   }) => void;
@@ -18,14 +20,18 @@ const HatchFold = requireNativeView<{
 
 /**
  * Fills its container, behind the content, and reports where the display
- * folds across it in the container's coordinates (`modules/hatch-fold`).
+ * folds across it in the container's coordinates, and how far the hinge is
+ * open (`modules/hatch-fold`).
  */
-export function FoldProbe({ onFolds }: FoldProbeProps) {
+export function FoldProbe({ onFolds, onHinge }: FoldProbeProps) {
   return (
     <HatchFold
       style={StyleSheet.absoluteFill}
       pointerEvents="none"
       onFoldChange={(event) => onFolds(event.nativeEvent.folds)}
+      onHingeChange={
+        onHinge ? (event) => onHinge(event.nativeEvent.hinge) : undefined
+      }
     />
   );
 }
