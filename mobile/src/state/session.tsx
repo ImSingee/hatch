@@ -67,7 +67,7 @@ export function SessionProvider({ children }: PropsWithChildren) {
       currentInstance = null;
       currentRevision++;
       // Native Apps hold the session's credential: they stop with it.
-      appRuntime.configure(null, null);
+      void appRuntime.configure(null, null);
       setOrigin(null);
       setEpoch(currentRevision);
       await queryClient.cancelQueries();
@@ -160,7 +160,7 @@ export function SessionProvider({ children }: PropsWithChildren) {
       }
       // The identity changes here; work started under the previous one ends.
       endConversationLifetimes();
-      appRuntime.configure(null, null);
+      void appRuntime.configure(null, null);
       currentInstance = next;
       currentRevision++;
       setOrigins(recent);

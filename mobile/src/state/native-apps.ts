@@ -35,11 +35,14 @@ export function useNativeAppRuntime(): boolean {
     subscribe();
     if (!origin) return;
     let alive = true;
-    void vault.get(origin).then((token) => {
-      if (!alive) return;
-      appRuntime.configure(origin, token);
-      setConfigured(`${epoch}:${origin}`);
-    });
+    void vault
+      .get(origin)
+      .then(async (token) => {
+        if (!alive) return;
+        await appRuntime.configure(origin, token);
+        if (alive) setConfigured(`${epoch}:${origin}`);
+      })
+      .catch(() => undefined);
     return () => {
       alive = false;
     };

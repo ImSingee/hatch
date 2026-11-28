@@ -43,9 +43,13 @@ const ignore = () => undefined;
 
 export const appRuntime = {
   available: runtime !== null,
-  /** The signed-in instance; another instance, or none, stops every App. */
-  configure(origin: string | null, token: string | null) {
-    void runtime?.configure(origin, token).catch(ignore);
+  /**
+   * The signed-in instance; another instance, or none, stops every App.
+   * Settles once the runtime has it: an App view mounted before then would
+   * find no session.
+   */
+  async configure(origin: string | null, token: string | null) {
+    await runtime?.configure(origin, token).catch(ignore);
   },
   setBackgroundMinutes(minutes: number) {
     void runtime?.setBackgroundMinutes(minutes).catch(ignore);
