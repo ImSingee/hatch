@@ -399,8 +399,11 @@ public final class AppEngineManager {
             let build = Int(package.info.build)
             engine.bridge.scope = AppScope(
                 appId: engine.appId, deploymentId: deploymentId, rpcMethods: app.rpcMethods, hasData: app.hasData)!
+            // The route asked for last: a link that came while the package
+            // loaded moved it, and the App reads it only at launch.
             let setup = EngineSetup(
-                platform: "ios", route: route, packageBuild: build, appId: engine.appId,
+                platform: "ios", route: ledger.route(of: engine.appId) ?? route, packageBuild: build,
+                appId: engine.appId,
                 accountDirectory: accountDirectory, cacheRoot: cacheRoot)
             try apply(setup, to: engine)
             engine.build = build

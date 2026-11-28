@@ -452,7 +452,10 @@ object AppEngineManager {
                 }
                 try {
                     engine.bridge.scope = scope
-                    val setup = EngineSetup.of("android", route, build, engine.appId, accountDirectory, cacheRoot)
+                    // The route asked for last: a link that came while the package
+                    // loaded moved it, and the App reads it only at launch.
+                    val start = ledger().route(engine.appId) ?: route
+                    val setup = EngineSetup.of("android", start, build, engine.appId, accountDirectory, cacheRoot)
                     install(engine, setup)
                     engine.build = build
                     engine.view.runPackage(pkg)
