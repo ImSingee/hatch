@@ -33,6 +33,7 @@ import {
   type AppTaskRunStep,
   type AppTaskRunSummary,
   type AppDoc,
+  type GetAppRpcReferenceResponse,
   CreateAppRequestSchema,
   AppService,
 } from '../../hatch-platform-api/gen/hatch/platform/v1/app_pb';
@@ -198,6 +199,67 @@ const appDoc = (value: AppDoc | undefined) => {
   };
 };
 export type AppDocView = ReturnType<typeof appDoc>;
+/** The RPC reference as a plain DTO; absent optional values are `null`. */
+const rpcReference = (result: GetAppRpcReferenceResponse) => {
+  const endpoint = required(result.endpoint);
+  return {
+    appId: result.appId,
+    version: result.version,
+    deploymentId: result.deploymentId,
+    endpoint: { url: endpoint.url, service: endpoint.service },
+    complete: result.complete,
+    services: result.services.map((service) => ({
+      name: service.name,
+      description: service.description ?? null,
+      methods: service.methods.map((method) => ({
+        name: method.name,
+        description: method.description ?? null,
+        inputType: method.inputType,
+        outputType: method.outputType,
+        clientStreaming: method.clientStreaming,
+        serverStreaming: method.serverStreaming,
+        deprecated: method.deprecated,
+        idempotency: method.idempotency ?? null,
+      })),
+    })),
+    types: result.types
+      ? {
+          messages: result.types.messages.map((message) => ({
+            name: message.name,
+            description: message.description ?? null,
+            deprecated: message.deprecated,
+            fields: message.fields.map((field) => ({
+              name: field.name,
+              jsonName: field.jsonName,
+              kind: field.kind,
+              type: field.type,
+              label: field.label,
+              mapKey: field.mapKey ?? null,
+              oneof: field.oneof ?? null,
+              description: field.description ?? null,
+              deprecated: field.deprecated,
+            })),
+          })),
+          enums: result.types.enums.map((entry) => ({
+            name: entry.name,
+            description: entry.description ?? null,
+            deprecated: entry.deprecated,
+            values: entry.values.map((value) => ({
+              name: value.name,
+              number: value.number,
+              description: value.description ?? null,
+              deprecated: value.deprecated,
+            })),
+          })),
+        }
+      : null,
+    protoFiles: result.protoFiles.map((file) => ({
+      path: file.path,
+      content: file.content,
+    })),
+    markdown: result.markdown,
+  };
+};
 const icon = (app: string, value: AppIcon | undefined) => ({
   // The id or slug the caller passed; `path` carries the immutable id.
   app,
@@ -1415,6 +1477,8 @@ export function cliClient(transport: Transport) {
             content: result.content,
           };
         },
+        rpc: async (input: { id: string }) =>
+          rpcReference(await apps.getAppRpcReference(input)),
       },
       icon: {
         get: async (input: { id: string }) =>

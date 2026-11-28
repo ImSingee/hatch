@@ -68,13 +68,82 @@ export type RpcMethodApi = {
   outputType: string;
   clientStreaming: boolean;
   serverStreaming: boolean;
+  /** Markdown from the method's proto comment. */
+  description?: string;
+  /** `option deprecated = true`. */
+  deprecated?: true;
+  /** `option idempotency_level`; absent when unset. */
+  idempotency?: RpcIdempotency;
 };
+
+/**
+ * `NO_SIDE_EFFECTS` and `IDEMPOTENT` from protobuf's `idempotency_level`
+ * method option: whether a caller may retry the method after a timeout.
+ */
+export type RpcIdempotency = 'no_side_effects' | 'idempotent';
 
 /** A service (and its methods) defined in the app's proto. */
 export type RpcServiceApi = {
   /** Fully-qualified service name, e.g. `app.v1.CounterService`. */
   name: string;
+  /** Markdown from the service's proto comment. */
+  description?: string;
   methods: RpcMethodApi[];
+};
+
+/** One field of a documented message, in protobuf JSON terms. */
+export type ApiField = {
+  /** Proto field name. */
+  name: string;
+  /** Name in the JSON request/response body. */
+  jsonName: string;
+  /** What `type` names: a scalar, an enum or a message. */
+  kind: 'scalar' | 'enum' | 'message';
+  /**
+   * Scalar name (`string`, `int64`, ...) or fully-qualified enum/message
+   * name. For a map field this is the value type.
+   */
+  type: string;
+  /** `optional` is proto3 explicit presence. */
+  label: 'single' | 'optional' | 'repeated' | 'map';
+  /** Scalar key type of a map field. */
+  mapKey?: string;
+  /** Oneof group the field belongs to. */
+  oneof?: string;
+  description?: string;
+  deprecated?: true;
+};
+
+/** A message used by the App's RPC methods. */
+export type ApiMessage = {
+  /** Fully-qualified name. */
+  name: string;
+  description?: string;
+  deprecated?: true;
+  fields: ApiField[];
+};
+
+/** An enum used by the App's RPC methods. */
+export type ApiEnum = {
+  /** Fully-qualified name. */
+  name: string;
+  description?: string;
+  deprecated?: true;
+  values: {
+    name: string;
+    number: number;
+    description?: string;
+    deprecated?: true;
+  }[];
+};
+
+/**
+ * The App messages and enums reachable from its services' methods.
+ * Well-known types (`google.protobuf.*`) are referenced by name only.
+ */
+export type ApiTypes = {
+  messages: ApiMessage[];
+  enums: ApiEnum[];
 };
 
 /** A raw proto source file uploaded to the platform on deploy. */
@@ -92,6 +161,12 @@ export type ProtoFile = {
  */
 export type AppApi = {
   services: RpcServiceApi[];
+  /**
+   * Types the methods use, with their proto comments. Absent on deployments
+   * built before the API reference existed; their comments survive only in
+   * `protoFiles`.
+   */
+  types?: ApiTypes;
   protoFiles: ProtoFile[];
 };
 

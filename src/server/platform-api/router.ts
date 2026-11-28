@@ -68,6 +68,7 @@ import { createApp } from '~server/apps/scaffold';
 import { authenticatePublicApi } from './auth';
 import { listAppsForAgent, getAppDetailForAgent } from '~server/apps/inspect';
 import { listAppDocs, readAppDoc } from '~server/apps/docs';
+import { rpcReference } from '~server/apps/rpc-reference';
 import type { PublishedAppDoc } from '~server/apps/manifest';
 import { appSummarySchema, appDetailSchema } from '~/platform-api/views';
 import {
@@ -792,6 +793,9 @@ export function registerPlatformApi(
     const doc = await readAppDoc((await find(input.id)).id, input.docId);
     return { ...doc, doc: appDocMessage(doc.doc) };
   });
+  router.rpc(AppService.method.getAppRpcReference, async (input) =>
+    rpcReference((await find(input.id)).id),
+  );
   router.rpc(AppService.method.getAppAi, async (input) => {
     try {
       return {

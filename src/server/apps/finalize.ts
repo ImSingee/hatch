@@ -72,6 +72,12 @@ import {
   taskInputSchema,
 } from './tasks/input-schema';
 
+/**
+ * Most bytes the RPC API reference (services, types and their comments) may
+ * add to the deployment manifest, which every manifest read carries.
+ */
+export const APP_API_REFERENCE_MAX_BYTES = 512 * 1024;
+
 export type FinalizedBuild = {
   source: SourceManifest;
   normalized: NormalizedManifest;
@@ -456,6 +462,15 @@ export async function finalizeBuild(
     } catch {
       throw new BuildPackageError(
         `${BUILD_PACKAGE_API_DESCRIPTOR} is not a compiled descriptor set.`,
+        'app_build_invalid',
+      );
+    }
+    const referenceBytes = Buffer.byteLength(
+      JSON.stringify({ services: api.services, types: api.types }),
+    );
+    if (referenceBytes > APP_API_REFERENCE_MAX_BYTES) {
+      throw new BuildPackageError(
+        `The RPC API reference (services, types and proto comments) is ${referenceBytes} bytes; the limit is ${APP_API_REFERENCE_MAX_BYTES}. Shorten the proto comments or split the service.`,
         'app_build_invalid',
       );
     }

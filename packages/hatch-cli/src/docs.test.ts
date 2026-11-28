@@ -21,6 +21,10 @@ describe('hatch app docs arguments', () => {
       app: 'orders',
       docId: 'order-webhook',
     });
+    expect(parse('rpc', 'orders', '--json')).toEqual({
+      kind: 'rpc',
+      app: 'orders',
+    });
   });
 
   it.each([
@@ -34,6 +38,9 @@ describe('hatch app docs arguments', () => {
     [['get', 'orders', 'a', 'b']],
     [['get', 'orders', 'Bad_Id']],
     [['get', 'orders', 'a', '--limit', '5']],
+    [['rpc']],
+    [['rpc', 'orders', 'extra']],
+    [['rpc', 'orders', '--limit', '5']],
   ])('rejects %j before any request', (args) => {
     expect(() => parse(...args)).toThrow(
       expect.objectContaining({ code: 'invalid_arguments' }),

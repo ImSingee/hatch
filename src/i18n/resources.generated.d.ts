@@ -233,6 +233,18 @@ export type TranslationResource = {
   'api.noServices': 'No RPC services declared in the proto.';
   'api.servicesIntro': 'Connect RPC services this app exposes, captured from its proto on deploy.';
   'api.protoSource': 'Proto source';
+  'api.incomplete': 'This deployment was built before method and field descriptions were recorded. Redeploy to see them; the proto source below still has its comments.';
+  'api.deprecated': 'Deprecated';
+  'api.noSideEffects': 'No side effects';
+  'api.idempotent': 'Idempotent';
+  'api.safeToRetry': 'Safe to retry after a timeout';
+  'api.request': 'Request · {{type}}';
+  'api.response': 'Response · {{type}}';
+  'api.noFields': 'No fields.';
+  'api.optional': 'optional';
+  'api.oneof': 'oneof {{name}}';
+  'api.showMethod': 'Show {{name}} details';
+  'api.hideMethod': 'Hide {{name}} details';
   'deployment.deployedApp': 'Deployed app';
   'deployment.deployedApps': 'Deployed apps';
   'deployment.deployedAppsCount': 'Deployed apps · {{count}}';

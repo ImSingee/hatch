@@ -40,7 +40,7 @@ The capabilities below never had an Agent Tool.
 
 | Capability       | CLI                                                                                                 | Public API / shared behavior                                                                                                                                                                                                                    |
 | ---------------- | --------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| App docs         | app docs list / get                                                                                 | AppService/ListAppDocs, GetAppDoc; current deployment's external docs, webhook/RPC endpoints, raw Markdown                                                                                                                                      |
+| App docs         | app docs list / get / rpc                                                                           | AppService/ListAppDocs, GetAppDoc, GetAppRpcReference; current deployment's external docs, webhook/RPC endpoints, raw Markdown, and the RPC reference generated from its proto (the API section of the manage page)                             |
 | App icon         | app icon get / set / clear                                                                          | AppService/GetAppIcon, SetAppIcon (file bytes or candidate id), ClearAppIcon; validated and re-encoded                                                                                                                                          |
 | Image models     | image-model list / add / update / remove                                                            | ImageService/ListImageModels, CreateImageModel, UpdateImageModel, DeleteImageModel; provider keys never exposed                                                                                                                                 |
 | Providers        | provider list / get / catalog / add / update / remove / test / fetch-models                         | ProviderService, CatalogService/ListCatalogProviders; presets, write-only API keys (`hasApiKey`), test prompt                                                                                                                                   |
@@ -388,6 +388,14 @@ archived or undeployed App fails with `CONFLICT`. The commands are read-only.
 Sessions, API keys and Run JWTs have the same authority, and no operation is
 bound to a device or browser. `app get` also lists the doc index under
 `manifest.docs`. No Agent Tool is added.
+
+`hatch app docs rpc` calls `AppService/GetAppRpcReference`
+(`src/server/apps/rpc-reference.ts`). It covers what the API section of the
+App manage page shows from the deployment manifest: services, methods, their
+proto comments, `deprecated` and `idempotency_level`, the types they use and
+the proto source, plus the same reference as Markdown. It is read-only and
+has the same credential rules as `docs list|get`; an App without an RPC
+service fails with `NOT_FOUND`.
 
 ## Native App packages and runtime trust: CLI only, no Agent Tool
 
