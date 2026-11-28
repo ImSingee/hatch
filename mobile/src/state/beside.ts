@@ -1,4 +1,5 @@
 import { skipToken, useQuery, useQueryClient } from '@tanstack/react-query';
+import { useIsFocused } from 'expo-router';
 import { useCallback, useEffect } from 'react';
 import { useSession } from './session';
 
@@ -49,10 +50,15 @@ export function useFrontApps() {
   return data;
 }
 
-/** Registers an App a front screen shows, for `useFrontApps`. */
-export function useShowsApp(id: string | null | undefined) {
+/**
+ * Registers an App the screen in front shows, for `useFrontApps`. Only while
+ * that screen has focus: a screen another one covers keeps its place in the
+ * stack, but it no longer shows its App, which may then be beside.
+ */
+export function useShowsApp(appId: string | null | undefined) {
   const { origin } = useSession();
   const client = useQueryClient();
+  const id = useIsFocused() ? appId : null;
   useEffect(() => {
     if (!id) return;
     const key = frontKey(origin);
